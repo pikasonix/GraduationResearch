@@ -73,9 +73,9 @@ document.addEventListener('DOMContentLoaded', () => {
             // Update algorithm parameters
             document.getElementById('antCount').value = params[0] || 20;
             document.getElementById('maxIterations').value = params[1] || 100;
-            document.getElementById('alpha').value = params[2] || 2.5;
-            document.getElementById('beta').value = params[3] || 6.0;
-            document.getElementById('rho').value = params[4] || 0.3;
+            document.getElementById('alpha').value = params[2] || 2.0;
+            document.getElementById('beta').value = params[3] || 3.0;
+            document.getElementById('rho').value = params[4] || 0.01;
             document.getElementById('q').value = params[5] || 100.0;
 
             // Parse nodes
@@ -114,7 +114,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Get nodes from canvas
         const nodes = canvasInputManager.getNodes();
         if (nodes.length < 2) {
-            alert('Please add at least 2 nodes (including depot)');
+            alert('Please add at least 2 nodes (including the depot) or, if entering from Text Input, click Parse Text before running the algorithm!');
             return;
         }
 
@@ -122,9 +122,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const parameters = {
             antCount: parseInt(document.getElementById('antCount').value) || 20,
             maxIterations: parseInt(document.getElementById('maxIterations').value) || 100,
-            alpha: parseFloat(document.getElementById('alpha').value) || 2.5,
-            beta: parseFloat(document.getElementById('beta').value) || 6.0,
-            rho: parseFloat(document.getElementById('rho').value) || 0.3,
+            alpha: parseFloat(document.getElementById('alpha').value) || 2.0,
+            beta: parseFloat(document.getElementById('beta').value) || 3.0,
+            rho: parseFloat(document.getElementById('rho').value) || 0.01,
             Q: parseFloat(document.getElementById('q').value) || 100.0
         };
 
