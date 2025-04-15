@@ -7,6 +7,12 @@ struct Point {
     double x, y;
 };
 
+struct IterationData {
+    int iteration;
+    vector<int> path;
+    double distance;
+};
+
 int numNodes;                      // Số điểm
 vector<Point> nodes;               // Danh sách các điểm
 vector<vector<double>> distances;  // Ma trận khoảng cách
@@ -109,6 +115,9 @@ vector<int> solveACO() {
     // For storing convergence data
     vector<double> convergenceData;
 
+    // For storing iteration paths
+    vector<IterationData> iterationPaths;
+
     for (int iter = 0; iter < maxIterations; iter++) {
         vector<vector<int>> antTours(antCount);
         vector<double> antTourLengths(antCount);
@@ -125,6 +134,13 @@ vector<int> solveACO() {
         // Store best tour length for this iteration
         convergenceData.push_back(bestTourLength);
 
+        // Store iteration path
+        IterationData iterData;
+        iterData.iteration = iter + 1;
+        iterData.path = bestTour;
+        iterData.distance = bestTourLength;
+        iterationPaths.push_back(iterData);
+
         updatePheromones(antTours, antTourLengths);
     }
 
@@ -134,6 +150,19 @@ vector<int> solveACO() {
         convergenceFile << i + 1 << " " << convergenceData[i] << endl;
     }
     convergenceFile.close();
+
+    // Write iteration paths to a file
+    ofstream iterPathsFile("iteration_paths.txt");
+    for (const auto &iterData : iterationPaths) {
+        iterPathsFile << iterData.iteration << " " << iterData.distance << " ";
+        for (int i = 0; i < iterData.path.size(); i++) {
+            iterPathsFile << nodes[iterData.path[i]].id;
+            if (i < iterData.path.size() - 1)
+                iterPathsFile << " ";
+        }
+        iterPathsFile << endl;
+    }
+    iterPathsFile.close();
 
     return bestTour;
 }

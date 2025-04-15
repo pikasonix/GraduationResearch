@@ -17,6 +17,21 @@ app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
+// Add this function to parse iteration paths data
+function parseIterationPathsData(content) {
+    const lines = content.trim().split('\n');
+    return lines.map(line => {
+        const parts = line.split(' ');
+        const iteration = parseInt(parts[0]);
+        const distance = parseFloat(parts[1]);
+
+        // Extract the path - skip first 2 elements (iteration and distance)
+        const path = parts.slice(2).map(Number);
+
+        return { iteration, distance, path };
+    });
+}
+
 // API endpoint to run the ACO algorithm
 app.post('/run-aco', (req, res) => {
     try {
@@ -42,10 +57,20 @@ app.post('/run-aco', (req, res) => {
             console.error('Error reading convergence data:', error);
         }
 
+        // Read iteration paths data if available
+        let iterationPathsData = [];
+        try {
+            const iterationPathsContent = fs.readFileSync(path.join(__dirname, 'temp', 'iteration_paths.txt'), 'utf8');
+            iterationPathsData = parseIterationPathsData(iterationPathsContent);
+        } catch (error) {
+            console.error('Error reading iteration paths data:', error);
+        }
+
         res.json({
             success: true,
             result,
-            convergenceData
+            convergenceData,
+            iterationPathsData
         });
     } catch (error) {
         console.error('Error running ACO algorithm:', error);
