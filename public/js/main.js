@@ -1,5 +1,5 @@
 document.addEventListener('DOMContentLoaded', () => {
-    // Elements
+    // Original elements
     const canvasTab = document.getElementById('canvas-tab');
     const textTab = document.getElementById('text-tab');
     const canvasInput = document.getElementById('canvas-input');
@@ -10,6 +10,21 @@ document.addEventListener('DOMContentLoaded', () => {
     const clearCanvasBtn = document.getElementById('clear-canvas');
     const runAlgorithmBtn = document.getElementById('run-algorithm');
     const resultsContainer = document.getElementById('results-container');
+
+    // New element for iteration selection
+    const iterationSelector = document.createElement('div');
+    iterationSelector.id = 'iteration-selector';
+    iterationSelector.className = 'iteration-selector';
+    iterationSelector.innerHTML = `
+        <h3>Iterations</h3>
+        <div class="iteration-list" id="iteration-list">
+            <p>No iterations available</p>
+        </div>
+    `;
+
+    // Add the iteration selector to the visualization section
+    const visualizationSection = document.querySelector('.visualization');
+    visualizationSection.appendChild(iterationSelector);
 
     // Canvas input manager
     const canvasInputManager = new CanvasInputManager(inputCanvas);
@@ -58,9 +73,9 @@ document.addEventListener('DOMContentLoaded', () => {
             // Update algorithm parameters
             document.getElementById('antCount').value = params[0] || 20;
             document.getElementById('maxIterations').value = params[1] || 100;
-            document.getElementById('alpha').value = params[2] || 2.5;
-            document.getElementById('beta').value = params[3] || 6.0;
-            document.getElementById('rho').value = params[4] || 0.3;
+            document.getElementById('alpha').value = params[2] || 2.0;
+            document.getElementById('beta').value = params[3] || 3.0;
+            document.getElementById('rho').value = params[4] || 0.01;
             document.getElementById('q').value = params[5] || 100.0;
 
             // Parse nodes
@@ -99,7 +114,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Get nodes from canvas
         const nodes = canvasInputManager.getNodes();
         if (nodes.length < 2) {
-            alert('Please add at least 2 nodes (including depot)');
+            alert('Please add at least 2 nodes (including the depot) or, if entering from Text Input, click Parse Text before running the algorithm!');
             return;
         }
 
@@ -107,9 +122,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const parameters = {
             antCount: parseInt(document.getElementById('antCount').value) || 20,
             maxIterations: parseInt(document.getElementById('maxIterations').value) || 100,
-            alpha: parseFloat(document.getElementById('alpha').value) || 2.5,
-            beta: parseFloat(document.getElementById('beta').value) || 6.0,
-            rho: parseFloat(document.getElementById('rho').value) || 0.3,
+            alpha: parseFloat(document.getElementById('alpha').value) || 2.0,
+            beta: parseFloat(document.getElementById('beta').value) || 3.0,
+            rho: parseFloat(document.getElementById('rho').value) || 0.01,
             Q: parseFloat(document.getElementById('q').value) || 100.0
         };
 
@@ -117,6 +132,10 @@ document.addEventListener('DOMContentLoaded', () => {
         runAlgorithmBtn.disabled = true;
         runAlgorithmBtn.textContent = 'Running...';
         resultsContainer.innerHTML = '<p>Running ACO algorithm...</p>';
+
+        // Clear previous visualization
+        visualizationManager.clear();
+        document.getElementById('iteration-list').innerHTML = '<p>Loading iterations...</p>';
 
         try {
             // Call API to run ACO algorithm
@@ -133,23 +152,30 @@ document.addEventListener('DOMContentLoaded', () => {
             if (data.success) {
                 // Display results
                 resultsContainer.innerHTML = `
-            <h3>Optimal Path:</h3>
-            <p>${data.result.path.join(' → ')}</p>
-            <h3>Total Distance:</h3>
-            <p>${data.result.distance.toFixed(2)}</p>
-          `;
+                    <h3>Optimal Path:</h3>
+                    <p>${data.result.path.join(' → ')}</p>
+                    <h3>Total Distance:</h3>
+                    <p>${data.result.distance.toFixed(2)}</p>
+                `;
 
-                // Update visualization
+                // Update visualization with the final result
                 visualizationManager.drawNodes(nodes);
                 visualizationManager.drawPath(nodes, data.result.path);
 
-                // Update convergence chart with real data
+                // Update convergence chart
                 if (data.convergenceData && data.convergenceData.length > 0) {
                     convergenceChartManager.updateChart(data.convergenceData);
                 } else {
                     // Fallback to mock data if no real data is available
                     const mockConvergenceData = generateMockConvergenceData(parameters.maxIterations);
                     convergenceChartManager.updateChart(mockConvergenceData);
+                }
+
+                // Update iteration selector
+                if (data.iterationPathsData && data.iterationPathsData.length > 0) {
+                    updateIterationSelector(data.iterationPathsData, nodes);
+                } else {
+                    document.getElementById('iteration-list').innerHTML = '<p>No iteration data available</p>';
                 }
             } else {
                 resultsContainer.innerHTML = `<p>Error: ${data.error}</p>`;
@@ -178,5 +204,52 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         return data;
+    }
+
+    // Update iteration selector and handle click events
+    function updateIterationSelector(iterationPathsData, nodes) {
+        const iterationList = document.getElementById('iteration-list');
+        iterationList.innerHTML = '';
+
+        // Create buttons for each iteration
+        iterationPathsData.forEach(iterData => {
+            const button = document.createElement('button');
+            button.className = 'iteration-btn';
+            button.textContent = `Iteration ${iterData.iteration} (${iterData.distance.toFixed(2)})`;
+
+            button.addEventListener('click', () => {
+                // Update visualization for this iteration
+                visualizationManager.clear();
+                visualizationManager.drawNodes(nodes);
+                visualizationManager.drawPath(nodes, iterData.path);
+
+                // Highlight selected button
+                document.querySelectorAll('.iteration-btn').forEach(btn => {
+                    btn.classList.remove('active');
+                });
+                button.classList.add('active');
+            });
+
+            iterationList.appendChild(button);
+        });
+
+        // Add a button for the final result
+        const finalButton = document.createElement('button');
+        finalButton.className = 'iteration-btn active';
+        finalButton.textContent = 'Final Result';
+        finalButton.addEventListener('click', () => {
+            // Update visualization for the final result
+            visualizationManager.clear();
+            visualizationManager.drawNodes(nodes);
+            visualizationManager.drawPath(nodes, iterationPathsData[iterationPathsData.length - 1].path);
+
+            // Highlight selected button
+            document.querySelectorAll('.iteration-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            finalButton.classList.add('active');
+        });
+
+        iterationList.appendChild(finalButton);
     }
 });

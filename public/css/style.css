@@ -152,6 +152,64 @@ button:hover {
     height: 300px;
 }
 
+/* Add these styles to your style.css file */
+
+.iteration-selector {
+    margin-top: 1rem;
+    padding: 0.5rem;
+    background-color: #f8f8f8;
+    border-radius: 5px;
+    border: 1px solid #ddd;
+}
+
+.iteration-list {
+    max-height: 150px;
+    overflow-y: auto;
+    margin-top: 0.5rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+}
+
+.iteration-btn {
+    background-color: #eee;
+    border: 1px solid #ddd;
+    border-radius: 3px;
+    padding: 5px 10px;
+    cursor: pointer;
+    font-size: 0.8rem;
+    margin: 2px;
+    transition: all 0.2s;
+}
+
+.iteration-btn:hover {
+    background-color: #ddd;
+}
+
+.iteration-btn.active {
+    background-color: #4CAF50;
+    color: white;
+    border-color: #4CAF50;
+}
+
+/* For scrollbar styling */
+.iteration-list::-webkit-scrollbar {
+    width: 8px;
+}
+
+.iteration-list::-webkit-scrollbar-track {
+    background: #f1f1f1;
+}
+
+.iteration-list::-webkit-scrollbar-thumb {
+    background: #888;
+    border-radius: 4px;
+}
+
+.iteration-list::-webkit-scrollbar-thumb:hover {
+    background: #555;
+}
+
 /* For smaller screens */
 @media (max-width: 768px) {
     .container {
