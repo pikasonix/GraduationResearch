@@ -1,0 +1,11 @@
+Instance name : bar-n100-2
+Authors       : New OR-Tools PDPTW Solver
+Date          : 2024
+Reference     : Google OR-Tools v9.x
+Solution
+Route 1 : 15 34 65 84 9 13 59 63 48 46 98 47 97 14 64 96 
+Route 2 : 32 27 42 92 26 76 82 31 77 33 83 81 6 3 56 44 53 94 22 72 
+Route 3 : 20 70 28 78 49 99 35 85 24 74 
+Route 4 : 39 89 12 19 17 62 67 45 95 16 69 50 66 21 71 1 51 4 54 100 25 75 
+Route 5 : 40 90 18 68 36 86 11 38 61 7 88 57 
+Route 6 : 43 37 93 29 79 30 87 23 5 80 55 8 10 58 60 41 91 2 73 52 
