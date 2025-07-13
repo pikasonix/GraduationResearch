@@ -226,11 +226,18 @@
                 </div>
 
                 <!-- Load Solution Section -->
-                <div class="p-4 border-b border-gray-200">
+                <div class="p-4 border-b border-gray-200 space-y-2">
                     <button id="load_solution_btn" onclick="document.getElementById('load_solution').click()"
                         class="w-full flex items-center space-x-3 px-4 py-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors duration-200">
                         <i class="fa fa-file-alt text-blue-600"></i>
                         <span class="font-medium text-gray-700">Load Solution</span>
+                    </button>
+                    
+                    <!-- Real Routing Toggle Button -->
+                    <button id="toggle_routing_btn" onclick="console.log('Button clicked!'); toggleRealRouting();"
+                        class="w-full flex items-center justify-center space-x-2 px-3 py-2 bg-gray-600 hover:bg-gray-700 text-white text-sm rounded transition-colors duration-200">
+                        <i class="fas fa-map-marked-alt"></i>
+                        <span>Bật đường thực tế</span>
                     </button>
                 </div>
 
@@ -246,7 +253,7 @@
                             class="fa fa-angle-down text-gray-400 transform transition-transform duration-200"></i>
                     </button>
                     <div id="nodes_dropdown" class="hidden bg-gray-50 max-h-40 overflow-y-auto"></div>
-                </div> <!-- Routes Section -->
+                </div>                <!-- Routes Section -->
                 <div class="border-b border-gray-200">
                     <button id="routes_button" onclick="toggleDropdown('routes')"
                         class="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-50 transition-colors duration-200">
@@ -257,7 +264,8 @@
                         <i id="routes-icon"
                             class="fa fa-angle-down text-gray-400 transform transition-transform duration-200"></i>
                     </button>
-                    <div id="routes_dropdown" class="hidden bg-gray-50 max-h-40 overflow-y-auto"></div>
+                    <div id="routes_dropdown" class="hidden bg-gray-50 max-h-40 overflow-y-auto">
+                    </div>
                 </div>
 
                 <!-- Route Analysis Section -->
