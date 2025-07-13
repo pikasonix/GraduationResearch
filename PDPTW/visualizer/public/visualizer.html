@@ -138,7 +138,7 @@
 
                 <!-- Instance Form -->
                 <div class="p-4 border-b border-gray-200">
-                    <form id="instance-form" onsubmit="runInstance(event)" class="space-y-4">
+                    <form id="instance-form" class="space-y-4">
                         <!-- Instance Textarea -->
                         <div>
                             <label for="instance_textarea"
@@ -267,7 +267,7 @@
 
                         <!-- Action Buttons -->
                         <div class="space-y-2">
-                            <button type="submit"
+                            <button type="button" onclick="runInstance()"
                                 class="w-full flex items-center justify-center space-x-2 px-4 py-3 bg-green-600 hover:bg-green-700 text-white rounded-md transition-colors duration-200 font-medium">
                                 <i class="fas fa-play"></i>
                                 <span>Chạy giải bài toán</span>
@@ -717,6 +717,14 @@
             const route = solution.routes.find(r => r.id == routeId);
             if (!route) return;
 
+            // Highlight current route on main map and fade others
+            if (typeof clear_route_selection === 'function') {
+                clear_route_selection(new Event('click'));
+            }
+            if (typeof highlight_route === 'function') {
+                highlight_route(route, true);
+            }
+
             // Show loading indicator
             const routeSummary = document.getElementById('route-summary');
             routeSummary.innerHTML = `
@@ -821,7 +829,7 @@
                 Math.sin(dLon / 2) * Math.sin(dLon / 2);
             const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
             return R * c;
-        }        function displayNodeSequence(route) {
+        } function displayNodeSequence(route) {
             const container = document.getElementById('node-sequence');
             container.innerHTML = '';
 
@@ -865,7 +873,7 @@
                 const div = document.createElement('div');
                 div.className = 'flex items-center space-x-3 p-2 bg-gray-50 rounded border-l-4 mb-2 transition-colors duration-200';
                 div.id = `route-node-${index}`;
-                
+
                 let iconClass, borderColor, nodeType;
                 if (node.is_depot) {
                     iconClass = 'fa fa-home text-blue-600';
@@ -882,11 +890,11 @@
                 }
 
                 div.className += ' ' + borderColor;
-                
+
                 // Add segment indicator for non-first nodes
                 const segmentInfo = index > 0 ? `
                     <div class="text-xs text-gray-500 mt-1">
-                        <i class="fas fa-arrow-right mr-1"></i>Đoạn ${index}: ${instance.nodes[route.sequence[index-1]].id} → ${nodeId}
+                        <i class="fas fa-arrow-right mr-1"></i>Đoạn ${index}: ${instance.nodes[route.sequence[index - 1]].id} → ${nodeId}
                     </div>
                 ` : '';
 
@@ -909,12 +917,12 @@
                 div.onclick = (e) => {
                     // Prevent double trigger from number click
                     if (e.target.tagName === 'SPAN' && e.target.onclick) return;
-                    
+
                     showSingleSegment(index);
-                    
+
                     if (routeDetailMap) {
                         routeDetailMap.setView(node.coords, 15);
-                        
+
                         // Temporarily highlight this node
                         const tempMarker = L.circleMarker(node.coords, {
                             color: 'red',
@@ -923,7 +931,7 @@
                             radius: 20,
                             weight: 3
                         }).addTo(routeDetailMap);
-                        
+
                         // Remove highlight after 2 seconds
                         setTimeout(() => {
                             routeDetailMap.removeLayer(tempMarker);
@@ -941,12 +949,12 @@
 
                 container.appendChild(div);
             });
-        }        async function displayRouteOnDetailMap(route) {
+        } async function displayRouteOnDetailMap(route) {
             if (!routeDetailMap) return;
 
-            // Clear existing layers (but keep markers)
+            // Clear ALL existing layers including markers, polylines, and polygons
             routeDetailMap.eachLayer((layer) => {
-                if (layer instanceof L.Polyline || layer instanceof L.Polygon) {
+                if (layer instanceof L.Polyline || layer instanceof L.Polygon || layer instanceof L.Marker) {
                     routeDetailMap.removeLayer(layer);
                 }
             });
@@ -979,21 +987,17 @@
                 marker.addTo(routeDetailMap);
             });
 
-            // Get route path - use real routing if enabled and available
+            // Get route path - use cached route.path if available, otherwise straight lines
             let routeCoords = [];
-            
-            if (use_real_routing) {
-                // Try to build real route or get from cache
-                try {
-                    routeCoords = await buildRealRouteForDetailMap(route);
-                } catch (error) {
-                    console.warn('Error getting real route for detail map:', error);
-                    // Fallback to straight lines
-                    routeCoords = route.sequence.map(nodeId => instance.nodes[nodeId].coords);
-                }
+
+            if (use_real_routing && route.path && route.path.length > 0) {
+                // Use already cached/computed route path
+                routeCoords = route.path;
+                console.log(`Using cached route path for detail map (${routeCoords.length} points)`);
             } else {
                 // Use straight lines between nodes
                 routeCoords = route.sequence.map(nodeId => instance.nodes[nodeId].coords);
+                console.log(`Using straight line route for detail map (${routeCoords.length} points)`);
             }
 
             // Add route path
@@ -1002,10 +1006,10 @@
                 weight: 4,
                 opacity: 0.8
             });
-            
+
             polyline.bindTooltip(`Route ${route.id + 1}<br>Cost: ${route.cost}<br>Type: ${use_real_routing ? 'Real routing' : 'Straight lines'}`);
             polyline.addTo(routeDetailMap);
-            
+
             // Fit map to route bounds
             if (routeCoords.length > 0) {
                 routeDetailMap.fitBounds(polyline.getBounds().pad(0.1));
@@ -1013,38 +1017,6 @@
 
             // Build segments for interactive display
             await buildRouteSegments(route);
-        }
-
-        // Helper function to build real route for detail map
-        async function buildRealRouteForDetailMap(route) {
-            const routeCoords = [];
-            const sequence = route.sequence;
-
-            if (!sequence || sequence.length < 2) {
-                console.warn('Invalid route sequence for detail map');
-                return sequence.map(nodeId => instance.nodes[nodeId].coords);
-            }
-
-            for (let i = 0; i < sequence.length - 1; i++) {
-                const currentNodeId = sequence[i];
-                const nextNodeId = sequence[i + 1];
-
-                // Get coordinates from instance nodes
-                const startCoord = instance.nodes[currentNodeId].coords;
-                const endCoord = instance.nodes[nextNodeId].coords;
-
-                // Get route segment (from cache or API)
-                const segmentCoords = await getRouteFromAPI(startCoord, endCoord);
-
-                // Add all coordinates except the last one (to avoid duplication)
-                if (i === 0) {
-                    routeCoords.push(...segmentCoords);
-                } else {
-                    routeCoords.push(...segmentCoords.slice(1));
-                }
-            }
-
-            return routeCoords.length > 0 ? routeCoords : sequence.map(nodeId => instance.nodes[nodeId].coords);
         }
 
         // Segment-based route display functions
@@ -1059,6 +1031,7 @@
                 return;
             }
 
+            // Build individual segments - each segment is the route between two consecutive nodes
             for (let i = 0; i < sequence.length - 1; i++) {
                 const currentNodeId = sequence[i];
                 const nextNodeId = sequence[i + 1];
@@ -1067,7 +1040,35 @@
 
                 let segmentCoords;
                 if (use_real_routing) {
-                    segmentCoords = await getRouteFromAPI(startCoord, endCoord);
+                    // Try to get individual segment from cache first
+                    const cacheKey = generateCacheKey(startCoord, endCoord);
+                    if (typeof routing_cache !== 'undefined' && routing_cache.has(cacheKey)) {
+                        segmentCoords = routing_cache.get(cacheKey);
+                        console.log(`Using cached segment ${i}: ${currentNodeId} → ${nextNodeId}`);
+                    } else {
+                        // If no cache, try to get real route from OSRM
+                        console.log(`Getting real route for segment ${i}: ${currentNodeId} → ${nextNodeId}`);
+                        try {
+                            const osrmUrl = `http://router.project-osrm.org/route/v1/driving/${startCoord[1]},${startCoord[0]};${endCoord[1]},${endCoord[0]}?geometries=geojson`;
+                            const response = await fetch(osrmUrl);
+                            const data = await response.json();
+
+                            if (data.routes && data.routes.length > 0) {
+                                segmentCoords = data.routes[0].geometry.coordinates.map(coord => [coord[1], coord[0]]);
+                                // Save to cache for future use
+                                if (typeof routing_cache !== 'undefined') {
+                                    routing_cache.set(cacheKey, segmentCoords);
+                                }
+                                console.log(`Got real route for segment ${i}, ${segmentCoords.length} points`);
+                            } else {
+                                segmentCoords = [startCoord, endCoord];
+                                console.log(`OSRM failed for segment ${i}, using straight line`);
+                            }
+                        } catch (error) {
+                            console.log(`Error getting route for segment ${i}:`, error);
+                            segmentCoords = [startCoord, endCoord];
+                        }
+                    }
                 } else {
                     segmentCoords = [startCoord, endCoord];
                 }
@@ -1093,13 +1094,49 @@
                 await buildRouteSegments(window.currentDetailRoute);
             }
 
-            // Clear existing displayed segments
+            // Clear existing displayed segments and all layers
             displayedSegments.forEach(segment => {
                 if (segment.polyline) {
                     routeDetailMap.removeLayer(segment.polyline);
                 }
             });
             displayedSegments = [];
+
+            // Clear all existing layers
+            routeDetailMap.eachLayer((layer) => {
+                if (layer instanceof L.Polyline || layer instanceof L.Marker) {
+                    routeDetailMap.removeLayer(layer);
+                }
+            });
+
+            const route = window.currentDetailRoute;
+
+            // Add markers for nodes up to the selected index
+            for (let i = 0; i <= nodeIndex; i++) {
+                const nodeId = route.sequence[i];
+                const node = instance.nodes[nodeId];
+                let iconHtml;
+
+                if (node.is_depot) {
+                    iconHtml = '<div class="w-4 h-4 bg-blue-600 rounded-full border-2 border-white shadow-lg"></div>';
+                } else if (node.is_pickup) {
+                    iconHtml = '<div class="w-4 h-4 bg-green-600 rounded border-2 border-white shadow-lg"></div>';
+                } else {
+                    iconHtml = '<div class="w-4 h-4 bg-red-600 border-2 border-white shadow-lg" style="clip-path: polygon(50% 0%, 0% 100%, 100% 100%);"></div>';
+                }
+
+                const marker = L.marker(node.coords, {
+                    icon: L.divIcon({
+                        html: iconHtml,
+                        className: 'custom-marker',
+                        iconSize: [16, 16],
+                        iconAnchor: [8, 8]
+                    })
+                });
+
+                marker.bindTooltip(`${node.is_depot ? 'Depot' : node.is_pickup ? 'Pickup' : 'Delivery'} ${nodeId}<br>Demand: ${node.demand}`);
+                marker.addTo(routeDetailMap);
+            }
 
             // Add segments up to the selected node
             for (let i = 0; i < nodeIndex; i++) {
@@ -1134,9 +1171,30 @@
         async function showSingleSegment(nodeIndex) {
             if (!window.currentDetailRoute || !routeDetailMap || nodeIndex <= 0) {
                 if (nodeIndex === 0) {
-                    // Nếu là điểm đầu tiên, chỉ focus vào điểm đó
+                    // Nếu là điểm đầu tiên, chỉ focus vào điểm đó và hiển thị marker
                     const route = window.currentDetailRoute;
                     const node = instance.nodes[route.sequence[0]];
+
+                    // Clear all layers first
+                    routeDetailMap.eachLayer((layer) => {
+                        if (layer instanceof L.Polyline || layer instanceof L.Marker) {
+                            routeDetailMap.removeLayer(layer);
+                        }
+                    });
+
+                    // Add marker for the first node
+                    const iconHtml = '<div class="w-4 h-4 bg-blue-600 rounded-full border-2 border-white shadow-lg"></div>';
+                    const marker = L.marker(node.coords, {
+                        icon: L.divIcon({
+                            html: iconHtml,
+                            className: 'custom-marker',
+                            iconSize: [16, 16],
+                            iconAnchor: [8, 8]
+                        })
+                    });
+                    marker.bindTooltip(`Depot ${node.id}<br>Demand: ${node.demand}`);
+                    marker.addTo(routeDetailMap);
+
                     routeDetailMap.setView(node.coords, 15);
                     updateSingleNodeHighlight(nodeIndex);
                 }
@@ -1151,7 +1209,7 @@
                 await buildRouteSegments(window.currentDetailRoute);
             }
 
-            // Clear existing displayed segments
+            // Clear existing displayed segments and all layers
             displayedSegments.forEach(segment => {
                 if (segment.polyline) {
                     routeDetailMap.removeLayer(segment.polyline);
@@ -1159,8 +1217,66 @@
             });
             displayedSegments = [];
 
-            // Add only the single segment leading to this node
+            // Clear all existing layers
+            routeDetailMap.eachLayer((layer) => {
+                if (layer instanceof L.Polyline || layer instanceof L.Marker) {
+                    routeDetailMap.removeLayer(layer);
+                }
+            });
+
+            const route = window.currentDetailRoute;
+
+            // Add markers for the two nodes involved in this segment
             const segmentIndex = nodeIndex - 1; // Segment from (nodeIndex-1) to nodeIndex
+            if (segmentIndex >= 0) {
+                // Add marker for start node
+                const startNodeId = route.sequence[segmentIndex];
+                const startNode = instance.nodes[startNodeId];
+                let startIconHtml;
+                if (startNode.is_depot) {
+                    startIconHtml = '<div class="w-4 h-4 bg-blue-600 rounded-full border-2 border-white shadow-lg"></div>';
+                } else if (startNode.is_pickup) {
+                    startIconHtml = '<div class="w-4 h-4 bg-green-600 rounded border-2 border-white shadow-lg"></div>';
+                } else {
+                    startIconHtml = '<div class="w-4 h-4 bg-red-600 border-2 border-white shadow-lg" style="clip-path: polygon(50% 0%, 0% 100%, 100% 100%);"></div>';
+                }
+
+                const startMarker = L.marker(startNode.coords, {
+                    icon: L.divIcon({
+                        html: startIconHtml,
+                        className: 'custom-marker',
+                        iconSize: [16, 16],
+                        iconAnchor: [8, 8]
+                    })
+                });
+                startMarker.bindTooltip(`${startNode.is_depot ? 'Depot' : startNode.is_pickup ? 'Pickup' : 'Delivery'} ${startNodeId}<br>Demand: ${startNode.demand}`);
+                startMarker.addTo(routeDetailMap);
+
+                // Add marker for end node
+                const endNodeId = route.sequence[nodeIndex];
+                const endNode = instance.nodes[endNodeId];
+                let endIconHtml;
+                if (endNode.is_depot) {
+                    endIconHtml = '<div class="w-4 h-4 bg-blue-600 rounded-full border-2 border-white shadow-lg"></div>';
+                } else if (endNode.is_pickup) {
+                    endIconHtml = '<div class="w-4 h-4 bg-green-600 rounded border-2 border-white shadow-lg"></div>';
+                } else {
+                    endIconHtml = '<div class="w-4 h-4 bg-red-600 border-2 border-white shadow-lg" style="clip-path: polygon(50% 0%, 0% 100%, 100% 100%);"></div>';
+                }
+
+                const endMarker = L.marker(endNode.coords, {
+                    icon: L.divIcon({
+                        html: endIconHtml,
+                        className: 'custom-marker',
+                        iconSize: [16, 16],
+                        iconAnchor: [8, 8]
+                    })
+                });
+                endMarker.bindTooltip(`${endNode.is_depot ? 'Depot' : endNode.is_pickup ? 'Pickup' : 'Delivery'} ${endNodeId}<br>Demand: ${endNode.demand}`);
+                endMarker.addTo(routeDetailMap);
+            }
+
+            // Add only the single segment leading to this node
             if (segmentIndex >= 0 && segmentIndex < routeSegments.length) {
                 const segment = routeSegments[segmentIndex];
                 const polyline = L.polyline(segment.coords, {
@@ -1210,9 +1326,9 @@
             });
             displayedSegments = [];
 
-            // Clear any existing route polylines
+            // Clear any existing route polylines and markers
             routeDetailMap.eachLayer((layer) => {
-                if (layer instanceof L.Polyline) {
+                if (layer instanceof L.Polyline || layer instanceof L.Marker) {
                     routeDetailMap.removeLayer(layer);
                 }
             });
@@ -1325,7 +1441,10 @@
         }
 
         function runInstance(event) {
-            event.preventDefault();
+            console.log('runInstance called with event:', event);
+            if (event) {
+                event.preventDefault();
+            }
             const instance = document.getElementById('instance_textarea').value;
 
             if (!instance.trim()) {
@@ -1351,7 +1470,7 @@
             console.log('Sending parameters:', params);
 
             // Hiển thị loading
-            const submitBtn = event.target.querySelector('button[type="submit"]');
+            const submitBtn = document.querySelector('button[onclick="runInstance()"]');
             const originalText = submitBtn.innerHTML;
             submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i><span>Đang xử lý...</span>';
             submitBtn.disabled = true;
@@ -1916,6 +2035,7 @@
 
         // Hàm load instance ví dụ
         function loadSampleInstance() {
+            console.log('loadSampleInstance called');
             const sampleInstance = `NAME: bar-n100-1
 LOCATION: Barcelona
 COMMENT:  Sartori and Buriol (2019)

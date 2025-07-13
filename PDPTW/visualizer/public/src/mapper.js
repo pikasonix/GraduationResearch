@@ -132,6 +132,12 @@ function fade_routes(is_fading, except_id) {
 
 function highlight_route(route, light_on) {
     if (light_on) {
+        // Hide all other routes completely
+        for (const [id, layer] of polygons) {
+            if (id !== route.id && map.hasLayer(layer)) {
+                map.removeLayer(layer);
+            }
+        }
         const routeLayer = polygons.get(route.id);
         if (routeLayer) {
             if (use_real_routing) {
@@ -149,6 +155,10 @@ function highlight_route(route, light_on) {
         }
         fade_routes(true, route.id);
     } else {
+        // Restore all routes on deselect
+        for (const layer of polygons.values()) {
+            if (!map.hasLayer(layer)) layer.addTo(map);
+        }
         const routeLayer = polygons.get(route.id);
         if (routeLayer) {
             if (use_real_routing) {
@@ -712,7 +722,21 @@ function read_solution_file(input) {
         is_solution_loaded = true;
         routes_showing = true;
         routes_filled = true;
-
+        // Load any cached full routes and set for details view
+        loadCacheFromStorage();
+        if (cache_enabled && routing_cache.size > 0) {
+            solution.routes.forEach(route => {
+                const coordPairs = route.sequence.map(id => {
+                    const c = instance.nodes[id].coords;
+                    return `${c[1]},${c[0]}`;
+                }).join(';');
+                const cacheKey = `full:${coordPairs}`;
+                if (routing_cache.has(cacheKey)) {
+                    console.log(`Using cached route for details of ${route.id}`);
+                    route.path = routing_cache.get(cacheKey);
+                }
+            });
+        }
         enable_solution_buttons(true)
         select_button(show_routes_btn, true)
         select_button(fill_routes_btn, true)
@@ -961,58 +985,54 @@ async function buildRealRoute(route) {
     console.log('buildRealRoute called for route:', route.id);
     console.log('Route sequence:', route.sequence);
 
-    const routeCoords = [];
     const sequence = route.sequence;
-
     if (!sequence || sequence.length < 2) {
         console.warn('Invalid route sequence for route', route.id);
         return route.path; // Fallback to original path
     }
 
-    const cacheStats = getCacheStats();
-    console.log(`Cache stats: ${cacheStats.entries} entries, ${cacheStats.sizeKB} KB`);
-
-    for (let i = 0; i < sequence.length - 1; i++) {
-        const currentNodeId = sequence[i];
-        const nextNodeId = sequence[i + 1];
-
-        console.log(`Processing segment ${i}: ${currentNodeId} -> ${nextNodeId}`);
-
-        // Get coordinates from instance nodes
-        const startCoord = instance.nodes[currentNodeId].coords;
-        const endCoord = instance.nodes[nextNodeId].coords;
-
-        if (use_real_routing) {
-            const segmentCoords = await getRouteFromAPI(startCoord, endCoord);
-            console.log(`Segment ${i}: Got ${segmentCoords.length} coordinates`);
-
-            // Add all coordinates except the last one (to avoid duplication)
-            if (i === 0) {
-                routeCoords.push(...segmentCoords);
-            } else {
-                routeCoords.push(...segmentCoords.slice(1));
-            }
-        } else {
-            // Use straight line
-            if (i === 0) {
-                routeCoords.push(startCoord, endCoord);
-            } else {
-                routeCoords.push(endCoord);
-            }
+    if (use_real_routing) {
+        // Single OSRM request for full route through all waypoints
+        const coordPairs = sequence.map(id => {
+            const c = instance.nodes[id].coords;
+            return `${c[1]},${c[0]}`;
+        }).join(';');
+        const cacheKey = `full:${coordPairs}`;
+        if (cache_enabled && routing_cache.has(cacheKey)) {
+            console.log(`Cache hit for full route ${route.id}`);
+            return routing_cache.get(cacheKey);
         }
-
-        // Add small delay to avoid overwhelming the API (only for non-cached requests)
-        if (use_real_routing && i < sequence.length - 2) {
-            const cacheKey = generateCacheKey(startCoord, endCoord);
-            if (!routing_cache.has(cacheKey)) {
-                await new Promise(resolve => setTimeout(resolve, 150));
+        try {
+            console.log(`Fetching full route for route ${route.id}`);
+            const url = `https://router.project-osrm.org/route/v1/driving/${coordPairs}?overview=full&geometries=geojson`;
+            const response = await fetch(url);
+            const data = await response.json();
+            let routeCoords;
+            if (data.routes && data.routes.length > 0) {
+                routeCoords = data.routes[0].geometry.coordinates.map(coord => [coord[1], coord[0]]);
+            } else {
+                console.warn('No full route found, fallback to straight lines');
+                routeCoords = sequence.map(id => instance.nodes[id].coords);
             }
+            if (cache_enabled) {
+                routing_cache.set(cacheKey, routeCoords);
+                saveCacheToStorage();
+            }
+            // Update route.path so details view uses real routing geometry
+            route.path = routeCoords;
+            return routeCoords;
+        } catch (error) {
+            console.warn('Full route API error:', error, 'Using straight lines fallback');
+            const fallback = sequence.map(id => instance.nodes[id].coords);
+            // Fallback path assignment
+            route.path = fallback;
+            if (cache_enabled) routing_cache.set(cacheKey, fallback);
+            return fallback;
         }
+    } else {
+        // Straight-line fallback when real routing disabled
+        return sequence.map(id => instance.nodes[id].coords);
     }
-
-    console.log(`buildRealRoute completed for route ${route.id}. Total coordinates:`, routeCoords.length);
-
-    return routeCoords.length > 0 ? routeCoords : route.path;
 }
 
 function toggleRealRouting() {
