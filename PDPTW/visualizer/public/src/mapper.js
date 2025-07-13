@@ -131,13 +131,9 @@ function fade_routes(is_fading, except_id) {
 }
 
 function highlight_route(route, light_on) {
+    console.log('highlight_route called:', { route: route.id, light_on, use_real_routing });
+
     if (light_on) {
-        // Hide all other routes completely
-        for (const [id, layer] of polygons) {
-            if (id !== route.id && map.hasLayer(layer)) {
-                map.removeLayer(layer);
-            }
-        }
         const routeLayer = polygons.get(route.id);
         if (routeLayer) {
             if (use_real_routing) {
@@ -147,18 +143,18 @@ function highlight_route(route, light_on) {
                     weight: 6,
                     opacity: 1
                 }).bringToFront();
+                console.log('Highlighted polyline for route:', route.id);
             } else {
                 // For polygons, use existing logic
                 let style = routes_filled ? highlight_route_filled_style : highlight_route_hollow_style;
                 routeLayer.setStyle(style.highlight).bringToFront();
+                console.log('Highlighted polygon for route:', route.id);
             }
+        } else {
+            console.warn('Route layer not found for route:', route.id);
         }
         fade_routes(true, route.id);
     } else {
-        // Restore all routes on deselect
-        for (const layer of polygons.values()) {
-            if (!map.hasLayer(layer)) layer.addTo(map);
-        }
         const routeLayer = polygons.get(route.id);
         if (routeLayer) {
             if (use_real_routing) {
@@ -168,26 +164,48 @@ function highlight_route(route, light_on) {
                     weight: 4,
                     opacity: 0.8
                 });
+                console.log('Reset polyline style for route:', route.id);
             } else {
                 // Reset polygon style
                 routeLayer.setStyle({ 'color': route.color });
+                console.log('Reset polygon style for route:', route.id);
             }
+        } else {
+            console.warn('Route layer not found for route:', route.id);
         }
         fade_routes(false, undefined);
     }
 }
 
 function clear_route_selection(event) {
+    console.log('clear_route_selection called, current selected_route:', selected_route?.id);
+
     if (selected_route != null) {
-        polygons.get(selected_route.id).setStyle({ 'color': selected_route.color });
+        const routeLayer = polygons.get(selected_route.id);
+        if (routeLayer) {
+            if (use_real_routing) {
+                // Reset polyline style
+                routeLayer.setStyle({
+                    color: selected_route.color,
+                    weight: 4,
+                    opacity: 0.8
+                });
+            } else {
+                // Reset polygon style
+                routeLayer.setStyle({ 'color': selected_route.color });
+            }
+        }
         color_side_bar_btn(event, selected_route.side_bar_btn)
         selected_route = null;
+        console.log('Route selection cleared');
     }
     fade_routes(false, undefined);
 }
 
 
 function on_click_route(event, route, closing = false) {
+    console.log('on_click_route called:', { route: route.id, closing, selected_route: selected_route?.id });
+
     if (closing) {
         if (selected_route !== null && selected_route.id !== route.id)
             return
@@ -202,6 +220,7 @@ function on_click_route(event, route, closing = false) {
     color_side_bar_btn(event, route.side_bar_btn)
 
     selected_route = route;
+    console.log('Route selected:', route.id);
 }
 
 
@@ -622,11 +641,23 @@ function reset_visualizer() {
 
 
 async function draw_solution(solution) {
-    console.log('draw_solution called with:', solution);
+    console.log('=== draw_solution called ===');
+    console.log('Solution:', solution);
     console.log('use_real_routing:', use_real_routing);
+    console.log('Number of routes:', solution.routes?.length);
+
+    // Clear existing routes first
+    console.log('Clearing existing routes...');
+    for (const p of polygons.values()) {
+        map.removeLayer(p);
+    }
+    polygons.clear();
+    routes_polylines.clear();
 
     for (var route of solution.routes) {
-        console.log('Processing route:', route.id, 'sequence:', route.sequence);
+        console.log('=== Processing route:', route.id, '===');
+        console.log('Route sequence:', route.sequence);
+        console.log('Route color:', route.color);
 
         const tooltipText = `<b>Route ${route.id}</b><br>Cost: ${route.cost}<br>Nodes: ${route.sequence.length}<br>${use_real_routing ? 'Real routing' : 'Straight lines'}`;
 
@@ -649,16 +680,20 @@ async function draw_solution(solution) {
 
             // Add click events to polyline
             polyline.on('click', function (e) {
+                console.log('Polyline clicked for route:', route.id);
+                e.originalEvent.stopPropagation();
                 on_click_route(e, route, false);
             });
 
             polyline.on('mouseover', function (e) {
+                console.log('Polyline mouseover for route:', route.id);
                 if (selected_route == null) {
                     highlight_route(route, true);
                 }
             });
 
             polyline.on('mouseout', function (e) {
+                console.log('Polyline mouseout for route:', route.id);
                 if (selected_route == null) {
                     highlight_route(route, false);
                 }
@@ -670,13 +705,18 @@ async function draw_solution(solution) {
             // Also store in polygons map for compatibility with existing code
             polygons.set(route.id, polyline);
 
-            console.log('Added polyline for route', route.id, 'to map');
+            console.log('✓ Added polyline for route', route.id, 'to map');
         } else {
             console.log('Creating polygon for route', route.id);
 
             // Original polygon method
             let p = route.path;
             console.log('Route path:', p);
+
+            if (!p || p.length === 0) {
+                console.warn('⚠️ Route path is empty for route', route.id);
+                continue;
+            }
 
             let poly = L.polygon(p, { color: route.color });
 
@@ -685,16 +725,20 @@ async function draw_solution(solution) {
 
             // Add click events to polygon
             poly.on('click', function (e) {
+                console.log('Polygon clicked for route:', route.id);
+                e.originalEvent.stopPropagation();
                 on_click_route(e, route, false);
             });
 
             poly.on('mouseover', function (e) {
+                console.log('Polygon mouseover for route:', route.id);
                 if (selected_route == null) {
                     highlight_route(route, true);
                 }
             });
 
             poly.on('mouseout', function (e) {
+                console.log('Polygon mouseout for route:', route.id);
                 if (selected_route == null) {
                     highlight_route(route, false);
                 }
@@ -703,11 +747,19 @@ async function draw_solution(solution) {
             poly.addTo(map);
             polygons.set(route.id, poly);
 
-            console.log('Added polygon for route', route.id, 'to map');
+            console.log('✓ Added polygon for route', route.id, 'to map');
         }
     }
 
-    console.log('draw_solution completed. Total routes processed:', solution.routes.length);
+    console.log('=== draw_solution completed ===');
+    console.log('Total routes processed:', solution.routes.length);
+    console.log('Polygons map size:', polygons.size);
+    console.log('Routes polylines map size:', routes_polylines.size);
+
+    // Test interactivity after drawing
+    setTimeout(() => {
+        testRouteInteractivity();
+    }, 100);
 }
 
 function enable_solution_buttons(active) {
@@ -1136,3 +1188,26 @@ async function redrawRoutesWithNewMode() {
         }
     }
 }
+
+// Debug function to test route interactivity
+function testRouteInteractivity() {
+    console.log('Testing route interactivity...');
+    console.log('Total routes in polygons map:', polygons.size);
+    console.log('use_real_routing:', use_real_routing);
+
+    for (const [routeId, layer] of polygons) {
+        console.log(`Route ${routeId}:`, {
+            layerType: layer instanceof L.Polyline ? 'polyline' : layer instanceof L.Polygon ? 'polygon' : 'unknown',
+            hasClickEvent: layer.listens('click'),
+            hasMouseoverEvent: layer.listens('mouseover'),
+            bounds: layer.getBounds ? layer.getBounds() : 'no bounds'
+        });
+    }
+
+    if (solution && solution.routes) {
+        console.log('Routes in solution:', solution.routes.map(r => ({ id: r.id, color: r.color, sequenceLength: r.sequence?.length })));
+    }
+}
+
+// Make it globally available for console testing
+window.testRouteInteractivity = testRouteInteractivity;
