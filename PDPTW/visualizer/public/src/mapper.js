@@ -45,7 +45,7 @@ function saveCacheToStorage() {
 function showCacheInfo() {
     const stats = getCacheStats();
     const cacheSize = (JSON.stringify(Object.fromEntries(routing_cache)).length / 1024).toFixed(2);
-    
+
     const info = `
 Thông tin Cache:
 • Số tuyến đường đã lưu: ${stats.total}
@@ -55,7 +55,7 @@ Thông tin Cache:
 • Kích thước cache: ${cacheSize} KB
 • Cache trong localStorage: ${localStorage.getItem('pdptw_routing_cache') ? 'Có' : 'Không'}
     `.trim();
-    
+
     alert(info);
 }
 
@@ -106,7 +106,7 @@ function fade_routes(is_fading, except_id) {
     if (is_fading) {
         for (const [key, p] of polygons) {
             if (key === except_id) continue;
-            
+
             if (use_real_routing) {
                 // For polylines
                 p.setStyle({ opacity: 0.3, weight: 2 });
@@ -614,89 +614,89 @@ function reset_visualizer() {
 async function draw_solution(solution) {
     console.log('draw_solution called with:', solution);
     console.log('use_real_routing:', use_real_routing);
-    
+
     for (var route of solution.routes) {
         console.log('Processing route:', route.id, 'sequence:', route.sequence);
-        
+
         const tooltipText = `<b>Route ${route.id}</b><br>Cost: ${route.cost}<br>Nodes: ${route.sequence.length}<br>${use_real_routing ? 'Real routing' : 'Straight lines'}`;
-        
+
         if (use_real_routing) {
             console.log('Building real route for route', route.id);
-            
+
             // Build real route using routing API
             const routeCoords = await buildRealRoute(route);
             console.log('Real route coords for route', route.id, ':', routeCoords.length, 'points');
-            
+
             // Create polyline instead of polygon for real routes
-            let polyline = L.polyline(routeCoords, { 
-                color: route.color, 
+            let polyline = L.polyline(routeCoords, {
+                color: route.color,
                 weight: 4,
                 opacity: 0.8
             });
-            
+
             // Add tooltip
             polyline.bindTooltip(tooltipText);
-            
+
             // Add click events to polyline
-            polyline.on('click', function(e) {
+            polyline.on('click', function (e) {
                 on_click_route(e, route, false);
             });
-            
-            polyline.on('mouseover', function(e) {
+
+            polyline.on('mouseover', function (e) {
                 if (selected_route == null) {
                     highlight_route(route, true);
                 }
             });
-            
-            polyline.on('mouseout', function(e) {
+
+            polyline.on('mouseout', function (e) {
                 if (selected_route == null) {
                     highlight_route(route, false);
                 }
             });
-            
+
             polyline.addTo(map);
             routes_polylines.set(route.id, polyline);
-            
+
             // Also store in polygons map for compatibility with existing code
             polygons.set(route.id, polyline);
-            
+
             console.log('Added polyline for route', route.id, 'to map');
         } else {
             console.log('Creating polygon for route', route.id);
-            
+
             // Original polygon method
             let p = route.path;
             console.log('Route path:', p);
-            
+
             let poly = L.polygon(p, { color: route.color });
-            
+
             // Add tooltip
             poly.bindTooltip(tooltipText);
-            
+
             // Add click events to polygon
-            poly.on('click', function(e) {
+            poly.on('click', function (e) {
                 on_click_route(e, route, false);
             });
-            
-            poly.on('mouseover', function(e) {
+
+            poly.on('mouseover', function (e) {
                 if (selected_route == null) {
                     highlight_route(route, true);
                 }
             });
-            
-            poly.on('mouseout', function(e) {
+
+            poly.on('mouseout', function (e) {
                 if (selected_route == null) {
                     highlight_route(route, false);
                 }
             });
-            
+
             poly.addTo(map);
             polygons.set(route.id, poly);
-            
+
             console.log('Added polygon for route', route.id, 'to map');
         }
     }
-    
+
     console.log('draw_solution completed. Total routes processed:', solution.routes.length);
 }
 
@@ -719,6 +719,11 @@ function read_solution_file(input) {
         draw_solution(solution)
         activate_routes_list()
         list_routes_in_menu()
+
+        // Update route selector in route details page
+        if (typeof populateRouteSelector === 'function') {
+            populateRouteSelector();
+        }
 
         // Show and populate route analysis section
         if (typeof showRouteAnalysisSection === 'function') {
@@ -905,21 +910,21 @@ function read_instance_file(input, callback) {
 async function getRouteFromAPI(startCoord, endCoord) {
     // Generate cache key
     const cacheKey = generateCacheKey(startCoord, endCoord);
-    
+
     // Check cache first
     if (cache_enabled && routing_cache.has(cacheKey)) {
         console.log(`Cache hit for ${cacheKey}`);
         return routing_cache.get(cacheKey);
     }
-    
+
     try {
         // Using OSRM Demo API - for production use your own instance
         const url = `https://router.project-osrm.org/route/v1/driving/${startCoord[1]},${startCoord[0]};${endCoord[1]},${endCoord[0]}?overview=full&geometries=geojson`;
-        
+
         console.log(`Fetching route from API: ${cacheKey}`);
         const response = await fetch(url);
         const data = await response.json();
-        
+
         let routeCoords;
         if (data.routes && data.routes.length > 0) {
             // Convert coordinates from [lng, lat] to [lat, lng] for Leaflet
@@ -928,7 +933,7 @@ async function getRouteFromAPI(startCoord, endCoord) {
             console.warn('No route found, using straight line');
             routeCoords = [startCoord, endCoord];
         }
-        
+
         // Cache the result
         if (cache_enabled) {
             routing_cache.set(cacheKey, routeCoords);
@@ -937,17 +942,17 @@ async function getRouteFromAPI(startCoord, endCoord) {
                 saveCacheToStorage();
             }
         }
-        
+
         return routeCoords;
     } catch (error) {
         console.warn('Routing API error:', error, 'Using straight line');
         const fallback = [startCoord, endCoord];
-        
+
         // Cache the fallback too to avoid repeated failed API calls
         if (cache_enabled) {
             routing_cache.set(cacheKey, fallback);
         }
-        
+
         return fallback;
     }
 }
@@ -955,32 +960,32 @@ async function getRouteFromAPI(startCoord, endCoord) {
 async function buildRealRoute(route) {
     console.log('buildRealRoute called for route:', route.id);
     console.log('Route sequence:', route.sequence);
-    
+
     const routeCoords = [];
     const sequence = route.sequence;
-    
+
     if (!sequence || sequence.length < 2) {
         console.warn('Invalid route sequence for route', route.id);
         return route.path; // Fallback to original path
     }
-    
+
     const cacheStats = getCacheStats();
     console.log(`Cache stats: ${cacheStats.entries} entries, ${cacheStats.sizeKB} KB`);
-    
+
     for (let i = 0; i < sequence.length - 1; i++) {
         const currentNodeId = sequence[i];
         const nextNodeId = sequence[i + 1];
-        
+
         console.log(`Processing segment ${i}: ${currentNodeId} -> ${nextNodeId}`);
-        
+
         // Get coordinates from instance nodes
         const startCoord = instance.nodes[currentNodeId].coords;
         const endCoord = instance.nodes[nextNodeId].coords;
-        
+
         if (use_real_routing) {
             const segmentCoords = await getRouteFromAPI(startCoord, endCoord);
             console.log(`Segment ${i}: Got ${segmentCoords.length} coordinates`);
-            
+
             // Add all coordinates except the last one (to avoid duplication)
             if (i === 0) {
                 routeCoords.push(...segmentCoords);
@@ -995,7 +1000,7 @@ async function buildRealRoute(route) {
                 routeCoords.push(endCoord);
             }
         }
-        
+
         // Add small delay to avoid overwhelming the API (only for non-cached requests)
         if (use_real_routing && i < sequence.length - 2) {
             const cacheKey = generateCacheKey(startCoord, endCoord);
@@ -1004,27 +1009,27 @@ async function buildRealRoute(route) {
             }
         }
     }
-    
+
     console.log(`buildRealRoute completed for route ${route.id}. Total coordinates:`, routeCoords.length);
-    
+
     return routeCoords.length > 0 ? routeCoords : route.path;
 }
 
 function toggleRealRouting() {
     console.log('toggleRealRouting called. Current use_real_routing:', use_real_routing);
-    
+
     use_real_routing = !use_real_routing;
-    
+
     console.log('New use_real_routing:', use_real_routing);
-    
+
     // Update button text and style
     const button = document.getElementById('toggle_routing_btn');
     if (button) {
         const icon = button.querySelector('i');
         const text = button.querySelector('span');
-        
+
         console.log('Button found, updating UI');
-        
+
         if (use_real_routing) {
             text.textContent = 'Tắt đường thực tế';
             button.style.backgroundColor = '#10b981';
@@ -1039,10 +1044,10 @@ function toggleRealRouting() {
     } else {
         console.error('Button not found!');
     }
-    
+
     // Redraw routes if solution is loaded
     console.log('Checking if solution is loaded:', is_solution_loaded, solution);
-    
+
     if (is_solution_loaded && solution) {
         console.log('Redrawing routes with new mode');
         redrawRoutesWithNewMode();
@@ -1056,7 +1061,7 @@ async function redrawRoutesWithNewMode() {
     if (use_real_routing && routing_cache.size > 0) {
         saveCacheToStorage();
     }
-    
+
     // Clear existing routes
     for (const p of polygons.values()) {
         map.removeLayer(p);
@@ -1064,10 +1069,10 @@ async function redrawRoutesWithNewMode() {
     for (const p of routes_polylines.values()) {
         map.removeLayer(p);
     }
-    
+
     polygons.clear();
     routes_polylines.clear();
-    
+
     // Show loading indicator with cache info
     const cacheStats = getCacheStats();
     const loadingDiv = document.createElement('div');
@@ -1092,10 +1097,10 @@ async function redrawRoutesWithNewMode() {
         </div>
     `;
     document.body.appendChild(loadingDiv);
-    
+
     try {
         await draw_solution(solution);
-        
+
         // Save cache after successful completion
         if (use_real_routing) {
             saveCacheToStorage();

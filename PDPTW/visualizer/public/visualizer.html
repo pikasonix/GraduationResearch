@@ -32,6 +32,29 @@
         }
     </script>
 
+    <!-- Custom Navigation Styles -->
+    <style>
+        .nav-tab {
+            color: #6b7280;
+            border: 1px solid transparent;
+        }
+        .nav-tab:hover {
+            color: #374151;
+            background-color: #f3f4f6;
+        }
+        .nav-tab.active {
+            color: #3b82f6;
+            background-color: #eff6ff;
+            border-color: #3b82f6;
+        }
+        .page-content {
+            height: calc(100vh - 60px);
+        }
+        .page-content.hidden {
+            display: none;
+        }
+    </style>
+
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css"
         integrity="sha512-xodZBNTC5n17Xt2atTPuE1HxjVMSvLVW9ocqUKLsCC5CXdbqCmblAshOMAS6/keqq/sMZMZ19scR4PsZChSR7A=="
@@ -57,14 +80,44 @@
 </head>
 
 <body class="bg-gray-100 font-sans">
-    <div class="flex h-screen">
+    <!-- Navigation Header -->
+    <nav class="bg-white shadow-sm border-b border-gray-200">
+        <div class="flex items-center justify-between px-6 py-3">
+            <div class="flex items-center space-x-4">
+                <i class="fas fa-route text-2xl text-blue-600"></i>
+                <h1 class="text-xl font-bold text-gray-800">PDPTW Visualizer</h1>
+            </div>
+            
+            <!-- Navigation Tabs -->
+            <div class="flex space-x-1">
+                <button onclick="showPage('dashboard')" 
+                    class="nav-tab active px-4 py-2 text-sm font-medium rounded-lg transition-colors duration-200"
+                    id="dashboard-tab">
+                    <i class="fas fa-tachometer-alt mr-2"></i>Dashboard
+                </button>
+                <button onclick="showPage('route-details')" 
+                    class="nav-tab px-4 py-2 text-sm font-medium rounded-lg transition-colors duration-200"
+                    id="route-details-tab">
+                    <i class="fas fa-route mr-2"></i>Chi tiết Routes
+                </button>
+                <button onclick="showPage('guide')" 
+                    class="nav-tab px-4 py-2 text-sm font-medium rounded-lg transition-colors duration-200"
+                    id="guide-tab">
+                    <i class="fas fa-map mr-2"></i>Hướng dẫn
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Dashboard Page (Current functionality) -->
+    <div id="dashboard-page" class="page-content flex h-screen">
         <!-- Sidebar -->
         <div class="w-80 bg-white shadow-xl border-r border-gray-200 flex flex-col overflow-hidden">
-            <!-- Header -->
-            <div class="bg-gradient-to-r from-blue-600 to-purple-600 text-white p-6">
+            <!-- Sidebar Header -->
+            <div class="bg-gradient-to-r from-blue-600 to-purple-600 text-white p-4">
                 <div class="flex items-center space-x-3">
-                    <i class="fas fa-route text-2xl"></i>
-                    <h1 class="text-xl font-bold">PDPTW Visualizer</h1>
+                    <i class="fas fa-cog text-xl"></i>
+                    <h2 class="text-lg font-semibold">Điều khiển</h2>
                 </div>
             </div>
 
@@ -232,7 +285,7 @@
                         <i class="fa fa-file-alt text-blue-600"></i>
                         <span class="font-medium text-gray-700">Load Solution</span>
                     </button>
-                    
+
                     <!-- Real Routing Controls -->
                     <div class="space-y-2">
                         <!-- Real Routing Toggle Button -->
@@ -241,15 +294,15 @@
                             <i class="fas fa-map-marked-alt"></i>
                             <span>Bật đường thực tế</span>
                         </button>
-                        
+
                         <!-- Cache Controls -->
                         <div class="flex space-x-2">
-                            <button onclick="showCacheInfo()" 
+                            <button onclick="showCacheInfo()"
                                 class="flex-1 flex items-center justify-center space-x-1 px-2 py-1 bg-blue-500 hover:bg-blue-600 text-white text-xs rounded transition-colors duration-200">
                                 <i class="fas fa-info-circle"></i>
                                 <span>Cache Info</span>
                             </button>
-                            <button onclick="clearRoutingCache(); alert('Cache đã được xóa!');" 
+                            <button onclick="clearRoutingCache(); alert('Cache đã được xóa!');"
                                 class="flex-1 flex items-center justify-center space-x-1 px-2 py-1 bg-red-500 hover:bg-red-600 text-white text-xs rounded transition-colors duration-200">
                                 <i class="fas fa-trash"></i>
                                 <span>Xóa Cache</span>
@@ -270,7 +323,7 @@
                             class="fa fa-angle-down text-gray-400 transform transition-transform duration-200"></i>
                     </button>
                     <div id="nodes_dropdown" class="hidden bg-gray-50 max-h-40 overflow-y-auto"></div>
-                </div>                <!-- Routes Section -->
+                </div> <!-- Routes Section -->
                 <div class="border-b border-gray-200">
                     <button id="routes_button" onclick="toggleDropdown('routes')"
                         class="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-50 transition-colors duration-200">
@@ -325,6 +378,252 @@
                 <div id="route_detail_content"></div>
             </div>
         </div>
+    </div> <!-- End Dashboard Page -->
+
+    <!-- Route Details Page -->
+    <div id="route-details-page" class="page-content hidden">
+        <div class="flex h-screen">
+            <!-- Route List Sidebar -->
+            <div class="w-80 bg-white shadow-xl border-r border-gray-200 flex flex-col overflow-hidden">
+                <div class="bg-gradient-to-r from-green-600 to-blue-600 text-white p-4">
+                    <div class="flex items-center space-x-3">
+                        <i class="fas fa-route text-xl"></i>
+                        <h2 class="text-lg font-semibold">Chi tiết Routes</h2>
+                    </div>
+                </div>
+
+                <!-- Route Selection -->
+                <div class="p-4 border-b border-gray-200">
+                    <div class="space-y-3">
+                        <label class="text-sm font-medium text-gray-700">Chọn Route để xem chi tiết:</label>
+                        <select id="route-selector" onchange="showRouteDetail(this.value)" 
+                            class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <option value="">-- Chọn Route --</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Route Summary -->
+                <div id="route-summary" class="p-4 border-b border-gray-200 hidden">
+                    <h3 class="text-sm font-semibold text-gray-700 mb-3">Thông tin tổng quan:</h3>
+                    <div class="space-y-2">
+                        <div class="flex justify-between text-sm">
+                            <span class="text-gray-600">Tổng chi phí:</span>
+                            <span id="route-cost" class="font-medium"></span>
+                        </div>
+                        <div class="flex justify-between text-sm">
+                            <span class="text-gray-600">Số điểm:</span>
+                            <span id="route-nodes" class="font-medium"></span>
+                        </div>
+                        <div class="flex justify-between text-sm">
+                            <span class="text-gray-600">Tổng khoảng cách:</span>
+                            <span id="route-distance" class="font-medium"></span>
+                        </div>
+                        <div class="flex justify-between text-sm">
+                            <span class="text-gray-600">Thời gian thực hiện:</span>
+                            <span id="route-time" class="font-medium"></span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Node Sequence -->
+                <div class="flex-1 overflow-y-auto">
+                    <div class="p-4">
+                        <h3 class="text-sm font-semibold text-gray-700 mb-3">Trình tự các điểm:</h3>
+                        <div id="node-sequence" class="space-y-2">
+                            <!-- Node sequence will be populated here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Route Detail Map and Timeline -->
+            <div class="flex-1 flex flex-col">
+                <!-- Route Detail Map -->
+                <div class="flex-1 bg-gray-50">
+                    <div id="route-detail-map" class="w-full h-full"></div>
+                </div>
+
+                <!-- Route Timeline -->
+                <div class="h-64 bg-white border-t border-gray-200 p-4">
+                    <h3 class="text-lg font-semibold text-gray-800 mb-4">Timeline thực hiện Route</h3>
+                    <div id="route-timeline" class="w-full h-48"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Guide Page -->
+    <div id="guide-page" class="page-content hidden">
+        <div class="max-w-6xl mx-auto p-6">
+            <div class="bg-white rounded-lg shadow-lg overflow-hidden">
+                <!-- Guide Header -->
+                <div class="bg-gradient-to-r from-purple-600 to-blue-600 text-white p-6">
+                    <div class="flex items-center space-x-3">
+                        <i class="fas fa-map text-2xl"></i>
+                        <h1 class="text-2xl font-bold">Hướng dẫn sử dụng PDPTW Visualizer</h1>
+                    </div>
+                </div>
+
+                <!-- Guide Content -->
+                <div class="p-6">
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                        <!-- Getting Started -->
+                        <div class="space-y-6">
+                            <div class="border-l-4 border-blue-500 pl-4">
+                                <h2 class="text-xl font-semibold text-gray-800 mb-3">
+                                    <i class="fas fa-play-circle text-blue-500 mr-2"></i>
+                                    Bắt đầu
+                                </h2>
+                                <ol class="space-y-3 text-gray-700">
+                                    <li class="flex items-start space-x-2">
+                                        <span class="bg-blue-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm font-semibold flex-shrink-0 mt-0.5">1</span>
+                                        <div>
+                                            <strong>Load Instance:</strong> Click "Load Instance" để tải file dữ liệu bài toán PDPTW hoặc nhập trực tiếp vào textarea.
+                                        </div>
+                                    </li>
+                                    <li class="flex items-start space-x-2">
+                                        <span class="bg-blue-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm font-semibold flex-shrink-0 mt-0.5">2</span>
+                                        <div>
+                                            <strong>Chạy thuật toán:</strong> Điều chỉnh tham số và click "Chạy thuật toán" để tìm solution.
+                                        </div>
+                                    </li>
+                                    <li class="flex items-start space-x-2">
+                                        <span class="bg-blue-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm font-semibold flex-shrink-0 mt-0.5">3</span>
+                                        <div>
+                                            <strong>Load Solution:</strong> Hoặc tải solution có sẵn từ file.
+                                        </div>
+                                    </li>
+                                    <li class="flex items-start space-x-2">
+                                        <span class="bg-blue-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm font-semibold flex-shrink-0 mt-0.5">4</span>
+                                        <div>
+                                            <strong>Khám phá:</strong> Sử dụng các tab để xem dashboard, chi tiết routes, hoặc đọc hướng dẫn.
+                                        </div>
+                                    </li>
+                                </ol>
+                            </div>
+
+                            <!-- Dashboard Features -->
+                            <div class="border-l-4 border-green-500 pl-4">
+                                <h2 class="text-xl font-semibold text-gray-800 mb-3">
+                                    <i class="fas fa-tachometer-alt text-green-500 mr-2"></i>
+                                    Dashboard
+                                </h2>
+                                <ul class="space-y-2 text-gray-700">
+                                    <li class="flex items-center space-x-2">
+                                        <i class="fas fa-check text-green-500"></i>
+                                        <span>Xem tổng quan tất cả routes trên bản đồ</span>
+                                    </li>
+                                    <li class="flex items-center space-x-2">
+                                        <i class="fas fa-check text-green-500"></i>
+                                        <span>Toggle giữa đường thẳng và đường thực tế</span>
+                                    </li>
+                                    <li class="flex items-center space-x-2">
+                                        <i class="fas fa-check text-green-500"></i>
+                                        <span>Điều khiển hiển thị markers và routes</span>
+                                    </li>
+                                    <li class="flex items-center space-x-2">
+                                        <i class="fas fa-check text-green-500"></i>
+                                        <span>Xem danh sách nodes và routes trong sidebar</span>
+                                    </li>
+                                    <li class="flex items-center space-x-2">
+                                        <i class="fas fa-check text-green-500"></i>
+                                        <span>Phân tích performance và thống kê</span>
+                                    </li>
+                                </ul>
+                            </div>
+                        </div>
+
+                        <!-- Route Details & Features -->
+                        <div class="space-y-6">
+                            <!-- Route Details -->
+                            <div class="border-l-4 border-purple-500 pl-4">
+                                <h2 class="text-xl font-semibold text-gray-800 mb-3">
+                                    <i class="fas fa-route text-purple-500 mr-2"></i>
+                                    Chi tiết Routes
+                                </h2>
+                                <ul class="space-y-2 text-gray-700">
+                                    <li class="flex items-center space-x-2">
+                                        <i class="fas fa-check text-purple-500"></i>
+                                        <span>Xem từng route riêng biệt với bản đồ riêng</span>
+                                    </li>
+                                    <li class="flex items-center space-x-2">
+                                        <i class="fas fa-check text-purple-500"></i>
+                                        <span>Timeline chi tiết thời gian thực hiện</span>
+                                    </li>
+                                    <li class="flex items-center space-x-2">
+                                        <i class="fas fa-check text-purple-500"></i>
+                                        <span>Thông tin chi phí, khoảng cách, thời gian</span>
+                                    </li>
+                                    <li class="flex items-center space-x-2">
+                                        <i class="fas fa-check text-purple-500"></i>
+                                        <span>Trình tự các điểm pickup/delivery</span>
+                                    </li>
+                                </ul>
+                            </div>
+
+                            <!-- Controls Guide -->
+                            <div class="border-l-4 border-orange-500 pl-4">
+                                <h2 class="text-xl font-semibold text-gray-800 mb-3">
+                                    <i class="fas fa-gamepad text-orange-500 mr-2"></i>
+                                    Điều khiển
+                                </h2>
+                                <div class="space-y-3 text-gray-700">
+                                    <div class="bg-gray-50 p-3 rounded">
+                                        <div class="flex items-center space-x-2 mb-1">
+                                            <i class="fas fa-mouse-pointer text-orange-500"></i>
+                                            <strong>Click trên bản đồ:</strong>
+                                        </div>
+                                        <ul class="text-sm space-y-1 ml-6">
+                                            <li>• Click route để highlight</li>
+                                            <li>• Click node để xem thông tin</li>
+                                            <li>• Click ngoài để bỏ selection</li>
+                                        </ul>
+                                    </div>
+                                    <div class="bg-gray-50 p-3 rounded">
+                                        <div class="flex items-center space-x-2 mb-1">
+                                            <i class="fas fa-list text-orange-500"></i>
+                                            <strong>Sidebar:</strong>
+                                        </div>
+                                        <ul class="text-sm space-y-1 ml-6">
+                                            <li>• Hover item để preview trên map</li>
+                                            <li>• Click để select và highlight</li>
+                                            <li>• Dropdown để ẩn/hiện danh sách</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Tips -->
+                            <div class="border-l-4 border-yellow-500 pl-4">
+                                <h2 class="text-xl font-semibold text-gray-800 mb-3">
+                                    <i class="fas fa-lightbulb text-yellow-500 mr-2"></i>
+                                    Mẹo sử dụng
+                                </h2>
+                                <ul class="space-y-2 text-gray-700">
+                                    <li class="flex items-start space-x-2">
+                                        <i class="fas fa-star text-yellow-500 mt-1"></i>
+                                        <span>Sử dụng <strong>Cache Info</strong> để kiểm tra hiệu suất routing API</span>
+                                    </li>
+                                    <li class="flex items-start space-x-2">
+                                        <i class="fas fa-star text-yellow-500 mt-1"></i>
+                                        <span>Real routing sẽ cache kết quả để tăng tốc độ load</span>
+                                    </li>
+                                    <li class="flex items-start space-x-2">
+                                        <i class="fas fa-star text-yellow-500 mt-1"></i>
+                                        <span>Adjust zoom để fit tất cả routes trong view</span>
+                                    </li>
+                                    <li class="flex items-start space-x-2">
+                                        <i class="fas fa-star text-yellow-500 mt-1"></i>
+                                        <span>Sử dụng tab "Chi tiết Routes" để phân tích sâu từng route</span>
+                                    </li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- Scripts -->
@@ -334,6 +633,381 @@
     <script type="text/javascript" src="/src/mapper.js"></script>
 
     <script type="text/javascript">
+        // Navigation functions
+        let currentPage = 'dashboard';
+        let routeDetailMap = null;
+
+        function showPage(pageName) {
+            // Hide all pages
+            document.querySelectorAll('.page-content').forEach(page => {
+                page.classList.add('hidden');
+            });
+
+            // Remove active class from all tabs
+            document.querySelectorAll('.nav-tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+
+            // Show selected page
+            const targetPage = document.getElementById(pageName + '-page');
+            const targetTab = document.getElementById(pageName + '-tab');
+            
+            if (targetPage && targetTab) {
+                targetPage.classList.remove('hidden');
+                targetTab.classList.add('active');
+                currentPage = pageName;
+
+                // Initialize page-specific functionality
+                if (pageName === 'route-details') {
+                    initializeRouteDetailsPage();
+                } else if (pageName === 'dashboard') {
+                    // Re-initialize map if needed
+                    if (typeof adjust_zoom === 'function' && instance) {
+                        setTimeout(adjust_zoom, 100);
+                    }
+                }
+            }
+        }
+
+        function initializeRouteDetailsPage() {
+            // Populate route selector
+            populateRouteSelector();
+            
+            // Initialize route detail map
+            if (!routeDetailMap) {
+                setTimeout(() => {
+                    routeDetailMap = L.map('route-detail-map').setView([0, 0], 2);
+                    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                        maxZoom: 19,
+                        attribution: '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+                    }).addTo(routeDetailMap);
+                }, 100);
+            }
+        }
+
+        function populateRouteSelector() {
+            const selector = document.getElementById('route-selector');
+            selector.innerHTML = '<option value="">-- Chọn Route --</option>';
+            
+            if (typeof solution !== 'undefined' && solution && solution.routes) {
+                solution.routes.forEach(route => {
+                    const option = document.createElement('option');
+                    option.value = route.id;
+                    option.textContent = `Route ${route.id + 1} (Cost: ${route.cost})`;
+                    selector.appendChild(option);
+                });
+            }
+        }
+
+        async function showRouteDetail(routeId) {
+            if (!routeId || !solution || !routeDetailMap) return;
+
+            const route = solution.routes.find(r => r.id == routeId);
+            if (!route) return;
+
+            // Show loading indicator
+            const routeSummary = document.getElementById('route-summary');
+            routeSummary.innerHTML = `
+                <div class="flex items-center justify-center p-4">
+                    <i class="fas fa-spinner fa-spin text-blue-500 mr-2"></i>
+                    <span class="text-sm text-gray-600">Đang tải chi tiết route...</span>
+                </div>
+            `;
+            routeSummary.classList.remove('hidden');
+
+            try {
+                // Calculate metrics
+                const distance = calculateRouteDistance(route);
+                const time = calculateRouteTime(route);
+
+                // Update route summary with actual content
+                routeSummary.innerHTML = `
+                    <h3 class="text-sm font-semibold text-gray-700 mb-3">Thông tin tổng quan:</h3>
+                    <div class="space-y-2">
+                        <div class="flex justify-between text-sm">
+                            <span class="text-gray-600">Tổng chi phí:</span>
+                            <span id="route-cost" class="font-medium">${route.cost}</span>
+                        </div>
+                        <div class="flex justify-between text-sm">
+                            <span class="text-gray-600">Số điểm:</span>
+                            <span id="route-nodes" class="font-medium">${route.sequence.length}</span>
+                        </div>
+                        <div class="flex justify-between text-sm">
+                            <span class="text-gray-600">Tổng khoảng cách:</span>
+                            <span id="route-distance" class="font-medium">${distance.toFixed(2)} km</span>
+                        </div>
+                        <div class="flex justify-between text-sm">
+                            <span class="text-gray-600">Thời gian thực hiện:</span>
+                            <span id="route-time" class="font-medium">${time.toFixed(1)} h</span>
+                        </div>
+                        <div class="flex justify-between text-sm">
+                            <span class="text-gray-600">Kiểu đường đi:</span>
+                            <span class="font-medium">${use_real_routing ? 'Thực tế' : 'Đường thẳng'}</span>
+                        </div>
+                    </div>
+                `;
+
+                // Show node sequence
+                displayNodeSequence(route);
+
+                // Show route on detail map (this is now async)
+                await displayRouteOnDetailMap(route);
+
+                // Show timeline
+                displayRouteTimeline(route);
+
+            } catch (error) {
+                console.error('Error showing route detail:', error);
+                routeSummary.innerHTML = `
+                    <div class="text-center text-red-500 text-sm p-4">
+                        <i class="fas fa-exclamation-triangle mr-2"></i>
+                        Có lỗi khi tải chi tiết route
+                    </div>
+                `;
+            }
+        }
+
+        function calculateRouteDistance(route) {
+            // If real routing is enabled, try to get more accurate distance
+            if (use_real_routing) {
+                // For now, use simple calculation but could be enhanced with actual route data
+                let totalDistance = 0;
+                for (let i = 0; i < route.sequence.length - 1; i++) {
+                    const node1 = instance.nodes[route.sequence[i]];
+                    const node2 = instance.nodes[route.sequence[i + 1]];
+                    const distance = getDistanceBetweenPoints(node1.coords, node2.coords);
+                    // Apply a factor for real roads (typically 20-30% longer than straight line)
+                    totalDistance += distance * 1.25;
+                }
+                return totalDistance;
+            } else {
+                // Simple straight-line distance calculation
+                let totalDistance = 0;
+                for (let i = 0; i < route.sequence.length - 1; i++) {
+                    const node1 = instance.nodes[route.sequence[i]];
+                    const node2 = instance.nodes[route.sequence[i + 1]];
+                    const distance = getDistanceBetweenPoints(node1.coords, node2.coords);
+                    totalDistance += distance;
+                }
+                return totalDistance;
+            }
+        }
+
+        function calculateRouteTime(route) {
+            // Estimate time based on distance (assuming average speed)
+            const distance = calculateRouteDistance(route);
+            const averageSpeed = 30; // km/h
+            return distance / averageSpeed;
+        }
+
+        function getDistanceBetweenPoints(coord1, coord2) {
+            const R = 6371; // Earth's radius in km
+            const dLat = (coord2[0] - coord1[0]) * Math.PI / 180;
+            const dLon = (coord2[1] - coord1[1]) * Math.PI / 180;
+            const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                Math.cos(coord1[0] * Math.PI / 180) * Math.cos(coord2[0] * Math.PI / 180) *
+                Math.sin(dLon/2) * Math.sin(dLon/2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            return R * c;
+        }
+
+        function displayNodeSequence(route) {
+            const container = document.getElementById('node-sequence');
+            container.innerHTML = '';
+
+            // Add header with route type info
+            const header = document.createElement('div');
+            header.className = 'mb-3 p-2 bg-blue-50 rounded border border-blue-200';
+            header.innerHTML = `
+                <div class="flex items-center justify-between text-xs">
+                    <span class="font-medium text-blue-700">Route ${route.id + 1}</span>
+                    <span class="text-blue-600">
+                        <i class="fas ${use_real_routing ? 'fa-route' : 'fa-arrows-alt'} mr-1"></i>
+                        ${use_real_routing ? 'Đường thực tế' : 'Đường thẳng'}
+                    </span>
+                </div>
+            `;
+            container.appendChild(header);
+
+            route.sequence.forEach((nodeId, index) => {
+                const node = instance.nodes[nodeId];
+                const div = document.createElement('div');
+                div.className = 'flex items-center space-x-3 p-2 bg-gray-50 rounded border-l-4';
+                
+                let iconClass, borderColor, nodeType;
+                if (node.is_depot) {
+                    iconClass = 'fa fa-home text-blue-600';
+                    borderColor = 'border-blue-500';
+                    nodeType = 'Depot';
+                } else if (node.is_pickup) {
+                    iconClass = 'fa fa-upload text-green-600';
+                    borderColor = 'border-green-500';
+                    nodeType = 'Pickup';
+                } else {
+                    iconClass = 'fa fa-download text-red-600';
+                    borderColor = 'border-red-500';
+                    nodeType = 'Delivery';
+                }
+
+                div.className += ' ' + borderColor;
+                div.innerHTML = `
+                    <div class="flex items-center space-x-2 flex-1">
+                        <span class="bg-gray-200 text-gray-700 rounded-full w-6 h-6 flex items-center justify-center text-xs font-semibold">${index + 1}</span>
+                        <i class="${iconClass}"></i>
+                        <div class="flex-1">
+                            <div class="font-medium text-sm">${nodeType} ${nodeId}</div>
+                            <div class="text-xs text-gray-500">Demand: ${node.demand}, TW: [${node.time_window[0]}, ${node.time_window[1]}]</div>
+                            <div class="text-xs text-gray-400">Coords: [${node.coords[0].toFixed(4)}, ${node.coords[1].toFixed(4)}]</div>
+                        </div>
+                    </div>
+                `;
+
+                // Add click event to focus on node
+                div.style.cursor = 'pointer';
+                div.onclick = () => {
+                    if (routeDetailMap) {
+                        routeDetailMap.setView(node.coords, 15);
+                        
+                        // Temporarily highlight this node
+                        const tempMarker = L.circleMarker(node.coords, {
+                            color: 'red',
+                            fillColor: 'red',
+                            fillOpacity: 0.3,
+                            radius: 20,
+                            weight: 3
+                        }).addTo(routeDetailMap);
+                        
+                        // Remove highlight after 2 seconds
+                        setTimeout(() => {
+                            routeDetailMap.removeLayer(tempMarker);
+                        }, 2000);
+                    }
+                };
+
+                // Add hover effect
+                div.onmouseenter = () => {
+                    div.style.backgroundColor = '#e5e7eb';
+                };
+                div.onmouseleave = () => {
+                    div.style.backgroundColor = '#f9fafb';
+                };
+
+                container.appendChild(div);
+            });
+        }
+
+        async function displayRouteOnDetailMap(route) {
+            if (!routeDetailMap) return;
+
+            // Clear existing layers
+            routeDetailMap.eachLayer((layer) => {
+                if (layer instanceof L.Marker || layer instanceof L.Polyline || layer instanceof L.Polygon) {
+                    routeDetailMap.removeLayer(layer);
+                }
+            });
+
+            // Add markers for nodes
+            route.sequence.forEach(nodeId => {
+                const node = instance.nodes[nodeId];
+                let iconHtml;
+                if (node.is_depot) {
+                    iconHtml = '<div class="w-4 h-4 bg-blue-600 rounded-full border-2 border-white shadow-lg"></div>';
+                } else if (node.is_pickup) {
+                    iconHtml = '<div class="w-4 h-4 bg-green-600 rounded border-2 border-white shadow-lg"></div>';
+                } else {
+                    iconHtml = '<div class="w-4 h-4 bg-red-600 border-2 border-white shadow-lg" style="clip-path: polygon(50% 0%, 0% 100%, 100% 100%);"></div>';
+                }
+
+                const marker = L.marker(node.coords, {
+                    icon: L.divIcon({
+                        html: iconHtml,
+                        className: 'custom-marker',
+                        iconSize: [16, 16],
+                        iconAnchor: [8, 8]
+                    })
+                });
+
+                marker.bindTooltip(`${node.is_depot ? 'Depot' : node.is_pickup ? 'Pickup' : 'Delivery'} ${nodeId}<br>Demand: ${node.demand}`);
+                marker.addTo(routeDetailMap);
+            });
+
+            // Get route path - use real routing if enabled and available
+            let routeCoords = [];
+            
+            if (use_real_routing) {
+                // Try to build real route or get from cache
+                try {
+                    routeCoords = await buildRealRouteForDetailMap(route);
+                } catch (error) {
+                    console.warn('Error getting real route for detail map:', error);
+                    // Fallback to straight lines
+                    routeCoords = route.sequence.map(nodeId => instance.nodes[nodeId].coords);
+                }
+            } else {
+                // Use straight lines between nodes
+                routeCoords = route.sequence.map(nodeId => instance.nodes[nodeId].coords);
+            }
+
+            // Add route path
+            const polyline = L.polyline(routeCoords, {
+                color: route.color,
+                weight: 4,
+                opacity: 0.8
+            });
+            
+            polyline.bindTooltip(`Route ${route.id + 1}<br>Cost: ${route.cost}<br>Type: ${use_real_routing ? 'Real routing' : 'Straight lines'}`);
+            polyline.addTo(routeDetailMap);
+            
+            // Fit map to route bounds
+            if (routeCoords.length > 0) {
+                routeDetailMap.fitBounds(polyline.getBounds().pad(0.1));
+            }
+        }
+
+        // Helper function to build real route for detail map
+        async function buildRealRouteForDetailMap(route) {
+            const routeCoords = [];
+            const sequence = route.sequence;
+
+            if (!sequence || sequence.length < 2) {
+                console.warn('Invalid route sequence for detail map');
+                return sequence.map(nodeId => instance.nodes[nodeId].coords);
+            }
+
+            for (let i = 0; i < sequence.length - 1; i++) {
+                const currentNodeId = sequence[i];
+                const nextNodeId = sequence[i + 1];
+
+                // Get coordinates from instance nodes
+                const startCoord = instance.nodes[currentNodeId].coords;
+                const endCoord = instance.nodes[nextNodeId].coords;
+
+                // Get route segment (from cache or API)
+                const segmentCoords = await getRouteFromAPI(startCoord, endCoord);
+
+                // Add all coordinates except the last one (to avoid duplication)
+                if (i === 0) {
+                    routeCoords.push(...segmentCoords);
+                } else {
+                    routeCoords.push(...segmentCoords.slice(1));
+                }
+            }
+
+            return routeCoords.length > 0 ? routeCoords : sequence.map(nodeId => instance.nodes[nodeId].coords);
+        }
+
+        function displayRouteTimeline(route) {
+            // Simple timeline implementation
+            const container = document.getElementById('route-timeline');
+            container.innerHTML = `
+                <div class="text-center text-gray-500 text-sm">
+                    <i class="fas fa-clock mb-2"></i>
+                    <div>Timeline visualization sẽ được implement với thư viện timeline</div>
+                    <div class="text-xs mt-1">Route ${route.id + 1}: ${route.sequence.length} điểm</div>
+                </div>
+            `;
+        }
+
         window.onload = startup;        // Toggle dropdown function
         function toggleDropdown(section) {
             const dropdown = document.getElementById(section + '_dropdown');
