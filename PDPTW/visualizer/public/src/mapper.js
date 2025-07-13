@@ -7,6 +7,75 @@ let map = null;
 let polygons = new Map();
 let routes_polylines = new Map(); // Store polylines for routes
 let use_real_routing = false; // Toggle for real routing
+let routing_cache = new Map(); // Cache for routing results
+let cache_enabled = true; // Enable/disable cache
+
+// Cache management
+function generateCacheKey(startCoord, endCoord) {
+    return `${startCoord[0].toFixed(6)},${startCoord[1].toFixed(6)}-${endCoord[0].toFixed(6)},${endCoord[1].toFixed(6)}`;
+}
+
+function loadCacheFromStorage() {
+    try {
+        const cached = localStorage.getItem('pdptw_routing_cache');
+        if (cached) {
+            const data = JSON.parse(cached);
+            routing_cache = new Map(data);
+            console.log(`Loaded ${routing_cache.size} cached routes from storage`);
+        }
+    } catch (error) {
+        console.warn('Error loading cache from storage:', error);
+        routing_cache = new Map();
+    }
+}
+
+function saveCacheToStorage() {
+    try {
+        const data = Array.from(routing_cache.entries());
+        localStorage.setItem('pdptw_routing_cache', JSON.stringify(data));
+        console.log(`Saved ${routing_cache.size} routes to cache`);
+    } catch (error) {
+        console.warn('Error saving cache to storage:', error);
+    }
+}
+
+/**
+ * Show cache information to user
+ */
+function showCacheInfo() {
+    const stats = getCacheStats();
+    const cacheSize = (JSON.stringify(Object.fromEntries(routing_cache)).length / 1024).toFixed(2);
+    
+    const info = `
+Thông tin Cache:
+• Số tuyến đường đã lưu: ${stats.total}
+• Hits: ${stats.hits}
+• Misses: ${stats.misses} 
+• Hit rate: ${stats.total > 0 ? ((stats.hits / (stats.hits + stats.misses)) * 100).toFixed(1) : 0}%
+• Kích thước cache: ${cacheSize} KB
+• Cache trong localStorage: ${localStorage.getItem('pdptw_routing_cache') ? 'Có' : 'Không'}
+    `.trim();
+    
+    alert(info);
+}
+
+function clearRoutingCache() {
+    routing_cache.clear();
+    localStorage.removeItem('pdptw_routing_cache');
+    console.log('Routing cache cleared');
+}
+
+function getCacheStats() {
+    const cacheSize = routing_cache.size;
+    let storageSize = 0;
+    try {
+        const cached = localStorage.getItem('pdptw_routing_cache');
+        storageSize = cached ? (cached.length * 2) / 1024 : 0; // Approximate size in KB
+    } catch (error) {
+        // Ignore errors
+    }
+    return { entries: cacheSize, sizeKB: storageSize.toFixed(1) };
+}
 
 let markers = [];
 let selected_nodes = null;
@@ -834,39 +903,69 @@ function read_instance_file(input, callback) {
 
 // Real routing functionality
 async function getRouteFromAPI(startCoord, endCoord) {
+    // Generate cache key
+    const cacheKey = generateCacheKey(startCoord, endCoord);
+    
+    // Check cache first
+    if (cache_enabled && routing_cache.has(cacheKey)) {
+        console.log(`Cache hit for ${cacheKey}`);
+        return routing_cache.get(cacheKey);
+    }
+    
     try {
         // Using OSRM Demo API - for production use your own instance
         const url = `https://router.project-osrm.org/route/v1/driving/${startCoord[1]},${startCoord[0]};${endCoord[1]},${endCoord[0]}?overview=full&geometries=geojson`;
         
+        console.log(`Fetching route from API: ${cacheKey}`);
         const response = await fetch(url);
         const data = await response.json();
         
+        let routeCoords;
         if (data.routes && data.routes.length > 0) {
             // Convert coordinates from [lng, lat] to [lat, lng] for Leaflet
-            return data.routes[0].geometry.coordinates.map(coord => [coord[1], coord[0]]);
+            routeCoords = data.routes[0].geometry.coordinates.map(coord => [coord[1], coord[0]]);
+        } else {
+            console.warn('No route found, using straight line');
+            routeCoords = [startCoord, endCoord];
         }
         
-        console.warn('No route found, using straight line');
-        return [startCoord, endCoord];
+        // Cache the result
+        if (cache_enabled) {
+            routing_cache.set(cacheKey, routeCoords);
+            // Save to localStorage every 10 new entries
+            if (routing_cache.size % 10 === 0) {
+                saveCacheToStorage();
+            }
+        }
+        
+        return routeCoords;
     } catch (error) {
         console.warn('Routing API error:', error, 'Using straight line');
-        return [startCoord, endCoord];
+        const fallback = [startCoord, endCoord];
+        
+        // Cache the fallback too to avoid repeated failed API calls
+        if (cache_enabled) {
+            routing_cache.set(cacheKey, fallback);
+        }
+        
+        return fallback;
     }
 }
 
 async function buildRealRoute(route) {
     console.log('buildRealRoute called for route:', route.id);
     console.log('Route sequence:', route.sequence);
-    console.log('Route path:', route.path);
     
     const routeCoords = [];
     const sequence = route.sequence;
     
     if (!sequence || sequence.length < 2) {
         console.warn('Invalid route sequence for route', route.id);
-        console.log('Returning original path:', route.path);
         return route.path; // Fallback to original path
     }
+    
+    const cacheStats = getCacheStats();
+    console.log(`Cache stats: ${cacheStats.entries} entries, ${cacheStats.sizeKB} KB`);
     
     for (let i = 0; i < sequence.length - 1; i++) {
         const currentNodeId = sequence[i];
@@ -878,11 +977,9 @@ async function buildRealRoute(route) {
         const startCoord = instance.nodes[currentNodeId].coords;
         const endCoord = instance.nodes[nextNodeId].coords;
         
-        console.log(`Coordinates: ${startCoord} -> ${endCoord}`);
-        
         if (use_real_routing) {
             const segmentCoords = await getRouteFromAPI(startCoord, endCoord);
-            console.log(`API returned ${segmentCoords.length} coordinates for segment ${i}`);
+            console.log(`Segment ${i}: Got ${segmentCoords.length} coordinates`);
             
             // Add all coordinates except the last one (to avoid duplication)
             if (i === 0) {
@@ -899,14 +996,16 @@ async function buildRealRoute(route) {
             }
         }
         
-        // Add small delay to avoid overwhelming the API
+        // Add small delay to avoid overwhelming the API (only for non-cached requests)
         if (use_real_routing && i < sequence.length - 2) {
-            await new Promise(resolve => setTimeout(resolve, 150));
+            const cacheKey = generateCacheKey(startCoord, endCoord);
+            if (!routing_cache.has(cacheKey)) {
+                await new Promise(resolve => setTimeout(resolve, 150));
+            }
         }
     }
     
     console.log(`buildRealRoute completed for route ${route.id}. Total coordinates:`, routeCoords.length);
-    console.log('Final route coordinates:', routeCoords);
     
     return routeCoords.length > 0 ? routeCoords : route.path;
 }
@@ -953,6 +1052,11 @@ function toggleRealRouting() {
 }
 
 async function redrawRoutesWithNewMode() {
+    // Save cache before clearing routes
+    if (use_real_routing && routing_cache.size > 0) {
+        saveCacheToStorage();
+    }
+    
     // Clear existing routes
     for (const p of polygons.values()) {
         map.removeLayer(p);
@@ -964,7 +1068,8 @@ async function redrawRoutesWithNewMode() {
     polygons.clear();
     routes_polylines.clear();
     
-    // Show loading indicator
+    // Show loading indicator with cache info
+    const cacheStats = getCacheStats();
     const loadingDiv = document.createElement('div');
     loadingDiv.id = 'routing_loading';
     loadingDiv.innerHTML = `
@@ -975,7 +1080,14 @@ async function redrawRoutesWithNewMode() {
                 <p style="margin: 0; font-weight: 500;">
                     ${use_real_routing ? 'Đang tải đường đi thực tế...' : 'Đang chuyển về đường thẳng...'}
                 </p>
-                ${use_real_routing ? '<p style="margin: 5px 0 0 0; font-size: 12px; color: #666;">Có thể mất vài giây</p>' : ''}
+                ${use_real_routing ? `
+                    <p style="margin: 5px 0 0 0; font-size: 12px; color: #666;">
+                        Cache: ${cacheStats.entries} routes (${cacheStats.sizeKB} KB)
+                    </p>
+                    <p style="margin: 2px 0 0 0; font-size: 11px; color: #999;">
+                        Các route đã cache sẽ load nhanh hơn
+                    </p>
+                ` : ''}
             </div>
         </div>
     `;
@@ -983,6 +1095,11 @@ async function redrawRoutesWithNewMode() {
     
     try {
         await draw_solution(solution);
+        
+        // Save cache after successful completion
+        if (use_real_routing) {
+            saveCacheToStorage();
+        }
     } catch (error) {
         console.error('Error redrawing routes:', error);
         alert('Có lỗi khi tải đường đi. Vui lòng thử lại.');

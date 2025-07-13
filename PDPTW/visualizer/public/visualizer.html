@@ -233,12 +233,29 @@
                         <span class="font-medium text-gray-700">Load Solution</span>
                     </button>
                     
-                    <!-- Real Routing Toggle Button -->
-                    <button id="toggle_routing_btn" onclick="console.log('Button clicked!'); toggleRealRouting();"
-                        class="w-full flex items-center justify-center space-x-2 px-3 py-2 bg-gray-600 hover:bg-gray-700 text-white text-sm rounded transition-colors duration-200">
-                        <i class="fas fa-map-marked-alt"></i>
-                        <span>Bật đường thực tế</span>
-                    </button>
+                    <!-- Real Routing Controls -->
+                    <div class="space-y-2">
+                        <!-- Real Routing Toggle Button -->
+                        <button id="toggle_routing_btn" onclick="console.log('Button clicked!'); toggleRealRouting();"
+                            class="w-full flex items-center justify-center space-x-2 px-3 py-2 bg-gray-600 hover:bg-gray-700 text-white text-sm rounded transition-colors duration-200">
+                            <i class="fas fa-map-marked-alt"></i>
+                            <span>Bật đường thực tế</span>
+                        </button>
+                        
+                        <!-- Cache Controls -->
+                        <div class="flex space-x-2">
+                            <button onclick="showCacheInfo()" 
+                                class="flex-1 flex items-center justify-center space-x-1 px-2 py-1 bg-blue-500 hover:bg-blue-600 text-white text-xs rounded transition-colors duration-200">
+                                <i class="fas fa-info-circle"></i>
+                                <span>Cache Info</span>
+                            </button>
+                            <button onclick="clearRoutingCache(); alert('Cache đã được xóa!');" 
+                                class="flex-1 flex items-center justify-center space-x-1 px-2 py-1 bg-red-500 hover:bg-red-600 text-white text-xs rounded transition-colors duration-200">
+                                <i class="fas fa-trash"></i>
+                                <span>Xóa Cache</span>
+                            </button>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Nodes Section -->
