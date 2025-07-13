@@ -38,18 +38,22 @@
             color: #6b7280;
             border: 1px solid transparent;
         }
+
         .nav-tab:hover {
             color: #374151;
             background-color: #f3f4f6;
         }
+
         .nav-tab.active {
             color: #3b82f6;
             background-color: #eff6ff;
             border-color: #3b82f6;
         }
+
         .page-content {
             height: calc(100vh - 60px);
         }
+
         .page-content.hidden {
             display: none;
         }
@@ -87,20 +91,20 @@
                 <i class="fas fa-route text-2xl text-blue-600"></i>
                 <h1 class="text-xl font-bold text-gray-800">PDPTW Visualizer</h1>
             </div>
-            
+
             <!-- Navigation Tabs -->
             <div class="flex space-x-1">
-                <button onclick="showPage('dashboard')" 
+                <button onclick="showPage('dashboard')"
                     class="nav-tab active px-4 py-2 text-sm font-medium rounded-lg transition-colors duration-200"
                     id="dashboard-tab">
                     <i class="fas fa-tachometer-alt mr-2"></i>Dashboard
                 </button>
-                <button onclick="showPage('route-details')" 
+                <button onclick="showPage('route-details')"
                     class="nav-tab px-4 py-2 text-sm font-medium rounded-lg transition-colors duration-200"
                     id="route-details-tab">
                     <i class="fas fa-route mr-2"></i>Chi tiết Routes
                 </button>
-                <button onclick="showPage('guide')" 
+                <button onclick="showPage('guide')"
                     class="nav-tab px-4 py-2 text-sm font-medium rounded-lg transition-colors duration-200"
                     id="guide-tab">
                     <i class="fas fa-map mr-2"></i>Hướng dẫn
@@ -396,7 +400,7 @@
                 <div class="p-4 border-b border-gray-200">
                     <div class="space-y-3">
                         <label class="text-sm font-medium text-gray-700">Chọn Route để xem chi tiết:</label>
-                        <select id="route-selector" onchange="showRouteDetail(this.value)" 
+                        <select id="route-selector" onchange="showRouteDetail(this.value)"
                             class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
                             <option value="">-- Chọn Route --</option>
                         </select>
@@ -477,27 +481,34 @@
                                 </h2>
                                 <ol class="space-y-3 text-gray-700">
                                     <li class="flex items-start space-x-2">
-                                        <span class="bg-blue-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm font-semibold flex-shrink-0 mt-0.5">1</span>
+                                        <span
+                                            class="bg-blue-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm font-semibold flex-shrink-0 mt-0.5">1</span>
                                         <div>
-                                            <strong>Load Instance:</strong> Click "Load Instance" để tải file dữ liệu bài toán PDPTW hoặc nhập trực tiếp vào textarea.
+                                            <strong>Load Instance:</strong> Click "Load Instance" để tải file dữ liệu
+                                            bài toán PDPTW hoặc nhập trực tiếp vào textarea.
                                         </div>
                                     </li>
                                     <li class="flex items-start space-x-2">
-                                        <span class="bg-blue-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm font-semibold flex-shrink-0 mt-0.5">2</span>
+                                        <span
+                                            class="bg-blue-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm font-semibold flex-shrink-0 mt-0.5">2</span>
                                         <div>
-                                            <strong>Chạy thuật toán:</strong> Điều chỉnh tham số và click "Chạy thuật toán" để tìm solution.
+                                            <strong>Chạy thuật toán:</strong> Điều chỉnh tham số và click "Chạy thuật
+                                            toán" để tìm solution.
                                         </div>
                                     </li>
                                     <li class="flex items-start space-x-2">
-                                        <span class="bg-blue-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm font-semibold flex-shrink-0 mt-0.5">3</span>
+                                        <span
+                                            class="bg-blue-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm font-semibold flex-shrink-0 mt-0.5">3</span>
                                         <div>
                                             <strong>Load Solution:</strong> Hoặc tải solution có sẵn từ file.
                                         </div>
                                     </li>
                                     <li class="flex items-start space-x-2">
-                                        <span class="bg-blue-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm font-semibold flex-shrink-0 mt-0.5">4</span>
+                                        <span
+                                            class="bg-blue-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm font-semibold flex-shrink-0 mt-0.5">4</span>
                                         <div>
-                                            <strong>Khám phá:</strong> Sử dụng các tab để xem dashboard, chi tiết routes, hoặc đọc hướng dẫn.
+                                            <strong>Khám phá:</strong> Sử dụng các tab để xem dashboard, chi tiết
+                                            routes, hoặc đọc hướng dẫn.
                                         </div>
                                     </li>
                                 </ol>
@@ -603,7 +614,8 @@
                                 <ul class="space-y-2 text-gray-700">
                                     <li class="flex items-start space-x-2">
                                         <i class="fas fa-star text-yellow-500 mt-1"></i>
-                                        <span>Sử dụng <strong>Cache Info</strong> để kiểm tra hiệu suất routing API</span>
+                                        <span>Sử dụng <strong>Cache Info</strong> để kiểm tra hiệu suất routing
+                                            API</span>
                                     </li>
                                     <li class="flex items-start space-x-2">
                                         <i class="fas fa-star text-yellow-500 mt-1"></i>
@@ -651,7 +663,7 @@
             // Show selected page
             const targetPage = document.getElementById(pageName + '-page');
             const targetTab = document.getElementById(pageName + '-tab');
-            
+
             if (targetPage && targetTab) {
                 targetPage.classList.remove('hidden');
                 targetTab.classList.add('active');
@@ -672,7 +684,7 @@
         function initializeRouteDetailsPage() {
             // Populate route selector
             populateRouteSelector();
-            
+
             // Initialize route detail map
             if (!routeDetailMap) {
                 setTimeout(() => {
@@ -688,7 +700,7 @@
         function populateRouteSelector() {
             const selector = document.getElementById('route-selector');
             selector.innerHTML = '<option value="">-- Chọn Route --</option>';
-            
+
             if (typeof solution !== 'undefined' && solution && solution.routes) {
                 solution.routes.forEach(route => {
                     const option = document.createElement('option');
@@ -804,35 +816,55 @@
             const R = 6371; // Earth's radius in km
             const dLat = (coord2[0] - coord1[0]) * Math.PI / 180;
             const dLon = (coord2[1] - coord1[1]) * Math.PI / 180;
-            const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+            const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
                 Math.cos(coord1[0] * Math.PI / 180) * Math.cos(coord2[0] * Math.PI / 180) *
-                Math.sin(dLon/2) * Math.sin(dLon/2);
-            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+                Math.sin(dLon / 2) * Math.sin(dLon / 2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
             return R * c;
-        }
-
-        function displayNodeSequence(route) {
+        }        function displayNodeSequence(route) {
             const container = document.getElementById('node-sequence');
             container.innerHTML = '';
 
-            // Add header with route type info
+            // Add header with route type info and controls
             const header = document.createElement('div');
-            header.className = 'mb-3 p-2 bg-blue-50 rounded border border-blue-200';
+            header.className = 'mb-3 p-3 bg-blue-50 rounded border border-blue-200';
             header.innerHTML = `
-                <div class="flex items-center justify-between text-xs">
+                <div class="flex items-center justify-between text-xs mb-2">
                     <span class="font-medium text-blue-700">Route ${route.id + 1}</span>
                     <span class="text-blue-600">
                         <i class="fas ${use_real_routing ? 'fa-route' : 'fa-arrows-alt'} mr-1"></i>
                         ${use_real_routing ? 'Đường thực tế' : 'Đường thẳng'}
                     </span>
                 </div>
+                <div class="flex space-x-2">
+                    <button onclick="showFullRoute()" 
+                        class="px-2 py-1 bg-blue-500 hover:bg-blue-600 text-white text-xs rounded transition-colors">
+                        <i class="fas fa-eye mr-1"></i>Toàn bộ
+                    </button>
+                    <button onclick="showRouteUpToSelected()" 
+                        class="px-2 py-1 bg-green-500 hover:bg-green-600 text-white text-xs rounded transition-colors">
+                        <i class="fas fa-route mr-1"></i>Đến điểm
+                    </button>
+                    <button onclick="resetRouteView()" 
+                        class="px-2 py-1 bg-gray-500 hover:bg-gray-600 text-white text-xs rounded transition-colors">
+                        <i class="fas fa-eraser mr-1"></i>Xóa
+                    </button>
+                </div>
+                <div class="text-xs text-gray-600 mt-1">
+                    Click số để xem đoạn đường riêng lẻ
+                </div>
             `;
             container.appendChild(header);
+
+            // Store route globally for segment display
+            window.currentDetailRoute = route;
+            window.currentSegmentIndex = -1;
 
             route.sequence.forEach((nodeId, index) => {
                 const node = instance.nodes[nodeId];
                 const div = document.createElement('div');
-                div.className = 'flex items-center space-x-3 p-2 bg-gray-50 rounded border-l-4';
+                div.className = 'flex items-center space-x-3 p-2 bg-gray-50 rounded border-l-4 mb-2 transition-colors duration-200';
+                div.id = `route-node-${index}`;
                 
                 let iconClass, borderColor, nodeType;
                 if (node.is_depot) {
@@ -850,21 +882,36 @@
                 }
 
                 div.className += ' ' + borderColor;
+                
+                // Add segment indicator for non-first nodes
+                const segmentInfo = index > 0 ? `
+                    <div class="text-xs text-gray-500 mt-1">
+                        <i class="fas fa-arrow-right mr-1"></i>Đoạn ${index}: ${instance.nodes[route.sequence[index-1]].id} → ${nodeId}
+                    </div>
+                ` : '';
+
                 div.innerHTML = `
                     <div class="flex items-center space-x-2 flex-1">
-                        <span class="bg-gray-200 text-gray-700 rounded-full w-6 h-6 flex items-center justify-center text-xs font-semibold">${index + 1}</span>
+                        <span class="bg-gray-200 text-gray-700 rounded-full w-8 h-8 flex items-center justify-center text-sm font-semibold cursor-pointer hover:bg-blue-200 transition-colors" 
+                              onclick="showSingleSegment(${index})" title="Click để hiện đoạn đường đến điểm này">${index}</span>
                         <i class="${iconClass}"></i>
                         <div class="flex-1">
                             <div class="font-medium text-sm">${nodeType} ${nodeId}</div>
                             <div class="text-xs text-gray-500">Demand: ${node.demand}, TW: [${node.time_window[0]}, ${node.time_window[1]}]</div>
                             <div class="text-xs text-gray-400">Coords: [${node.coords[0].toFixed(4)}, ${node.coords[1].toFixed(4)}]</div>
+                            ${segmentInfo}
                         </div>
                     </div>
                 `;
 
-                // Add click event to focus on node
+                // Add click event to focus on node and show segment
                 div.style.cursor = 'pointer';
-                div.onclick = () => {
+                div.onclick = (e) => {
+                    // Prevent double trigger from number click
+                    if (e.target.tagName === 'SPAN' && e.target.onclick) return;
+                    
+                    showSingleSegment(index);
+                    
                     if (routeDetailMap) {
                         routeDetailMap.setView(node.coords, 15);
                         
@@ -894,17 +941,18 @@
 
                 container.appendChild(div);
             });
-        }
-
-        async function displayRouteOnDetailMap(route) {
+        }        async function displayRouteOnDetailMap(route) {
             if (!routeDetailMap) return;
 
-            // Clear existing layers
+            // Clear existing layers (but keep markers)
             routeDetailMap.eachLayer((layer) => {
-                if (layer instanceof L.Marker || layer instanceof L.Polyline || layer instanceof L.Polygon) {
+                if (layer instanceof L.Polyline || layer instanceof L.Polygon) {
                     routeDetailMap.removeLayer(layer);
                 }
             });
+
+            // Clear displayed segments tracking
+            displayedSegments = [];
 
             // Add markers for nodes
             route.sequence.forEach(nodeId => {
@@ -962,6 +1010,9 @@
             if (routeCoords.length > 0) {
                 routeDetailMap.fitBounds(polyline.getBounds().pad(0.1));
             }
+
+            // Build segments for interactive display
+            await buildRouteSegments(route);
         }
 
         // Helper function to build real route for detail map
@@ -994,6 +1045,235 @@
             }
 
             return routeCoords.length > 0 ? routeCoords : sequence.map(nodeId => instance.nodes[nodeId].coords);
+        }
+
+        // Segment-based route display functions
+        let routeSegments = []; // Store individual route segments
+        let displayedSegments = []; // Track which segments are currently displayed
+
+        async function buildRouteSegments(route) {
+            routeSegments = [];
+            const sequence = route.sequence;
+
+            if (!sequence || sequence.length < 2) {
+                return;
+            }
+
+            for (let i = 0; i < sequence.length - 1; i++) {
+                const currentNodeId = sequence[i];
+                const nextNodeId = sequence[i + 1];
+                const startCoord = instance.nodes[currentNodeId].coords;
+                const endCoord = instance.nodes[nextNodeId].coords;
+
+                let segmentCoords;
+                if (use_real_routing) {
+                    segmentCoords = await getRouteFromAPI(startCoord, endCoord);
+                } else {
+                    segmentCoords = [startCoord, endCoord];
+                }
+
+                routeSegments.push({
+                    index: i,
+                    fromNode: currentNodeId,
+                    toNode: nextNodeId,
+                    coords: segmentCoords,
+                    color: route.color
+                });
+            }
+        }
+
+        async function showRouteSegmentUpTo(nodeIndex) {
+            if (!window.currentDetailRoute || !routeDetailMap) return;
+
+            // Update visual feedback in node list
+            updateNodeHighlight(nodeIndex);
+
+            // Build segments if not already built
+            if (routeSegments.length === 0) {
+                await buildRouteSegments(window.currentDetailRoute);
+            }
+
+            // Clear existing displayed segments
+            displayedSegments.forEach(segment => {
+                if (segment.polyline) {
+                    routeDetailMap.removeLayer(segment.polyline);
+                }
+            });
+            displayedSegments = [];
+
+            // Add segments up to the selected node
+            for (let i = 0; i < nodeIndex; i++) {
+                if (i < routeSegments.length) {
+                    const segment = routeSegments[i];
+                    const polyline = L.polyline(segment.coords, {
+                        color: segment.color,
+                        weight: 4,
+                        opacity: 0.8
+                    });
+
+                    polyline.bindTooltip(`Đoạn ${i + 1}: Node ${segment.fromNode} → ${segment.toNode}`);
+                    polyline.addTo(routeDetailMap);
+
+                    displayedSegments.push({
+                        ...segment,
+                        polyline: polyline
+                    });
+                }
+            }
+
+            // Fit map to displayed segments
+            if (displayedSegments.length > 0) {
+                const allCoords = displayedSegments.flatMap(s => s.coords);
+                const bounds = L.latLngBounds(allCoords);
+                routeDetailMap.fitBounds(bounds.pad(0.1));
+            }
+
+            window.currentSegmentIndex = nodeIndex;
+        }
+
+        async function showSingleSegment(nodeIndex) {
+            if (!window.currentDetailRoute || !routeDetailMap || nodeIndex <= 0) {
+                if (nodeIndex === 0) {
+                    // Nếu là điểm đầu tiên, chỉ focus vào điểm đó
+                    const route = window.currentDetailRoute;
+                    const node = instance.nodes[route.sequence[0]];
+                    routeDetailMap.setView(node.coords, 15);
+                    updateSingleNodeHighlight(nodeIndex);
+                }
+                return;
+            }
+
+            // Update visual feedback in node list
+            updateSingleNodeHighlight(nodeIndex);
+
+            // Build segments if not already built
+            if (routeSegments.length === 0) {
+                await buildRouteSegments(window.currentDetailRoute);
+            }
+
+            // Clear existing displayed segments
+            displayedSegments.forEach(segment => {
+                if (segment.polyline) {
+                    routeDetailMap.removeLayer(segment.polyline);
+                }
+            });
+            displayedSegments = [];
+
+            // Add only the single segment leading to this node
+            const segmentIndex = nodeIndex - 1; // Segment from (nodeIndex-1) to nodeIndex
+            if (segmentIndex >= 0 && segmentIndex < routeSegments.length) {
+                const segment = routeSegments[segmentIndex];
+                const polyline = L.polyline(segment.coords, {
+                    color: segment.color,
+                    weight: 5,
+                    opacity: 1.0
+                });
+
+                polyline.bindTooltip(`Đoạn ${segmentIndex + 1}: Node ${segment.fromNode} → ${segment.toNode}`);
+                polyline.addTo(routeDetailMap);
+
+                displayedSegments.push({
+                    ...segment,
+                    polyline: polyline
+                });
+
+                // Fit map to this single segment
+                const bounds = L.latLngBounds(segment.coords);
+                routeDetailMap.fitBounds(bounds.pad(0.2));
+            }
+
+            window.currentSegmentIndex = nodeIndex;
+        }
+
+        async function showRouteUpToSelected() {
+            if (window.currentSegmentIndex >= 0) {
+                await showRouteSegmentUpTo(window.currentSegmentIndex);
+            }
+        }
+
+        async function showFullRoute() {
+            if (!window.currentDetailRoute) return;
+
+            const route = window.currentDetailRoute;
+            await displayRouteOnDetailMap(route);
+            updateNodeHighlight(-1); // Clear highlights
+        }
+
+        function resetRouteView() {
+            if (!routeDetailMap) return;
+
+            // Clear all route segments
+            displayedSegments.forEach(segment => {
+                if (segment.polyline) {
+                    routeDetailMap.removeLayer(segment.polyline);
+                }
+            });
+            displayedSegments = [];
+
+            // Clear any existing route polylines
+            routeDetailMap.eachLayer((layer) => {
+                if (layer instanceof L.Polyline) {
+                    routeDetailMap.removeLayer(layer);
+                }
+            });
+
+            updateNodeHighlight(-1); // Clear highlights
+            window.currentSegmentIndex = -1;
+        }
+
+        function updateNodeHighlight(activeIndex) {
+            const route = window.currentDetailRoute;
+            if (!route) return;
+
+            route.sequence.forEach((nodeId, index) => {
+                const nodeDiv = document.getElementById(`route-node-${index}`);
+                if (nodeDiv) {
+                    if (index <= activeIndex) {
+                        // Highlight active nodes
+                        nodeDiv.style.backgroundColor = '#dbeafe';
+                        nodeDiv.style.borderLeftWidth = '6px';
+                    } else {
+                        // Reset inactive nodes
+                        nodeDiv.style.backgroundColor = '#f9fafb';
+                        nodeDiv.style.borderLeftWidth = '4px';
+                    }
+                }
+            });
+        }
+
+        function updateSingleNodeHighlight(activeIndex) {
+            const route = window.currentDetailRoute;
+            if (!route) return;
+
+            route.sequence.forEach((nodeId, index) => {
+                const nodeDiv = document.getElementById(`route-node-${index}`);
+                if (nodeDiv) {
+                    if (index === activeIndex) {
+                        // Highlight only the selected node
+                        nodeDiv.style.backgroundColor = '#fef3c7'; // Yellow highlight
+                        nodeDiv.style.borderLeftWidth = '6px';
+                        nodeDiv.style.borderLeftColor = '#f59e0b'; // Yellow border
+                    } else if (activeIndex > 0 && index === activeIndex - 1) {
+                        // Highlight the previous node (start of segment)
+                        nodeDiv.style.backgroundColor = '#dcfce7'; // Light green
+                        nodeDiv.style.borderLeftWidth = '6px';
+                        nodeDiv.style.borderLeftColor = '#22c55e'; // Green border
+                    } else {
+                        // Reset other nodes
+                        nodeDiv.style.backgroundColor = '#f9fafb';
+                        nodeDiv.style.borderLeftWidth = '4px';
+                        // Reset border color to original
+                        const node = instance.nodes[nodeId];
+                        if (node.is_depot) {
+                            nodeDiv.style.borderLeftColor = '#3b82f6'; // Blue
+                        } else if (node.is_pickup) {
+                            nodeDiv.style.borderLeftColor = '#22c55e'; // Green
+                        } else {
+                            nodeDiv.style.borderLeftColor = '#ef4444'; // Red
+                        }
+                    }
+                }
+            });
         }
 
         function displayRouteTimeline(route) {
