@@ -57,6 +57,136 @@
         .page-content.hidden {
             display: none;
         }
+
+        /* Timeline specific styles */
+        .timeline-container {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+
+        .timeline-vertical {
+            position: relative;
+            padding: 20px 0;
+        }
+
+        .timeline-axis {
+            position: absolute;
+            left: 40px;
+            top: 0;
+            bottom: 0;
+            width: 2px;
+            background: linear-gradient(to bottom, #e5e7eb, #9ca3af, #e5e7eb);
+        }
+
+        .timeline-event-vertical {
+            position: relative;
+            margin-bottom: 20px;
+            padding-left: 70px;
+            transition: all 0.3s ease;
+        }
+
+        .timeline-event-vertical:hover {
+            transform: translateX(5px);
+        }
+
+        .timeline-marker-vertical {
+            position: absolute;
+            left: 32px;
+            top: 10px;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            border: 3px solid white;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            z-index: 10;
+        }
+
+        .timeline-marker-vertical:hover {
+            transform: scale(1.3);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        }
+
+        .timeline-marker-vertical.depot {
+            background: #2563eb;
+        }
+
+        .timeline-marker-vertical.pickup {
+            background: #16a34a;
+        }
+
+        .timeline-marker-vertical.delivery {
+            background: #dc2626;
+        }
+
+        .timeline-card {
+            background: white;
+            border-radius: 8px;
+            padding: 16px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            border-left: 4px solid #e5e7eb;
+            transition: all 0.3s ease;
+        }
+
+        .timeline-card:hover {
+            box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+        }
+
+        .timeline-card.depot {
+            border-left-color: #2563eb;
+        }
+
+        .timeline-card.pickup {
+            border-left-color: #16a34a;
+        }
+
+        .timeline-card.delivery {
+            border-left-color: #dc2626;
+        }
+
+        .timeline-progress-bar {
+            background: linear-gradient(to right, #3b82f6, #10b981, #f59e0b, #ef4444);
+            height: 4px;
+            border-radius: 2px;
+            margin: 8px 0;
+        }
+
+        .timeline-time-badge {
+            display: inline-block;
+            background: #f3f4f6;
+            color: #374151;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+
+        .timeline-segment-info {
+            background: #fef3c7;
+            border: 1px solid #fbbf24;
+            border-radius: 6px;
+            padding: 8px;
+            margin-top: 8px;
+            font-size: 12px;
+        }
+
+        /* Scrollbar styling for timeline */
+        .timeline-container::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .timeline-container::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 3px;
+        }
+
+        .timeline-container::-webkit-scrollbar-thumb {
+            background: #c1c1c1;
+            border-radius: 3px;
+        }
+
+        .timeline-container::-webkit-scrollbar-thumb:hover {
+            background: #a8a8a8;
+        }
     </style>
 
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
@@ -442,16 +572,21 @@
             </div>
 
             <!-- Route Detail Map and Timeline -->
-            <div class="flex-1 flex flex-col">
+            <div class="flex-1 flex">
                 <!-- Route Detail Map -->
                 <div class="flex-1 bg-gray-50">
                     <div id="route-detail-map" class="w-full h-full"></div>
                 </div>
 
-                <!-- Route Timeline -->
-                <div class="h-64 bg-white border-t border-gray-200 p-4">
-                    <h3 class="text-lg font-semibold text-gray-800 mb-4">Timeline thực hiện Route</h3>
-                    <div id="route-timeline" class="w-full h-48"></div>
+                <!-- Route Timeline Sidebar -->
+                <div class="w-80 bg-white border-l border-gray-200 flex flex-col overflow-hidden">
+                    <div class="bg-gradient-to-r from-purple-600 to-blue-600 text-white p-4">
+                        <div class="flex items-center space-x-3">
+                            <i class="fas fa-clock text-xl"></i>
+                            <h3 class="text-lg font-semibold">Timeline Route</h3>
+                        </div>
+                    </div>
+                    <div id="route-timeline" class="flex-1 overflow-y-auto"></div>
                 </div>
             </div>
         </div>
@@ -1390,21 +1525,378 @@
                     }
                 }
             });
-        }
-
-        function displayRouteTimeline(route) {
-            // Simple timeline implementation
+        }        function displayRouteTimeline(route) {
             const container = document.getElementById('route-timeline');
-            container.innerHTML = `
-                <div class="text-center text-gray-500 text-sm">
-                    <i class="fas fa-clock mb-2"></i>
-                    <div>Timeline visualization sẽ được implement với thư viện timeline</div>
-                    <div class="text-xs mt-1">Route ${route.id + 1}: ${route.sequence.length} điểm</div>
+            if (!container || !route.sequence || !instance) return;
+
+            // Calculate timeline data
+            const timelineData = calculateTimelineData(route);
+            
+            // Create vertical timeline
+            container.innerHTML = '';
+            container.className = 'flex-1 overflow-y-auto timeline-container bg-gray-50';
+            
+            // Create timeline summary header
+            const summaryHeader = document.createElement('div');
+            summaryHeader.className = 'sticky top-0 bg-white border-b border-gray-200 p-4 z-10';
+            summaryHeader.innerHTML = `
+                <div class="text-center space-y-2">
+                    <div class="text-sm font-medium text-gray-700">Route ${route.id + 1}</div>
+                    <div class="grid grid-cols-2 gap-2 text-xs">
+                        <div class="bg-blue-50 p-2 rounded">
+                            <div class="text-blue-600 font-semibold">${timelineData.totalDuration.toFixed(1)}h</div>
+                            <div class="text-gray-500">Thời gian</div>
+                        </div>
+                        <div class="bg-green-50 p-2 rounded">
+                            <div class="text-green-600 font-semibold">${timelineData.totalDistance.toFixed(1)}km</div>
+                            <div class="text-gray-500">Khoảng cách</div>
+                        </div>
+                    </div>
                 </div>
             `;
+            container.appendChild(summaryHeader);
+
+            // Create vertical timeline content
+            const timelineContent = document.createElement('div');
+            timelineContent.className = 'timeline-vertical relative p-4';
+            
+            // Add timeline axis
+            const axis = document.createElement('div');
+            axis.className = 'timeline-axis';
+            timelineContent.appendChild(axis);
+            
+            // Create timeline events
+            createVerticalTimelineEvents(timelineContent, timelineData, route);
+            
+            container.appendChild(timelineContent);
+
+            // Add timeline controls at bottom
+            const controls = document.createElement('div');
+            controls.className = 'sticky bottom-0 bg-white border-t border-gray-200 p-3';
+            controls.innerHTML = `
+                <div class="space-y-2">
+                    <div class="flex space-x-2">
+                        <button onclick="showFullRouteFromTimeline()" 
+                            class="flex-1 px-3 py-2 bg-blue-500 hover:bg-blue-600 text-white text-xs rounded transition-colors">
+                            <i class="fas fa-eye mr-1"></i>Toàn bộ
+                        </button>
+                        <button onclick="resetRouteFromTimeline()" 
+                            class="flex-1 px-3 py-2 bg-gray-500 hover:bg-gray-600 text-white text-xs rounded transition-colors">
+                            <i class="fas fa-eraser mr-1"></i>Xóa
+                        </button>
+                    </div>
+                    <div class="text-xs text-center text-gray-500">
+                        Click vào các điểm để focus trên bản đồ
+                    </div>
+                </div>
+            `;
+            container.appendChild(controls);
         }
 
-        window.onload = startup;        // Toggle dropdown function
+        function createVerticalTimelineEvents(container, timelineData, route) {
+            timelineData.events.forEach((event, index) => {
+                // Create event container
+                const eventContainer = document.createElement('div');
+                eventContainer.className = 'timeline-event-vertical';
+                eventContainer.id = `timeline-event-${index}`;
+
+                // Create marker
+                const marker = document.createElement('div');
+                let markerClass = 'timeline-marker-vertical depot';
+                if (event.nodeType === 'pickup') markerClass = 'timeline-marker-vertical pickup';
+                else if (event.nodeType === 'delivery') markerClass = 'timeline-marker-vertical delivery';
+                
+                marker.className = markerClass;
+                marker.title = `Click để focus Node ${event.nodeId}`;
+                
+                // Click event for marker
+                marker.onclick = () => {
+                    focusOnTimelineNode(event, index);
+                };
+                
+                eventContainer.appendChild(marker);
+
+                // Create event card
+                const card = document.createElement('div');
+                let cardClass = 'timeline-card depot';
+                if (event.nodeType === 'pickup') cardClass = 'timeline-card pickup';
+                else if (event.nodeType === 'delivery') cardClass = 'timeline-card delivery';
+                
+                card.className = cardClass;
+                
+                // Card header
+                const cardHeader = document.createElement('div');
+                cardHeader.className = 'flex items-center justify-between mb-2';
+                
+                const nodeInfo = document.createElement('div');
+                nodeInfo.className = 'flex items-center space-x-2';
+                
+                let nodeIcon = '🏠';
+                let nodeLabel = 'Depot';
+                if (event.nodeType === 'pickup') {
+                    nodeIcon = '📦';
+                    nodeLabel = 'Pickup';
+                } else if (event.nodeType === 'delivery') {
+                    nodeIcon = '🚚';
+                    nodeLabel = 'Delivery';
+                }
+                
+                nodeInfo.innerHTML = `
+                    <span class="text-lg">${nodeIcon}</span>
+                    <div>
+                        <div class="font-semibold text-gray-800">Node ${event.nodeId}</div>
+                        <div class="text-xs text-gray-500">${nodeLabel}</div>
+                    </div>
+                `;
+                
+                const stepNumber = document.createElement('div');
+                stepNumber.className = 'bg-gray-100 text-gray-700 rounded-full w-8 h-8 flex items-center justify-center text-sm font-bold';
+                stepNumber.textContent = index + 1;
+                
+                cardHeader.appendChild(nodeInfo);
+                cardHeader.appendChild(stepNumber);
+                card.appendChild(cardHeader);
+
+                // Time information
+                const timeInfo = document.createElement('div');
+                timeInfo.className = 'space-y-2 mb-3';
+                
+                // Arrival and service times
+                const timeBadges = document.createElement('div');
+                timeBadges.className = 'flex flex-wrap gap-1';
+                
+                if (index > 0) {
+                    timeBadges.innerHTML += `<span class="timeline-time-badge">🚗 Đến: ${event.arrivalTime.toFixed(1)}h</span>`;
+                }
+                
+                if (event.waitTime > 0) {
+                    timeBadges.innerHTML += `<span class="timeline-time-badge" style="background: #fef3c7; color: #92400e;">⏰ Chờ: ${event.waitTime.toFixed(1)}h</span>`;
+                }
+                
+                if (event.serviceDuration > 0) {
+                    timeBadges.innerHTML += `<span class="timeline-time-badge" style="background: #d1fae5; color: #065f46;">⚡ Phục vụ: ${event.serviceDuration.toFixed(1)}h</span>`;
+                }
+                
+                timeInfo.appendChild(timeBadges);
+
+                // Progress bar showing time window
+                if (event.timeWindow[1] > event.timeWindow[0]) {
+                    const progressContainer = document.createElement('div');
+                    progressContainer.className = 'mt-2';
+                    
+                    const progressLabel = document.createElement('div');
+                    progressLabel.className = 'text-xs text-gray-600 mb-1';
+                    progressLabel.textContent = `Time Window: [${event.timeWindow[0]}, ${event.timeWindow[1]}]`;
+                    
+                    const progressBar = document.createElement('div');
+                    progressBar.className = 'w-full bg-gray-200 rounded-full h-2';
+                    
+                    // Calculate position within time window
+                    const windowDuration = event.timeWindow[1] - event.timeWindow[0];
+                    const servicePosition = Math.max(0, Math.min(1, (event.serviceStartTime - event.timeWindow[0]) / windowDuration));
+                    
+                    progressBar.innerHTML = `
+                        <div class="h-2 rounded-full bg-gradient-to-r from-blue-400 to-green-400" 
+                             style="width: ${servicePosition * 100}%"></div>
+                    `;
+                    
+                    progressContainer.appendChild(progressLabel);
+                    progressContainer.appendChild(progressBar);
+                    timeInfo.appendChild(progressContainer);
+                }
+                
+                card.appendChild(timeInfo);
+
+                // Demand and load information
+                const demandInfo = document.createElement('div');
+                demandInfo.className = 'flex justify-between text-sm';
+                demandInfo.innerHTML = `
+                    <span class="text-gray-600">Demand:</span>
+                    <span class="font-medium ${event.demand > 0 ? 'text-green-600' : event.demand < 0 ? 'text-red-600' : 'text-gray-600'}">
+                        ${event.demand > 0 ? '+' : ''}${event.demand}
+                    </span>
+                `;
+                card.appendChild(demandInfo);
+                
+                const loadInfo = document.createElement('div');
+                loadInfo.className = 'flex justify-between text-sm mt-1';
+                loadInfo.innerHTML = `
+                    <span class="text-gray-600">Tải trọng sau:</span>
+                    <span class="font-medium text-blue-600">${event.load}</span>
+                `;
+                card.appendChild(loadInfo);
+
+                // Travel segment info (for non-first events)
+                if (index > 0) {
+                    const segmentInfo = document.createElement('div');
+                    segmentInfo.className = 'timeline-segment-info mt-3';
+                    
+                    const prevEvent = timelineData.events[index - 1];
+                    segmentInfo.innerHTML = `
+                        <div class="flex items-center space-x-2 mb-1">
+                            <i class="fas fa-route text-yellow-600"></i>
+                            <span class="font-medium text-sm">Từ Node ${prevEvent.nodeId}</span>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2 text-xs">
+                            <div>🚗 ${event.travelTime.toFixed(1)}h</div>
+                            <div>📏 ${event.distance.toFixed(1)}km</div>
+                        </div>
+                    `;
+                    card.appendChild(segmentInfo);
+                }
+
+                // Add click handler for the entire card
+                card.style.cursor = 'pointer';
+                card.onclick = (e) => {
+                    if (e.target === marker) return; // Don't double-trigger
+                    focusOnTimelineNode(event, index);
+                };
+
+                eventContainer.appendChild(card);
+                container.appendChild(eventContainer);
+            });
+        }
+
+        function focusOnTimelineNode(event, index) {
+            // Focus on map
+            if (routeDetailMap) {
+                routeDetailMap.setView(event.coords, 16);
+                
+                // Create temporary highlight marker
+                const tempMarker = L.circleMarker(event.coords, {
+                    color: '#ef4444',
+                    fillColor: '#fecaca',
+                    fillOpacity: 0.6,
+                    radius: 20,
+                    weight: 4
+                }).addTo(routeDetailMap);
+                
+                setTimeout(() => {
+                    routeDetailMap.removeLayer(tempMarker);
+                }, 3000);
+            }
+
+            // Highlight in node sequence
+            document.querySelectorAll('#node-sequence .bg-gray-50').forEach((div, i) => {
+                if (i === index) {
+                    div.style.backgroundColor = '#fef3c7';
+                    div.style.transition = 'background-color 0.3s ease';
+                    div.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    setTimeout(() => {
+                        div.style.backgroundColor = '#f9fafb';
+                    }, 3000);
+                } else {
+                    div.style.backgroundColor = '#f9fafb';
+                }
+            });
+
+            // Highlight timeline event
+            document.querySelectorAll('.timeline-event-vertical .timeline-card').forEach((card, i) => {
+                if (i === index) {
+                    card.style.backgroundColor = '#fef3c7';
+                    card.style.transform = 'scale(1.02)';
+                    card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    setTimeout(() => {
+                        card.style.backgroundColor = 'white';
+                        card.style.transform = 'scale(1)';
+                    }, 3000);
+                } else {
+                    card.style.backgroundColor = 'white';
+                    card.style.transform = 'scale(1)';
+                }
+            });
+
+            // Show single segment on map if available
+            if (typeof showSingleSegment === 'function') {
+                showSingleSegment(index);
+            }
+        }
+
+        function showFullRouteFromTimeline() {
+            if (typeof showFullRoute === 'function') {
+                showFullRoute();
+            }
+        }
+
+        function resetRouteFromTimeline() {
+            if (typeof resetRouteView === 'function') {
+                resetRouteView();
+            }
+        }
+
+        function calculateTimelineData(route) {
+            const data = {
+                events: [],
+                totalDuration: 0,
+                totalDistance: 0,
+                maxTime: 0
+            };
+
+            let currentTime = 0;
+            let currentLoad = 0;
+            let totalDistance = 0;
+
+            route.sequence.forEach((nodeId, index) => {
+                const node = instance.nodes[nodeId];
+                let travelTime = 0;
+                let distance = 0;
+
+                // Calculate travel time and distance from previous node
+                if (index > 0) {
+                    const prevNodeId = route.sequence[index - 1];
+                    if (instance.times && instance.times[prevNodeId] && instance.times[prevNodeId][nodeId]) {
+                        travelTime = instance.times[prevNodeId][nodeId];
+                        distance = instance.distances ? instance.distances[prevNodeId][nodeId] : travelTime * 30; // Assume 30km/h if no distance data
+                    } else {
+                        // Fallback calculation
+                        const prevNode = instance.nodes[prevNodeId];
+                        distance = getDistanceBetweenPoints(prevNode.coords, node.coords);
+                        travelTime = distance / 30; // 30 km/h average speed
+                    }
+                    totalDistance += distance;
+                }
+
+                // Arrival time
+                const arrivalTime = currentTime + travelTime;
+
+                // Service start time (considering time window)
+                let serviceStartTime = arrivalTime;
+                const waitTime = Math.max(0, node.time_window[0] - arrivalTime);
+                serviceStartTime = Math.max(arrivalTime, node.time_window[0]);
+
+                // Service duration
+                const serviceDuration = node.service_time || 0;
+
+                // Update load
+                currentLoad += node.demand;
+
+                // Create event
+                const event = {
+                    nodeId: nodeId,
+                    index: index,
+                    nodeType: node.is_depot ? 'depot' : node.is_pickup ? 'pickup' : 'delivery',
+                    arrivalTime: arrivalTime,
+                    serviceStartTime: serviceStartTime,
+                    serviceEndTime: serviceStartTime + serviceDuration,
+                    waitTime: waitTime,
+                    serviceDuration: serviceDuration,
+                    travelTime: travelTime,
+                    distance: distance,
+                    load: currentLoad,
+                    timeWindow: [node.time_window[0], node.time_window[1]],
+                    demand: node.demand,
+                    coords: node.coords
+                };
+
+                data.events.push(event);
+                currentTime = serviceStartTime + serviceDuration;
+            });
+
+            data.totalDuration = currentTime;
+            data.totalDistance = totalDistance;
+            data.maxTime = Math.max(currentTime, Math.max(...route.sequence.map(nodeId => instance.nodes[nodeId].time_window[1])));
+
+            return data;        }        window.onload = startup;// Toggle dropdown function
         function toggleDropdown(section) {
             const dropdown = document.getElementById(section + '_dropdown');
             const icon = document.getElementById(section + '-icon');
