@@ -226,3 +226,69 @@
 ::-webkit-scrollbar-thumb:hover {
   background: #a8a8a8;
 }
+
+/* Custom Marker Styles for Add Instance Page */
+.custom-marker {
+  background: transparent !important;
+  border: none !important;
+}
+
+.custom-marker .leaflet-div-icon {
+  background: transparent !important;
+  border: none !important;
+}
+
+/* Node editing form styles */
+.node-type-button {
+  transition: all 0.2s ease;
+}
+
+.node-type-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+.node-type-button.selected {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+}
+
+/* Add Instance Page specific styles */
+.add-instance-map {
+  cursor: crosshair;
+}
+
+.add-instance-map.adding-node {
+  cursor: crosshair !important;
+}
+
+.add-instance-map.normal {
+  cursor: default;
+}
+
+/* Instance form validation */
+.form-error {
+  border-color: #ef4444 !important;
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1) !important;
+}
+
+.form-success {
+  border-color: #10b981 !important;
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1) !important;
+}
+
+/* Node list item hover effects */
+.node-list-item {
+  transition: all 0.2s ease;
+}
+
+.node-list-item:hover {
+  background-color: #f9fafb;
+  transform: translateX(4px);
+}
+
+.node-list-item.selected {
+  background-color: #eff6ff;
+  border-left-color: #3b82f6;
+  transform: translateX(4px);
+}

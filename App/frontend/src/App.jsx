@@ -3,6 +3,7 @@ import MapComponent from './components/MapComponent';
 import Sidebar from './components/Sidebar';
 import RouteDetailsPage from './components/RouteDetailsPage';
 import GuidePage from './components/GuidePage';
+import AddInstancePage from './components/AddInstancePage';
 import './App.css';
 import { useFileReader } from './hooks/useFileReader';
 import { useMapControls } from './hooks/useMapControls';
@@ -194,6 +195,26 @@ function App() {
     }
   }, [instance, readSolutionFile]);
 
+  const handleInstanceCreated = async (file, content) => {
+    try {
+      // Parse the created instance
+      const parsedInstance = await readInstanceFile(file);
+
+      // Set the instance text content
+      setInstanceText(content);
+
+      console.log('Created instance loaded:', parsedInstance);
+
+      // Switch back to dashboard
+      setCurrentPage('dashboard');
+
+      alert('Instance đã được tạo và load thành công!');
+    } catch (error) {
+      console.error('Error loading created instance:', error);
+      alert('Lỗi khi load instance đã tạo: ' + error.message);
+    }
+  };
+
   return (
     <div className="flex flex-col h-screen bg-gray-100">
       {/* Navigation Header */}
@@ -212,6 +233,13 @@ function App() {
               id="dashboard-tab"
             >
               <i className="fas fa-tachometer-alt mr-2"></i>Dashboard
+            </button>
+            <button
+              onClick={() => showPage('add-instance')}
+              className={`nav-tab px-4 py-2 text-sm font-medium rounded-lg transition-colors duration-200 ${currentPage === 'add-instance' ? 'active' : ''}`}
+              id="add-instance-tab"
+            >
+              <i className="fas fa-plus mr-2"></i>Tạo Instance
             </button>
             <button
               onClick={() => showPage('route-details')}
@@ -270,6 +298,13 @@ function App() {
             />
           </div>
         </div>
+      )}
+
+      {currentPage === 'add-instance' && (
+        <AddInstancePage
+          onBack={() => setCurrentPage('dashboard')}
+          onInstanceCreated={handleInstanceCreated}
+        />
       )}
 
       {currentPage === 'route-details' && (
