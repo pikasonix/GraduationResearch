@@ -1,0 +1,76 @@
+{
+    "name": "pdptw-frontend",
+    "version": "1.0.0",
+    "description": "PDPTW Problem Solving Frontend with React.js and TailwindCSS",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "dev": "vite",
+        "build": "vite build",
+        "preview": "vite preview",
+        "lint": "eslint . --ext js,jsx --report-unused-disable-directives --max-warnings 0",
+        "lint:fix": "eslint . --ext js,jsx --fix",
+        "format": "prettier --write \"src/**/*.{js,jsx,css,md}\"",
+        "test": "vitest",
+        "test:ui": "vitest --ui",
+        "test:coverage": "vitest --coverage"
+    },
+    "dependencies": {
+        "react": "^18.2.0",
+        "react-dom": "^18.2.0",
+        "react-router-dom": "^6.20.0",
+        "react-error-boundary": "^4.0.11",
+        "@heroicons/react": "^2.0.18",
+        "axios": "^1.6.0",
+        "react-hot-toast": "^2.4.1",
+        "react-hook-form": "^7.47.0",
+        "@hookform/resolvers": "^3.3.2",
+        "zod": "^3.22.4",
+        "chart.js": "^4.4.0",
+        "react-chartjs-2": "^5.2.0",
+        "d3": "^7.8.5",
+        "react-dropzone": "^14.2.3",
+        "clsx": "^2.0.0",
+        "tailwind-merge": "^2.0.0",
+        "lucide-react": "^0.294.0"
+    },
+    "devDependencies": {
+        "@types/react": "^18.2.37",
+        "@types/react-dom": "^18.2.15",
+        "@vitejs/plugin-react": "^4.1.1",
+        "vite": "^5.0.0",
+        "tailwindcss": "^3.3.5",
+        "autoprefixer": "^10.4.16",
+        "postcss": "^8.4.31",
+        "@tailwindcss/forms": "^0.5.7",
+        "@tailwindcss/typography": "^0.5.10",
+        "eslint": "^8.53.0",
+        "eslint-plugin-react": "^7.33.2",
+        "eslint-plugin-react-hooks": "^4.6.0",
+        "eslint-plugin-react-refresh": "^0.4.4",
+        "prettier": "^3.1.0",
+        "prettier-plugin-tailwindcss": "^0.5.7",
+        "vitest": "^0.34.6",
+        "@testing-library/react": "^13.4.0",
+        "@testing-library/jest-dom": "^6.1.4",
+        "@testing-library/user-event": "^14.5.1",
+        "@vitest/ui": "^0.34.6",
+        "@vitest/coverage-v8": "^0.34.6"
+    },
+    "engines": {
+        "node": ">=18.0.0",
+        "npm": ">=9.0.0"
+    },
+    "browserslist": {
+        "production": [
+            ">0.2%",
+            "not dead",
+            "not op_mini all"
+        ],
+        "development": [
+            "last 1 chrome version",
+            "last 1 firefox version",
+            "last 1 safari version"
+        ]
+    }
+}

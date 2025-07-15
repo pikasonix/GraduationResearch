@@ -1,53 +1,178 @@
-# PDPTW (Pickup and Delivery Problem with Time Windows) Solver
+# 🚛 PDPTW Visualizer - Refactored Architecture
 
-Dự án này cung cấp một bộ giải hoàn chỉnh cho bài toán PDPTW (Pickup and Delivery Problem with Time Windows) sử dụng các thuật toán tối ưu hóa khác nhau như ACO (Ant Colony Optimization), Greedy Insertion, và phương pháp kết hợp Hybrid ACO-Greedy.
+> **Modern web-based visualization tool for Pickup and Delivery Problem with Time Windows (PDPTW)**
 
-## Mục lục
+![Architecture](https://img.shields.io/badge/Architecture-Frontend%2FBackend%20Separated-brightgreen)
+![Backend](https://img.shields.io/badge/Backend-Python%20Flask-blue)
+![Frontend](https://img.shields.io/badge/Frontend-Vanilla%20JavaScript-yellow)
+![API](https://img.shields.io/badge/API-RESTful-orange)
 
-- [Cấu trúc dự án](#cấu-trúc-dự-án)
-- [Cài đặt](#cài-đặt)
-- [Sử dụng](#sử-dụng)
-- [Visualizer](#visualizer)
-- [Validator](#validator)
-- [Dataset](#dataset)
-- [Thuật toán](#thuật-toán)
+## 🏗️ **Kiến trúc mới (Refactored)**
 
+### **📋 Tổng quan:**
+Dự án đã được **refactor hoàn toàn** để tách biệt Frontend và Backend, tạo ra một kiến trúc hiện đại và dễ bảo trì.
 
-## Cấu trúc dự án
+```
+PDPTW Visualizer
+├── 🖥️  Frontend (Client-side)
+│   ├── Pure HTML/CSS/JavaScript
+│   ├── Interactive map visualization  
+│   ├── Real-time API communication
+│   └── Responsive user interface
+│
+├── ⚙️  Backend (Server-side)
+│   ├── Python Flask REST API
+│   ├── PDPTW algorithm execution
+│   ├── File processing & validation
+│   └── Data management
+│
+└── 🔗 Communication via REST API
+```
+
+## 📁 **Cấu trúc dự án:**
 
 ```
 PDPTW/
-├── README.md                    # File hướng dẫn này
-├── input.txt                    # File input mẫu
-├── output.txt                   # File output mẫu
-├── dataset/                     # Bộ dữ liệu test cases
-│   ├── Instances/              # Các instance bài toán
-│   │   ├── n100/              # Test cases với 100 nodes
-│   │   ├── n200/              # Test cases với 200 nodes
-│   │   └── n400/              # Test cases với 400 nodes
-│   └── Solutions/             # Các solution tham khảo
-├── RELEASE/                    # Các file thực thi và mã nguồn
-│   ├── PDPTW_ACO.cpp          # Thuật toán ACO
+├── 🎯 run.sh / run.bat          # Quick start scripts
+├── 📄 README.md                 # This file
+├── 
+├── 🖥️ frontend/                 # Client-side application
+│   ├── index.html               # Main application page
+│   ├── src/
+│   │   ├── api.js              # Backend API communication
+│   │   ├── app.js              # Main application logic
+│   │   ├── styles.css          # Custom styling
+│   │   ├── structures.js       # Data structures
+│   │   ├── reader.js           # File parsing
+│   │   ├── mapper.js           # Map visualization
+│   │   ├── timeline.js         # Timeline features
+│   │   └── guide.js            # User guide
+│   └── README.md
+│
+├── ⚙️ backend/                  # Server-side API
+│   ├── app.py                  # Flask application
+│   ├── requirements.txt        # Python dependencies
+│   ├── uploads/                # Uploaded files
+│   ├── results/                # Generated results
+│   └── README.md
+│
+├── 🔧 RELEASE/                  # Algorithm executables
 │   ├── PDPTW_ACO.exe
-│   ├── PDPTW_GREEDY_INSERTION.cpp  # Thuật toán Greedy Insertion
 │   ├── PDPTW_GREEDY_INSERTION.exe
-│   ├── PDPTW_HYBRID_ACO_GREEDY_V3.cpp # Thuật toán Hybrid
 │   ├── PDPTW_HYBRID_ACO_GREEDY_V3.exe
-│   └── PDPTW_ORTOOLS.py       # Giải pháp sử dụng OR-Tools
-├── validator/                  # Công cụ validation
-│   └── validator.py
-└── visualizer/                # visualizer
-    ├── package.json
-    ├── server.js
-    └── public/
+│   └── ...
+│
+├── 📊 dataset/                  # Test instances and solutions
+│   ├── Instances/
+│   └── Solutions/
+│
+├── ✅ validator/                # Solution validation
+└── 🗂️ visualizer/              # Legacy files (preserved)
 ```
 
-## Cài đặt
+## 🚀 **Quick Start**
 
-### 1. Cài đặt Visualizer
+### **🖱️ Cách dễ nhất - Chạy script tự động:**
 
+**Windows:**
 ```bash
-# Di chuyển vào thư mục visualizer
+run.bat
+```
+
+**Linux/Mac:**
+```bash
+chmod +x run.sh
+./run.sh
+```
+
+Script sẽ tự động:
+- ✅ Kiểm tra dependencies
+- ✅ Tạo virtual environment
+- ✅ Cài đặt packages
+- ✅ Khởi động backend (port 5000)
+- ✅ Khởi động frontend (port 8080)
+- ✅ Mở browser tự động
+
+### **🔧 Cách thủ công:**
+
+**1. Backend Setup:**
+```bash
+cd backend
+python -m venv venv
+source venv/bin/activate  # Windows: venv\Scripts\activate
+pip install -r requirements.txt
+python app.py
+```
+
+**2. Frontend Setup:**
+```bash
+cd frontend
+# Option 1: Node.js http-server
+npx http-server -p 8080 --cors
+
+# Option 2: Python simple server
+python -m http.server 8080
+
+# Option 3: VS Code Live Server
+# Right-click index.html → "Open with Live Server"
+```
+
+**3. Access:**
+- 🖥️ Frontend: `http://localhost:8080`
+- ⚙️ Backend API: `http://localhost:5000`
+
+## ✨ **Tính năng mới:**
+
+### **🔄 API-First Architecture:**
+- ✅ RESTful API communication
+- ✅ Real-time status monitoring
+- ✅ Async/await error handling
+- ✅ Health check endpoints
+
+### **🎨 Modern UI/UX:**
+- ✅ Responsive design
+- ✅ Toast notifications
+- ✅ Loading states with progress
+- ✅ Interactive feedback
+- ✅ Keyboard shortcuts (Ctrl+1,2,3)
+
+### **📊 Enhanced Visualization:**
+- ✅ Vertical timeline sidebar
+- ✅ Progress bars for time windows
+- ✅ Interactive route segments
+- ✅ Real-time map updates
+
+### **⚡ Performance Improvements:**
+- ✅ Route caching system
+- ✅ Lazy loading components
+- ✅ Optimized API calls
+- ✅ Memory management
+
+## 📈 **Lợi ích của kiến trúc mới:**
+
+### **🔧 Development:**
+- ✅ **Separation of Concerns:** Frontend/Backend tách biệt
+- ✅ **Maintainability:** Code dễ bảo trì và mở rộng
+- ✅ **Scalability:** Có thể scale Frontend/Backend riêng biệt
+- ✅ **Testing:** Test API và UI riêng lẻ
+
+### **🎨 User Experience:**
+- ✅ **Responsive:** Works on desktop, tablet, mobile
+- ✅ **Real-time feedback:** Progress indicators và status
+- ✅ **Error handling:** User-friendly error messages
+- ✅ **Performance:** Faster loading và smooth interactions
+
+### **🚀 Deployment:**
+- ✅ **Flexible hosting:** Frontend/Backend có thể host riêng
+- ✅ **CDN support:** Static assets có thể dùng CDN
+- ✅ **Container ready:** Easy Docker deployment
+- ✅ **Environment configs:** Dev/staging/production environments
+
+---
+
+## 📋 **Legacy Documentation (Original)**
+
+Dự án này cung cấp một bộ giải hoàn chỉnh cho bài toán PDPTW (Pickup and Delivery Problem with Time Windows) sử dụng các thuật toán tối ưu hóa khác nhau như ACO (Ant Colony Optimization), Greedy Insertion, và phương pháp kết hợp Hybrid ACO-Greedy.
 cd visualizer
 
 # Cài đặt dependencies

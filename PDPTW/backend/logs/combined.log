@@ -1,0 +1,403 @@
+2025-07-13T22:11:20.067Z [[32minfo[39m]: 🚀 PDPTW Backend Server started on port 5000
+2025-07-13T22:11:20.069Z [[32minfo[39m]: 📁 Algorithms folder: D:\CODE\GR1\GR2\PDPTW\RELEASE
+2025-07-13T22:11:20.070Z [[32minfo[39m]: 🧮 Available algorithms: aco, greedy, hybrid
+2025-07-13T22:11:20.070Z [[32minfo[39m]: 🌍 Environment: development
+2025-07-13T22:50:47.189Z [[32minfo[39m]: GET /api/health - 127.0.0.1
+2025-07-13T22:50:47.194Z [[32minfo[39m]: GET /api/algorithms - 127.0.0.1
+2025-07-13T22:50:47.196Z [[32minfo[39m]: GET /api/health - 127.0.0.1
+2025-07-13T22:50:47.199Z [[32minfo[39m]: GET /api/algorithms - 127.0.0.1
+2025-07-13T22:51:02.017Z [[32minfo[39m]: GET /api/health - 127.0.0.1
+2025-07-13T22:51:02.018Z [[32minfo[39m]: GET /api/algorithms - 127.0.0.1
+2025-07-13T22:51:02.020Z [[32minfo[39m]: GET /api/health - 127.0.0.1
+2025-07-13T22:51:02.021Z [[32minfo[39m]: GET /api/algorithms - 127.0.0.1
+2025-07-13T23:46:19.083Z [[32minfo[39m]: GET /api/health - 127.0.0.1
+2025-07-13T23:46:19.085Z [[32minfo[39m]: GET /api/algorithms - 127.0.0.1
+2025-07-13T23:46:19.086Z [[32minfo[39m]: GET /api/health - 127.0.0.1
+2025-07-13T23:46:19.088Z [[32minfo[39m]: GET /api/algorithms - 127.0.0.1
+2025-07-13T23:46:29.811Z [[32minfo[39m]: GET /api/sample-instance - 127.0.0.1
+2025-07-13T23:46:29.813Z [[32minfo[39m]: GET /api/algorithms - 127.0.0.1
+2025-07-13T23:46:29.815Z [[32minfo[39m]: GET /api/sample-instance - 127.0.0.1
+2025-07-13T23:46:29.816Z [[32minfo[39m]: GET /api/algorithms - 127.0.0.1
+2025-07-13T23:46:29.837Z [[32minfo[39m]: POST /api/validate-instance - 127.0.0.1
+2025-07-13T23:46:32.870Z [[32minfo[39m]: GET /api/health - 127.0.0.1
+2025-07-13T23:46:32.871Z [[32minfo[39m]: GET /api/algorithms - 127.0.0.1
+2025-07-13T23:46:32.872Z [[32minfo[39m]: GET /api/health - 127.0.0.1
+2025-07-13T23:46:32.874Z [[32minfo[39m]: GET /api/algorithms - 127.0.0.1
+2025-07-13T23:46:47.320Z [[32minfo[39m]: GET /api/algorithms - 127.0.0.1
+2025-07-13T23:46:47.326Z [[32minfo[39m]: GET /api/algorithms - 127.0.0.1
+2025-07-13T23:46:47.327Z [[32minfo[39m]: GET /api/sample-instance - 127.0.0.1
+2025-07-13T23:46:47.330Z [[32minfo[39m]: GET /api/sample-instance - 127.0.0.1
+2025-07-13T23:46:47.338Z [[32minfo[39m]: POST /api/validate-instance - 127.0.0.1
+2025-07-13T23:46:51.894Z [[32minfo[39m]: POST /api/upload-instance - 127.0.0.1
+2025-07-13T23:46:51.944Z [[32minfo[39m]: POST /api/validate-instance - 127.0.0.1
+2025-07-13T23:47:33.897Z [[32minfo[39m]: GET /api/algorithms - 127.0.0.1
+2025-07-13T23:47:33.898Z [[32minfo[39m]: GET /api/sample-instance - 127.0.0.1
+2025-07-13T23:47:33.900Z [[32minfo[39m]: GET /api/sample-instance - 127.0.0.1
+2025-07-13T23:47:33.902Z [[32minfo[39m]: GET /api/algorithms - 127.0.0.1
+2025-07-13T23:47:33.912Z [[32minfo[39m]: POST /api/validate-instance - 127.0.0.1
+2025-07-13T23:47:45.819Z [[32minfo[39m]: GET /api/health - 127.0.0.1
+2025-07-13T23:47:45.823Z [[32minfo[39m]: GET /api/algorithms - 127.0.0.1
+2025-07-13T23:47:45.826Z [[32minfo[39m]: GET /api/health - 127.0.0.1
+2025-07-13T23:47:45.828Z [[32minfo[39m]: GET /api/algorithms - 127.0.0.1
+2025-07-13T23:47:50.352Z [[32minfo[39m]: GET /api/algorithms - 127.0.0.1
+2025-07-13T23:47:50.355Z [[32minfo[39m]: GET /api/sample-instance - 127.0.0.1
+2025-07-13T23:47:50.357Z [[32minfo[39m]: GET /api/algorithms - 127.0.0.1
+2025-07-13T23:47:50.358Z [[32minfo[39m]: GET /api/sample-instance - 127.0.0.1
+2025-07-13T23:47:50.369Z [[32minfo[39m]: POST /api/validate-instance - 127.0.0.1
+2025-07-13T23:47:59.898Z [[32minfo[39m]: GET /api/algorithms - 127.0.0.1
+2025-07-13T23:47:59.900Z [[32minfo[39m]: GET /api/sample-instance - 127.0.0.1
+2025-07-13T23:47:59.901Z [[32minfo[39m]: GET /api/algorithms - 127.0.0.1
+2025-07-13T23:47:59.902Z [[32minfo[39m]: GET /api/sample-instance - 127.0.0.1
+2025-07-13T23:47:59.919Z [[32minfo[39m]: POST /api/validate-instance - 127.0.0.1
+2025-07-13T23:49:33.679Z [[32minfo[39m]: GET /api/algorithms - 127.0.0.1
+2025-07-13T23:49:33.680Z [[32minfo[39m]: GET /api/sample-instance - 127.0.0.1
+2025-07-13T23:49:33.682Z [[32minfo[39m]: POST /api/validate-instance - 127.0.0.1
+2025-07-13T23:59:56.540Z [[32minfo[39m]: GET /api/algorithms - 127.0.0.1
+2025-07-13T23:59:56.541Z [[32minfo[39m]: GET /api/sample-instance - 127.0.0.1
+2025-07-13T23:59:56.542Z [[32minfo[39m]: GET /api/sample-instance - 127.0.0.1
+2025-07-13T23:59:56.543Z [[32minfo[39m]: GET /api/algorithms - 127.0.0.1
+2025-07-13T23:59:56.553Z [[32minfo[39m]: POST /api/validate-instance - 127.0.0.1
+2025-07-14T00:00:11.609Z [[32minfo[39m]: GET /api/health - 127.0.0.1
+2025-07-14T00:00:11.612Z [[32minfo[39m]: GET /api/algorithms - 127.0.0.1
+2025-07-14T00:00:11.613Z [[32minfo[39m]: GET /api/health - 127.0.0.1
+2025-07-14T00:00:11.614Z [[32minfo[39m]: GET /api/algorithms - 127.0.0.1
+2025-07-14T00:00:20.676Z [[32minfo[39m]: GET /api/algorithms - 127.0.0.1
+2025-07-14T00:00:20.680Z [[32minfo[39m]: GET /api/sample-instance - 127.0.0.1
+2025-07-14T00:00:20.682Z [[32minfo[39m]: GET /api/algorithms - 127.0.0.1
+2025-07-14T00:00:20.683Z [[32minfo[39m]: GET /api/sample-instance - 127.0.0.1
+2025-07-14T00:00:20.690Z [[32minfo[39m]: POST /api/validate-instance - 127.0.0.1
+2025-07-14T00:01:13.680Z [[32minfo[39m]: GET /api/algorithms - 127.0.0.1
+2025-07-14T00:01:13.681Z [[32minfo[39m]: GET /api/sample-instance - 127.0.0.1
+2025-07-14T00:01:13.682Z [[32minfo[39m]: POST /api/validate-instance - 127.0.0.1
+2025-07-14T00:01:24.372Z [[32minfo[39m]: GET /api/algorithms - 127.0.0.1
+2025-07-14T00:01:24.373Z [[32minfo[39m]: GET /api/sample-instance - 127.0.0.1
+2025-07-14T00:01:24.375Z [[32minfo[39m]: POST /api/validate-instance - 127.0.0.1
+2025-07-14T00:01:31.794Z [[32minfo[39m]: GET /api/algorithms - 127.0.0.1
+2025-07-14T00:01:31.795Z [[32minfo[39m]: GET /api/sample-instance - 127.0.0.1
+2025-07-14T00:01:31.798Z [[32minfo[39m]: GET /api/sample-instance - 127.0.0.1
+2025-07-14T00:01:31.800Z [[32minfo[39m]: GET /api/algorithms - 127.0.0.1
+2025-07-14T00:01:31.813Z [[32minfo[39m]: POST /api/validate-instance - 127.0.0.1
+2025-07-14T00:01:35.700Z [[32minfo[39m]: POST /api/validate-instance - 127.0.0.1
+2025-07-14T00:01:35.701Z [[32minfo[39m]: GET /api/algorithms - 127.0.0.1
+2025-07-14T00:01:35.701Z [[32minfo[39m]: GET /api/sample-instance - 127.0.0.1
+2025-07-14T00:01:37.799Z [[32minfo[39m]: POST /api/solve - 127.0.0.1
+2025-07-14T00:01:37.801Z [[32minfo[39m]: Solving problem with algorithm: hybrid
+2025-07-14T00:01:48.265Z [[32minfo[39m]: GET /api/algorithms - 127.0.0.1
+2025-07-14T00:01:48.265Z [[32minfo[39m]: GET /api/sample-instance - 127.0.0.1
+2025-07-14T00:01:48.267Z [[32minfo[39m]: POST /api/validate-instance - 127.0.0.1
+2025-07-14T00:02:00.199Z [[32minfo[39m]: GET /api/algorithms - 127.0.0.1
+2025-07-14T00:02:00.201Z [[32minfo[39m]: GET /api/sample-instance - 127.0.0.1
+2025-07-14T00:02:00.203Z [[32minfo[39m]: POST /api/validate-instance - 127.0.0.1
+2025-07-14T00:02:13.373Z [[32minfo[39m]: GET /api/algorithms - 127.0.0.1
+2025-07-14T00:02:13.374Z [[32minfo[39m]: GET /api/sample-instance - 127.0.0.1
+2025-07-14T00:02:13.375Z [[32minfo[39m]: POST /api/validate-instance - 127.0.0.1
+2025-07-14T00:02:57.686Z [[32minfo[39m]: GET /api/algorithms - 127.0.0.1
+2025-07-14T00:02:57.687Z [[32minfo[39m]: GET /api/sample-instance - 127.0.0.1
+2025-07-14T00:02:57.688Z [[32minfo[39m]: POST /api/validate-instance - 127.0.0.1
+2025-07-14T00:03:02.699Z [[32minfo[39m]: GET /api/algorithms - 127.0.0.1
+2025-07-14T00:03:02.700Z [[32minfo[39m]: GET /api/sample-instance - 127.0.0.1
+2025-07-14T00:03:02.703Z [[32minfo[39m]: GET /api/sample-instance - 127.0.0.1
+2025-07-14T00:03:02.704Z [[32minfo[39m]: GET /api/algorithms - 127.0.0.1
+2025-07-14T00:03:02.720Z [[32minfo[39m]: POST /api/validate-instance - 127.0.0.1
+2025-07-14T00:03:11.397Z [[32minfo[39m]: POST /api/upload-instance - 127.0.0.1
+2025-07-14T00:03:11.423Z [[32minfo[39m]: POST /api/validate-instance - 127.0.0.1
+2025-07-14T00:03:15.646Z [[32minfo[39m]: POST /api/solve - 127.0.0.1
+2025-07-14T00:03:15.646Z [[32minfo[39m]: Solving problem with algorithm: hybrid
+2025-07-14T00:06:31.515Z [[32minfo[39m]: 🔍 Searching for algorithm executable...
+2025-07-14T00:06:31.517Z [[32minfo[39m]:    Checking: D:\CODE\GR1\GR2\PDPTW\visualizer\public\PDPTW_HYBRID_ACO_GREEDY_V3.exe
+2025-07-14T00:06:31.517Z [[32minfo[39m]: ✅ Found algorithm executable at: D:\CODE\GR1\GR2\PDPTW\visualizer\public\PDPTW_HYBRID_ACO_GREEDY_V3.exe
+2025-07-14T00:06:31.517Z [[32minfo[39m]: ✅ Updated algorithmsFolder to: D:\CODE\GR1\GR2\PDPTW\visualizer\public
+2025-07-14T00:06:31.533Z [[32minfo[39m]: 🚀 PDPTW Backend Server started on port 8080
+2025-07-14T00:06:31.534Z [[32minfo[39m]: 📁 Algorithms folder: D:\CODE\GR1\GR2\PDPTW\visualizer\public
+2025-07-14T00:06:31.534Z [[32minfo[39m]: 🧮 Available algorithms: hybrid
+2025-07-14T00:06:31.534Z [[32minfo[39m]: 🌍 Environment: development
+2025-07-14T00:06:31.535Z [[32minfo[39m]: 🔍 Algorithm executable check: D:\CODE\GR1\GR2\PDPTW\visualizer\public\PDPTW_HYBRID_ACO_GREEDY_V3.exe - EXISTS
+2025-07-14T00:06:48.157Z [[32minfo[39m]: GET /api/algorithms - 127.0.0.1
+2025-07-14T00:06:48.158Z [[32minfo[39m]: GET /api/sample-instance - 127.0.0.1
+2025-07-14T00:06:48.160Z [[32minfo[39m]: GET /api/sample-instance - 127.0.0.1
+2025-07-14T00:06:48.161Z [[32minfo[39m]: GET /api/algorithms - 127.0.0.1
+2025-07-14T00:06:48.173Z [[32minfo[39m]: POST /api/validate-instance - 127.0.0.1
+2025-07-14T00:06:53.059Z [[32minfo[39m]: POST /api/upload-instance - 127.0.0.1
+2025-07-14T00:06:53.081Z [[32minfo[39m]: POST /api/validate-instance - 127.0.0.1
+2025-07-14T00:07:06.666Z [[32minfo[39m]: POST /api/solve - 127.0.0.1
+2025-07-14T00:07:06.667Z [[32minfo[39m]: Solving problem with algorithm: hybrid
+2025-07-14T00:13:49.585Z [[32minfo[39m]: Received SIGINT. Starting graceful shutdown...
+2025-07-14T00:13:52.661Z [[32minfo[39m]: 🔍 Checking algorithm executable...
+2025-07-14T00:13:52.663Z [[32minfo[39m]:    Algorithm folder: D:\CODE\GR1\GR2\PDPTW\backend\algorithms
+2025-07-14T00:13:52.663Z [[32minfo[39m]:    Executable name: PDPTW_HYBRID_ACO_GREEDY_V3.exe
+2025-07-14T00:13:52.663Z [[32minfo[39m]:    Full path: D:\CODE\GR1\GR2\PDPTW\backend\algorithms\PDPTW_HYBRID_ACO_GREEDY_V3.exe
+2025-07-14T00:13:52.664Z [[32minfo[39m]: ✅ Algorithm executable found at: D:\CODE\GR1\GR2\PDPTW\backend\algorithms\PDPTW_HYBRID_ACO_GREEDY_V3.exe
+2025-07-14T00:13:52.675Z [[32minfo[39m]: 🚀 PDPTW Backend Server started on port 8080
+2025-07-14T00:13:52.678Z [[32minfo[39m]: 📁 Directory ensured: uploads
+2025-07-14T00:13:52.679Z [[32minfo[39m]: 📁 Directory ensured: results
+2025-07-14T00:13:52.679Z [[32minfo[39m]: 📁 Directory ensured: logs
+2025-07-14T00:13:52.679Z [[32minfo[39m]: 📁 Directory ensured: D:\CODE\GR1\GR2\PDPTW\backend\algorithms
+2025-07-14T00:13:52.679Z [[32minfo[39m]: 📁 Algorithms folder: D:\CODE\GR1\GR2\PDPTW\backend\algorithms
+2025-07-14T00:13:52.680Z [[32minfo[39m]: 🧮 Available algorithms: hybrid
+2025-07-14T00:13:52.680Z [[32minfo[39m]: 🌍 Environment: development
+2025-07-14T00:13:52.680Z [[32minfo[39m]: 🔍 Algorithm executable check: D:\CODE\GR1\GR2\PDPTW\backend\algorithms\PDPTW_HYBRID_ACO_GREEDY_V3.exe - EXISTS
+2025-07-14T00:15:07.905Z [[32minfo[39m]: GET /api/health - 127.0.0.1
+2025-07-14T00:15:07.912Z [[32minfo[39m]: GET /api/health - 127.0.0.1
+2025-07-14T00:15:07.915Z [[32minfo[39m]: GET /api/algorithms - 127.0.0.1
+2025-07-14T00:15:07.918Z [[32minfo[39m]: GET /api/algorithms - 127.0.0.1
+2025-07-14T00:15:27.368Z [[32minfo[39m]: GET /api/algorithms - 127.0.0.1
+2025-07-14T00:15:27.370Z [[32minfo[39m]: GET /api/sample-instance - 127.0.0.1
+2025-07-14T00:15:27.373Z [[32minfo[39m]: GET /api/algorithms - 127.0.0.1
+2025-07-14T00:15:27.375Z [[32minfo[39m]: GET /api/sample-instance - 127.0.0.1
+2025-07-14T00:15:27.395Z [[32minfo[39m]: POST /api/validate-instance - 127.0.0.1
+2025-07-14T00:15:31.306Z [[32minfo[39m]: POST /api/upload-instance - 127.0.0.1
+2025-07-14T00:15:31.342Z [[32minfo[39m]: POST /api/validate-instance - 127.0.0.1
+2025-07-14T00:15:38.331Z [[32minfo[39m]: POST /api/solve - 127.0.0.1
+2025-07-14T00:15:38.332Z [[32minfo[39m]: Solving problem with algorithm: hybrid
+2025-07-14T00:15:38.332Z [[32minfo[39m]: Checking algorithm executable at: D:\CODE\GR1\GR2\PDPTW\backend\algorithms\PDPTW_HYBRID_ACO_GREEDY_V3.exe
+2025-07-14T00:15:38.333Z [[32minfo[39m]: Algorithms folder: D:\CODE\GR1\GR2\PDPTW\backend\algorithms
+2025-07-14T00:15:38.333Z [[32minfo[39m]: Executable name: PDPTW_HYBRID_ACO_GREEDY_V3.exe
+2025-07-14T00:15:38.335Z [[32minfo[39m]: Executing algorithm: D:\CODE\GR1\GR2\PDPTW\backend\algorithms\PDPTW_HYBRID_ACO_GREEDY_V3.exe uploads\instance-fd83a6d1-098a-4412-a89c-bf16ee0bc6a4.txt results\solution-fd83a6d1-098a-4412-a89c-bf16ee0bc6a4.txt 7 10 20 2 5 0.1 50 0.01 0.85 4 0.7 2
+2025-07-14T00:18:48.280Z [[32minfo[39m]: Received SIGINT. Starting graceful shutdown...
+2025-07-14T00:18:50.076Z [[32minfo[39m]: 🔍 Checking algorithm executable...
+2025-07-14T00:18:50.079Z [[32minfo[39m]:    Algorithm folder: D:\CODE\GR1\GR2\PDPTW\backend\algorithms
+2025-07-14T00:18:50.080Z [[32minfo[39m]:    Executable name: PDPTW_HYBRID_ACO_GREEDY_V3.exe
+2025-07-14T00:18:50.080Z [[32minfo[39m]:    Full path: D:\CODE\GR1\GR2\PDPTW\backend\algorithms\PDPTW_HYBRID_ACO_GREEDY_V3.exe
+2025-07-14T00:18:50.080Z [[32minfo[39m]: ✅ Algorithm executable found at: D:\CODE\GR1\GR2\PDPTW\backend\algorithms\PDPTW_HYBRID_ACO_GREEDY_V3.exe
+2025-07-14T00:18:50.099Z [[32minfo[39m]: 🚀 PDPTW Backend Server started on port 8080
+2025-07-14T00:18:50.105Z [[32minfo[39m]: 📁 Directory ensured: uploads
+2025-07-14T00:18:50.106Z [[32minfo[39m]: 📁 Directory ensured: results
+2025-07-14T00:18:50.106Z [[32minfo[39m]: 📁 Directory ensured: logs
+2025-07-14T00:18:50.106Z [[32minfo[39m]: 📁 Directory ensured: D:\CODE\GR1\GR2\PDPTW\backend\algorithms
+2025-07-14T00:18:50.107Z [[32minfo[39m]: 📁 Algorithms folder: D:\CODE\GR1\GR2\PDPTW\backend\algorithms
+2025-07-14T00:18:50.107Z [[32minfo[39m]: 🧮 Available algorithms: hybrid
+2025-07-14T00:18:50.107Z [[32minfo[39m]: 🌍 Environment: development
+2025-07-14T00:18:50.107Z [[32minfo[39m]: 🔍 Algorithm executable check: D:\CODE\GR1\GR2\PDPTW\backend\algorithms\PDPTW_HYBRID_ACO_GREEDY_V3.exe - EXISTS
+2025-07-14T00:18:57.697Z [[32minfo[39m]: GET /api/algorithms - 127.0.0.1
+2025-07-14T00:18:57.702Z [[32minfo[39m]: GET /api/sample-instance - 127.0.0.1
+2025-07-14T00:18:57.703Z [[32minfo[39m]: GET /api/algorithms - 127.0.0.1
+2025-07-14T00:18:57.705Z [[32minfo[39m]: GET /api/sample-instance - 127.0.0.1
+2025-07-14T00:18:57.728Z [[32minfo[39m]: POST /api/validate-instance - 127.0.0.1
+2025-07-14T00:19:02.798Z [[32minfo[39m]: POST /api/upload-instance - 127.0.0.1
+2025-07-14T00:19:02.831Z [[32minfo[39m]: POST /api/validate-instance - 127.0.0.1
+2025-07-14T00:19:09.952Z [[32minfo[39m]: POST /api/solve - 127.0.0.1
+2025-07-14T00:19:09.954Z [[32minfo[39m]: Solving problem with algorithm: hybrid
+2025-07-14T00:19:09.955Z [[32minfo[39m]: Checking algorithm executable at: D:\CODE\GR1\GR2\PDPTW\backend\algorithms\PDPTW_HYBRID_ACO_GREEDY_V3.exe
+2025-07-14T00:19:09.955Z [[32minfo[39m]: Algorithms folder: D:\CODE\GR1\GR2\PDPTW\backend\algorithms
+2025-07-14T00:19:09.955Z [[32minfo[39m]: Executable name: PDPTW_HYBRID_ACO_GREEDY_V3.exe
+2025-07-14T00:19:09.957Z [[32minfo[39m]: Executing algorithm: D:\CODE\GR1\GR2\PDPTW\backend\algorithms\PDPTW_HYBRID_ACO_GREEDY_V3.exe uploads\instance-7ce630a1-feb5-4ea6-b013-f54610c1592a.txt results\solution-7ce630a1-feb5-4ea6-b013-f54610c1592a.txt 7 10 20 2 5 0.1 50 0.01 0.85 4 0.7 2
+2025-07-14T00:23:41.309Z [[32minfo[39m]: Received SIGINT. Starting graceful shutdown...
+2025-07-14T00:23:43.181Z [[32minfo[39m]: 🔍 Checking algorithm executable...
+2025-07-14T00:23:43.183Z [[32minfo[39m]:    Algorithm folder: D:\CODE\GR1\GR2\PDPTW\backend\algorithms
+2025-07-14T00:23:43.183Z [[32minfo[39m]:    Executable name: PDPTW_HYBRID_ACO_GREEDY_V3.exe
+2025-07-14T00:23:43.183Z [[32minfo[39m]:    Full path: D:\CODE\GR1\GR2\PDPTW\backend\algorithms\PDPTW_HYBRID_ACO_GREEDY_V3.exe
+2025-07-14T00:23:43.183Z [[32minfo[39m]: ✅ Algorithm executable found at: D:\CODE\GR1\GR2\PDPTW\backend\algorithms\PDPTW_HYBRID_ACO_GREEDY_V3.exe
+2025-07-14T00:23:43.196Z [[32minfo[39m]: 🚀 PDPTW Backend Server started on port 8080
+2025-07-14T00:23:43.204Z [[32minfo[39m]: 📁 Directory ensured: uploads
+2025-07-14T00:23:43.205Z [[32minfo[39m]: 📁 Directory ensured: results
+2025-07-14T00:23:43.205Z [[32minfo[39m]: 📁 Directory ensured: logs
+2025-07-14T00:23:43.206Z [[32minfo[39m]: 📁 Directory ensured: D:\CODE\GR1\GR2\PDPTW\backend\algorithms
+2025-07-14T00:23:43.206Z [[32minfo[39m]: 📁 Algorithms folder: D:\CODE\GR1\GR2\PDPTW\backend\algorithms
+2025-07-14T00:23:43.206Z [[32minfo[39m]: 🧮 Available algorithms: hybrid
+2025-07-14T00:23:43.206Z [[32minfo[39m]: 🌍 Environment: development
+2025-07-14T00:23:43.207Z [[32minfo[39m]: 🔍 Algorithm executable check: D:\CODE\GR1\GR2\PDPTW\backend\algorithms\PDPTW_HYBRID_ACO_GREEDY_V3.exe - EXISTS
+2025-07-14T00:23:49.513Z [[32minfo[39m]: GET /api/algorithms - 127.0.0.1
+2025-07-14T00:23:49.518Z [[32minfo[39m]: GET /api/sample-instance - 127.0.0.1
+2025-07-14T00:23:49.520Z [[32minfo[39m]: GET /api/algorithms - 127.0.0.1
+2025-07-14T00:23:49.521Z [[32minfo[39m]: GET /api/sample-instance - 127.0.0.1
+2025-07-14T00:23:49.544Z [[32minfo[39m]: POST /api/validate-instance - 127.0.0.1
+2025-07-14T00:23:54.542Z [[32minfo[39m]: POST /api/solve - 127.0.0.1
+2025-07-14T00:23:54.543Z [[32minfo[39m]: Solving problem with algorithm: hybrid
+2025-07-14T00:23:54.544Z [[32minfo[39m]: Checking algorithm executable at: D:\CODE\GR1\GR2\PDPTW\backend\algorithms\PDPTW_HYBRID_ACO_GREEDY_V3.exe
+2025-07-14T00:23:54.544Z [[32minfo[39m]: Algorithms folder: D:\CODE\GR1\GR2\PDPTW\backend\algorithms
+2025-07-14T00:23:54.544Z [[32minfo[39m]: Executable name: PDPTW_HYBRID_ACO_GREEDY_V3.exe
+2025-07-14T00:23:54.545Z [[32minfo[39m]: Executing algorithm: D:\CODE\GR1\GR2\PDPTW\backend\algorithms\PDPTW_HYBRID_ACO_GREEDY_V3.exe uploads\instance-a0847434-66f4-4e15-994c-7d4ff03d3128.txt results\solution-a0847434-66f4-4e15-994c-7d4ff03d3128.txt 7 10 20 2 5 0.1 50 0.01 0.85 4 0.7 2
+2025-07-14T00:24:32.521Z [[32minfo[39m]: Received SIGINT. Starting graceful shutdown...
+2025-07-14T00:24:35.129Z [[32minfo[39m]: 🔍 Checking algorithm executable...
+2025-07-14T00:24:35.131Z [[32minfo[39m]:    Algorithm folder: D:\CODE\GR1\GR2\PDPTW\backend\algorithms
+2025-07-14T00:24:35.132Z [[32minfo[39m]:    Executable name: PDPTW_HYBRID_ACO_GREEDY_V3.exe
+2025-07-14T00:24:35.132Z [[32minfo[39m]:    Full path: D:\CODE\GR1\GR2\PDPTW\backend\algorithms\PDPTW_HYBRID_ACO_GREEDY_V3.exe
+2025-07-14T00:24:35.132Z [[32minfo[39m]: ✅ Algorithm executable found at: D:\CODE\GR1\GR2\PDPTW\backend\algorithms\PDPTW_HYBRID_ACO_GREEDY_V3.exe
+2025-07-14T00:24:35.145Z [[32minfo[39m]: 🚀 PDPTW Backend Server started on port 8080
+2025-07-14T00:24:35.148Z [[32minfo[39m]: 📁 Directory ensured: uploads
+2025-07-14T00:24:35.149Z [[32minfo[39m]: 📁 Directory ensured: results
+2025-07-14T00:24:35.149Z [[32minfo[39m]: 📁 Directory ensured: logs
+2025-07-14T00:24:35.150Z [[32minfo[39m]: 📁 Directory ensured: D:\CODE\GR1\GR2\PDPTW\backend\algorithms
+2025-07-14T00:24:35.150Z [[32minfo[39m]: 📁 Algorithms folder: D:\CODE\GR1\GR2\PDPTW\backend\algorithms
+2025-07-14T00:24:35.150Z [[32minfo[39m]: 🧮 Available algorithms: hybrid
+2025-07-14T00:24:35.151Z [[32minfo[39m]: 🌍 Environment: development
+2025-07-14T00:24:35.151Z [[32minfo[39m]: 🔍 Algorithm executable check: D:\CODE\GR1\GR2\PDPTW\backend\algorithms\PDPTW_HYBRID_ACO_GREEDY_V3.exe - EXISTS
+2025-07-14T00:25:08.576Z [[32minfo[39m]: GET /api/health - 127.0.0.1
+2025-07-14T00:25:08.581Z [[32minfo[39m]: GET /api/algorithms - 127.0.0.1
+2025-07-14T00:25:08.582Z [[32minfo[39m]: GET /api/health - 127.0.0.1
+2025-07-14T00:25:08.584Z [[32minfo[39m]: GET /api/algorithms - 127.0.0.1
+2025-07-14T00:25:12.621Z [[32minfo[39m]: GET /api/health - 127.0.0.1
+2025-07-14T00:25:12.622Z [[32minfo[39m]: GET /api/algorithms - 127.0.0.1
+2025-07-14T00:25:12.623Z [[32minfo[39m]: GET /api/health - 127.0.0.1
+2025-07-14T00:25:12.624Z [[32minfo[39m]: GET /api/algorithms - 127.0.0.1
+2025-07-14T00:25:21.622Z [[32minfo[39m]: GET /api/sample-instance - 127.0.0.1
+2025-07-14T00:25:21.624Z [[32minfo[39m]: GET /api/algorithms - 127.0.0.1
+2025-07-14T00:25:21.625Z [[32minfo[39m]: GET /api/sample-instance - 127.0.0.1
+2025-07-14T00:25:21.626Z [[32minfo[39m]: GET /api/algorithms - 127.0.0.1
+2025-07-14T00:25:21.636Z [[32minfo[39m]: POST /api/validate-instance - 127.0.0.1
+2025-07-14T00:25:35.716Z [[32minfo[39m]: POST /api/upload-instance - 127.0.0.1
+2025-07-14T00:25:35.745Z [[32minfo[39m]: POST /api/validate-instance - 127.0.0.1
+2025-07-14T00:33:40.487Z [[32minfo[39m]: GET /api/health - 127.0.0.1
+2025-07-14T00:33:40.488Z [[32minfo[39m]: GET /api/algorithms - 127.0.0.1
+2025-07-14T00:33:40.489Z [[32minfo[39m]: GET /api/health - 127.0.0.1
+2025-07-14T00:33:40.490Z [[32minfo[39m]: GET /api/algorithms - 127.0.0.1
+2025-07-14T00:33:42.528Z [[32minfo[39m]: GET /api/algorithms - 127.0.0.1
+2025-07-14T00:33:42.529Z [[32minfo[39m]: GET /api/sample-instance - 127.0.0.1
+2025-07-14T00:33:42.530Z [[32minfo[39m]: GET /api/sample-instance - 127.0.0.1
+2025-07-14T00:33:42.531Z [[32minfo[39m]: GET /api/algorithms - 127.0.0.1
+2025-07-14T00:33:42.543Z [[32minfo[39m]: POST /api/validate-instance - 127.0.0.1
+2025-07-14T00:33:46.123Z [[32minfo[39m]: POST /api/upload-instance - 127.0.0.1
+2025-07-14T00:33:46.143Z [[32minfo[39m]: POST /api/validate-instance - 127.0.0.1
+2025-07-14T00:33:53.475Z [[32minfo[39m]: POST /api/validate-instance - 127.0.0.1
+2025-07-14T00:33:53.650Z [[32minfo[39m]: POST /api/validate-instance - 127.0.0.1
+2025-07-14T00:33:54.592Z [[32minfo[39m]: POST /api/validate-instance - 127.0.0.1
+2025-07-14T00:33:54.724Z [[32minfo[39m]: POST /api/validate-instance - 127.0.0.1
+2025-07-14T00:34:02.748Z [[32minfo[39m]: POST /api/solve - 127.0.0.1
+2025-07-14T00:34:02.749Z [[32minfo[39m]: Solving problem with algorithm: hybrid
+2025-07-14T00:34:02.749Z [[32minfo[39m]: Checking algorithm executable at: D:\CODE\GR1\GR2\PDPTW\backend\algorithms\PDPTW_HYBRID_ACO_GREEDY_V3.exe
+2025-07-14T00:34:02.749Z [[32minfo[39m]: Algorithms folder: D:\CODE\GR1\GR2\PDPTW\backend\algorithms
+2025-07-14T00:34:02.750Z [[32minfo[39m]: Executable name: PDPTW_HYBRID_ACO_GREEDY_V3.exe
+2025-07-14T00:34:02.750Z [[32minfo[39m]: Executing algorithm: D:\CODE\GR1\GR2\PDPTW\backend\algorithms\PDPTW_HYBRID_ACO_GREEDY_V3.exe uploads\instance-cc02b8a3-7f71-4a89-8076-859ef59f540a.txt results\solution-cc02b8a3-7f71-4a89-8076-859ef59f540a.txt 7 10 20 2 5 0.1 50 0.01 0.85 4 0.7 2
+2025-07-14T00:55:31.979Z [[32minfo[39m]: 🔍 Checking algorithm executable...
+2025-07-14T00:56:41.473Z [[32minfo[39m]: GET /api/algorithms - 127.0.0.1
+2025-07-14T00:56:41.474Z [[32minfo[39m]: GET /api/sample-instance - 127.0.0.1
+2025-07-14T00:56:41.476Z [[32minfo[39m]: GET /api/sample-instance - 127.0.0.1
+2025-07-14T00:56:41.477Z [[32minfo[39m]: GET /api/algorithms - 127.0.0.1
+2025-07-14T00:56:41.481Z [[32minfo[39m]: POST /api/validate-instance - 127.0.0.1
+2025-07-14T00:56:43.124Z [[32minfo[39m]: Received SIGINT. Starting graceful shutdown...
+2025-07-14T00:56:49.830Z [[32minfo[39m]: Received SIGINT. Starting graceful shutdown...
+2025-07-14T00:56:50.752Z [[32minfo[39m]: Received SIGINT. Starting graceful shutdown...
+2025-07-14T00:56:53.504Z [[32minfo[39m]: Received SIGINT. Starting graceful shutdown...
+2025-07-14T00:56:53.705Z [[32minfo[39m]: Received SIGINT. Starting graceful shutdown...
+2025-07-14T00:56:53.877Z [[32minfo[39m]: Received SIGINT. Starting graceful shutdown...
+2025-07-14T00:56:54.065Z [[32minfo[39m]: Received SIGINT. Starting graceful shutdown...
+2025-07-14T00:57:13.135Z [[31merror[39m]: Could not close connections in time, forcefully shutting down
+2025-07-14T00:58:42.637Z [[32minfo[39m]: 🔍 Checking algorithm executable...
+2025-07-14T00:58:42.639Z [[32minfo[39m]:    Algorithm folder: D:\CODE\GR1\GR2\PDPTW\backend\algorithms
+2025-07-14T00:58:42.639Z [[32minfo[39m]:    Executable name: PDPTW_HYBRID_ACO_GREEDY_V3.exe
+2025-07-14T00:58:42.639Z [[32minfo[39m]:    Full path: D:\CODE\GR1\GR2\PDPTW\backend\algorithms\PDPTW_HYBRID_ACO_GREEDY_V3.exe
+2025-07-14T00:58:42.640Z [[32minfo[39m]: ✅ Algorithm executable found at: D:\CODE\GR1\GR2\PDPTW\backend\algorithms\PDPTW_HYBRID_ACO_GREEDY_V3.exe
+2025-07-14T00:58:42.651Z [[32minfo[39m]: 🚀 PDPTW Backend Server started on port 8080
+2025-07-14T00:58:42.654Z [[32minfo[39m]: 📁 Directory ensured: uploads
+2025-07-14T00:58:42.654Z [[32minfo[39m]: 📁 Directory ensured: results
+2025-07-14T00:58:42.655Z [[32minfo[39m]: 📁 Directory ensured: logs
+2025-07-14T00:58:42.655Z [[32minfo[39m]: 📁 Directory ensured: D:\CODE\GR1\GR2\PDPTW\backend\algorithms
+2025-07-14T00:58:42.655Z [[32minfo[39m]: 📁 Algorithms folder: D:\CODE\GR1\GR2\PDPTW\backend\algorithms
+2025-07-14T00:58:42.655Z [[32minfo[39m]: 🧮 Available algorithms: hybrid
+2025-07-14T00:58:42.656Z [[32minfo[39m]: 🌍 Environment: development
+2025-07-14T00:58:42.656Z [[32minfo[39m]: 🔍 Algorithm executable check: D:\CODE\GR1\GR2\PDPTW\backend\algorithms\PDPTW_HYBRID_ACO_GREEDY_V3.exe - EXISTS
+2025-07-14T00:58:51.317Z [[32minfo[39m]: GET /api/algorithms - 127.0.0.1
+2025-07-14T00:58:51.321Z [[32minfo[39m]: GET /api/sample-instance - 127.0.0.1
+2025-07-14T00:58:51.322Z [[32minfo[39m]: GET /api/algorithms - 127.0.0.1
+2025-07-14T00:58:51.324Z [[32minfo[39m]: GET /api/sample-instance - 127.0.0.1
+2025-07-14T00:58:51.348Z [[32minfo[39m]: POST /api/validate-instance - 127.0.0.1
+2025-07-14T00:58:53.808Z [[32minfo[39m]: GET /api/health - 127.0.0.1
+2025-07-14T00:58:53.809Z [[32minfo[39m]: GET /api/algorithms - 127.0.0.1
+2025-07-14T00:58:53.811Z [[32minfo[39m]: GET /api/health - 127.0.0.1
+2025-07-14T00:58:53.812Z [[32minfo[39m]: GET /api/algorithms - 127.0.0.1
+2025-07-14T00:58:59.314Z [[32minfo[39m]: GET /api/health - 127.0.0.1
+2025-07-14T00:58:59.315Z [[32minfo[39m]: GET /api/algorithms - 127.0.0.1
+2025-07-14T00:58:59.318Z [[32minfo[39m]: GET /api/health - 127.0.0.1
+2025-07-14T00:58:59.318Z [[32minfo[39m]: GET /api/algorithms - 127.0.0.1
+2025-07-14T00:59:01.789Z [[32minfo[39m]: GET /api/health - 127.0.0.1
+2025-07-14T00:59:01.794Z [[32minfo[39m]: GET /api/health - 127.0.0.1
+2025-07-14T00:59:01.797Z [[32minfo[39m]: GET /api/algorithms - 127.0.0.1
+2025-07-14T00:59:01.799Z [[32minfo[39m]: GET /api/algorithms - 127.0.0.1
+2025-07-14T00:59:02.531Z [[32minfo[39m]: GET /api/algorithms - 127.0.0.1
+2025-07-14T00:59:02.533Z [[32minfo[39m]: GET /api/sample-instance - 127.0.0.1
+2025-07-14T00:59:02.535Z [[32minfo[39m]: GET /api/sample-instance - 127.0.0.1
+2025-07-14T00:59:02.535Z [[32minfo[39m]: GET /api/algorithms - 127.0.0.1
+2025-07-14T00:59:02.543Z [[32minfo[39m]: POST /api/validate-instance - 127.0.0.1
+2025-07-14T00:59:03.454Z [[32minfo[39m]: GET /api/health - 127.0.0.1
+2025-07-14T00:59:03.456Z [[32minfo[39m]: GET /api/algorithms - 127.0.0.1
+2025-07-14T00:59:03.457Z [[32minfo[39m]: GET /api/health - 127.0.0.1
+2025-07-14T00:59:03.458Z [[32minfo[39m]: GET /api/algorithms - 127.0.0.1
+2025-07-14T00:59:11.421Z [[32minfo[39m]: GET /api/algorithms - 127.0.0.1
+2025-07-14T00:59:11.425Z [[32minfo[39m]: GET /api/sample-instance - 127.0.0.1
+2025-07-14T00:59:11.427Z [[32minfo[39m]: GET /api/algorithms - 127.0.0.1
+2025-07-14T00:59:11.430Z [[32minfo[39m]: GET /api/sample-instance - 127.0.0.1
+2025-07-14T00:59:11.436Z [[32minfo[39m]: POST /api/validate-instance - 127.0.0.1
+2025-07-14T00:59:24.586Z [[32minfo[39m]: POST /api/upload-instance - 127.0.0.1
+2025-07-14T00:59:24.611Z [[32minfo[39m]: POST /api/validate-instance - 127.0.0.1
+2025-07-14T00:59:34.861Z [[32minfo[39m]: POST /api/solve - 127.0.0.1
+2025-07-14T00:59:34.863Z [[32minfo[39m]: Solving problem with algorithm: hybrid
+2025-07-14T00:59:34.863Z [[32minfo[39m]: Checking algorithm executable at: D:\CODE\GR1\GR2\PDPTW\backend\algorithms\PDPTW_HYBRID_ACO_GREEDY_V3.exe
+2025-07-14T00:59:34.863Z [[32minfo[39m]: Algorithms folder: D:\CODE\GR1\GR2\PDPTW\backend\algorithms
+2025-07-14T00:59:34.863Z [[32minfo[39m]: Executable name: PDPTW_HYBRID_ACO_GREEDY_V3.exe
+2025-07-14T00:59:34.864Z [[32minfo[39m]: Executing algorithm: D:\CODE\GR1\GR2\PDPTW\backend\algorithms\PDPTW_HYBRID_ACO_GREEDY_V3.exe uploads\instance-47fbdf4f-2f00-4f9f-b6f7-fca7ec3544e6.txt results\solution-47fbdf4f-2f00-4f9f-b6f7-fca7ec3544e6.txt 7 10 20 2 5 0.1 50 0.01 0.85 4 0.7 2
+2025-07-14T00:59:40.757Z [[32minfo[39m]: GET /api/sample-instance - 127.0.0.1
+2025-07-14T00:59:40.769Z [[32minfo[39m]: POST /api/validate-instance - 127.0.0.1
+2025-07-14T01:00:00.002Z [[32minfo[39m]: POST /api/upload-instance - 127.0.0.1
+2025-07-14T01:00:00.027Z [[32minfo[39m]: POST /api/validate-instance - 127.0.0.1
+2025-07-14T01:00:05.934Z [[32minfo[39m]: POST /api/solve - 127.0.0.1
+2025-07-14T01:00:05.935Z [[32minfo[39m]: Solving problem with algorithm: hybrid
+2025-07-14T01:00:05.935Z [[32minfo[39m]: Checking algorithm executable at: D:\CODE\GR1\GR2\PDPTW\backend\algorithms\PDPTW_HYBRID_ACO_GREEDY_V3.exe
+2025-07-14T01:00:05.935Z [[32minfo[39m]: Algorithms folder: D:\CODE\GR1\GR2\PDPTW\backend\algorithms
+2025-07-14T01:00:05.936Z [[32minfo[39m]: Executable name: PDPTW_HYBRID_ACO_GREEDY_V3.exe
+2025-07-14T01:00:05.936Z [[32minfo[39m]: Executing algorithm: D:\CODE\GR1\GR2\PDPTW\backend\algorithms\PDPTW_HYBRID_ACO_GREEDY_V3.exe uploads\instance-c0f67128-64c2-46ed-9f44-94f45d1341e7.txt results\solution-c0f67128-64c2-46ed-9f44-94f45d1341e7.txt 7 10 20 2 5 0.1 50 0.01 0.85 4 0.7 2
+2025-07-14T01:00:38.998Z [[32minfo[39m]: POST /api/upload-instance - 127.0.0.1
+2025-07-14T01:00:39.017Z [[32minfo[39m]: POST /api/validate-instance - 127.0.0.1
+2025-07-14T01:00:42.168Z [[32minfo[39m]: POST /api/solve - 127.0.0.1
+2025-07-14T01:00:42.169Z [[32minfo[39m]: Solving problem with algorithm: hybrid
+2025-07-14T01:00:42.169Z [[32minfo[39m]: Checking algorithm executable at: D:\CODE\GR1\GR2\PDPTW\backend\algorithms\PDPTW_HYBRID_ACO_GREEDY_V3.exe
+2025-07-14T01:00:42.169Z [[32minfo[39m]: Algorithms folder: D:\CODE\GR1\GR2\PDPTW\backend\algorithms
+2025-07-14T01:00:42.169Z [[32minfo[39m]: Executable name: PDPTW_HYBRID_ACO_GREEDY_V3.exe
+2025-07-14T01:00:42.171Z [[32minfo[39m]: Executing algorithm: D:\CODE\GR1\GR2\PDPTW\backend\algorithms\PDPTW_HYBRID_ACO_GREEDY_V3.exe uploads\instance-c7b6f909-ed59-4e86-8f9d-322b6bb19f2e.txt results\solution-c7b6f909-ed59-4e86-8f9d-322b6bb19f2e.txt 7 10 20 2 5 0.1 50 0.01 0.85 4 0.7 2
+2025-07-14T01:00:44.540Z [[32minfo[39m]: POST /api/solve - 127.0.0.1
+2025-07-14T01:00:44.541Z [[32minfo[39m]: Solving problem with algorithm: hybrid
+2025-07-14T01:00:44.541Z [[32minfo[39m]: Checking algorithm executable at: D:\CODE\GR1\GR2\PDPTW\backend\algorithms\PDPTW_HYBRID_ACO_GREEDY_V3.exe
+2025-07-14T01:00:44.541Z [[32minfo[39m]: Algorithms folder: D:\CODE\GR1\GR2\PDPTW\backend\algorithms
+2025-07-14T01:00:44.541Z [[32minfo[39m]: Executable name: PDPTW_HYBRID_ACO_GREEDY_V3.exe
+2025-07-14T01:00:44.543Z [[32minfo[39m]: Executing algorithm: D:\CODE\GR1\GR2\PDPTW\backend\algorithms\PDPTW_HYBRID_ACO_GREEDY_V3.exe uploads\instance-f49ced1f-5cea-446e-a398-435b33dbc326.txt results\solution-f49ced1f-5cea-446e-a398-435b33dbc326.txt 7 10 20 2 5 0.1 50 0.01 0.85 4 0.7 2
+2025-07-14T02:01:01.075Z [[32minfo[39m]: GET /api/algorithms - 127.0.0.1
+2025-07-14T02:01:01.075Z [[32minfo[39m]: GET /api/sample-instance - 127.0.0.1
+2025-07-14T02:01:01.076Z [[32minfo[39m]: GET /api/sample-instance - 127.0.0.1
+2025-07-14T02:01:01.077Z [[32minfo[39m]: GET /api/algorithms - 127.0.0.1
+2025-07-14T02:01:01.083Z [[32minfo[39m]: POST /api/validate-instance - 127.0.0.1
+2025-07-14T02:09:32.278Z [[32minfo[39m]: GET /api/algorithms - 127.0.0.1
+2025-07-14T02:09:32.278Z [[32minfo[39m]: GET /api/sample-instance - 127.0.0.1
+2025-07-14T02:09:32.280Z [[32minfo[39m]: GET /api/sample-instance - 127.0.0.1
+2025-07-14T02:09:32.280Z [[32minfo[39m]: GET /api/algorithms - 127.0.0.1
+2025-07-14T02:09:32.288Z [[32minfo[39m]: POST /api/validate-instance - 127.0.0.1
+2025-07-14T02:24:46.279Z [[32minfo[39m]: Received SIGINT. Starting graceful shutdown...
+2025-07-14T02:24:50.167Z [[32minfo[39m]: 🔍 Checking algorithm executable...
+2025-07-14T02:24:50.170Z [[32minfo[39m]:    Algorithm folder: D:\CODE\GR1\GR2\PDPTW\backend\algorithms
+2025-07-14T02:24:50.170Z [[32minfo[39m]:    Executable name: PDPTW_TEST.exe
+2025-07-14T02:24:50.170Z [[32minfo[39m]:    Full path: D:\CODE\GR1\GR2\PDPTW\backend\algorithms\PDPTW_TEST.exe
+2025-07-14T02:24:50.171Z [[32minfo[39m]: ✅ Algorithm executable found at: D:\CODE\GR1\GR2\PDPTW\backend\algorithms\PDPTW_TEST.exe
+2025-07-14T02:24:50.183Z [[32minfo[39m]: 🚀 PDPTW Backend Server started on port 8080
+2025-07-14T02:24:50.188Z [[32minfo[39m]: 📁 Directory ensured: uploads
+2025-07-14T02:24:50.189Z [[32minfo[39m]: 📁 Directory ensured: results
+2025-07-14T02:24:50.190Z [[32minfo[39m]: 📁 Directory ensured: logs
+2025-07-14T02:24:50.190Z [[32minfo[39m]: 📁 Directory ensured: D:\CODE\GR1\GR2\PDPTW\backend\algorithms
+2025-07-14T02:24:50.191Z [[32minfo[39m]: 📁 Algorithms folder: D:\CODE\GR1\GR2\PDPTW\backend\algorithms
+2025-07-14T02:24:50.191Z [[32minfo[39m]: 🧮 Available algorithms: hybrid
+2025-07-14T02:24:50.191Z [[32minfo[39m]: 🌍 Environment: development
+2025-07-14T02:24:50.191Z [[32minfo[39m]: 🔍 Algorithm executable check: D:\CODE\GR1\GR2\PDPTW\backend\algorithms\PDPTW_TEST.exe - EXISTS
+2025-07-14T02:24:58.530Z [[32minfo[39m]: GET /api/algorithms - 127.0.0.1
+2025-07-14T02:24:58.534Z [[32minfo[39m]: GET /api/sample-instance - 127.0.0.1
+2025-07-14T02:24:58.535Z [[32minfo[39m]: GET /api/algorithms - 127.0.0.1
+2025-07-14T02:24:58.536Z [[32minfo[39m]: GET /api/sample-instance - 127.0.0.1
+2025-07-14T02:24:58.546Z [[32minfo[39m]: POST /api/validate-instance - 127.0.0.1
+2025-07-14T02:25:03.672Z [[32minfo[39m]: GET /api/health - 127.0.0.1
+2025-07-14T02:25:03.675Z [[32minfo[39m]: GET /api/algorithms - 127.0.0.1
+2025-07-14T02:25:03.676Z [[32minfo[39m]: GET /api/health - 127.0.0.1
+2025-07-14T02:25:03.689Z [[32minfo[39m]: GET /api/algorithms - 127.0.0.1
+2025-07-14T02:25:10.028Z [[32minfo[39m]: GET /api/algorithms - 127.0.0.1
+2025-07-14T02:25:10.030Z [[32minfo[39m]: GET /api/sample-instance - 127.0.0.1
+2025-07-14T02:25:10.032Z [[32minfo[39m]: GET /api/algorithms - 127.0.0.1
+2025-07-14T02:25:10.033Z [[32minfo[39m]: GET /api/sample-instance - 127.0.0.1
+2025-07-14T02:25:10.051Z [[32minfo[39m]: POST /api/validate-instance - 127.0.0.1
+2025-07-14T02:25:13.838Z [[32minfo[39m]: POST /api/upload-instance - 127.0.0.1
+2025-07-14T02:25:13.864Z [[32minfo[39m]: POST /api/validate-instance - 127.0.0.1
+2025-07-14T02:25:16.585Z [[32minfo[39m]: POST /api/solve - 127.0.0.1
+2025-07-14T02:25:16.586Z [[32minfo[39m]: Solving problem with algorithm: hybrid
+2025-07-14T02:25:16.587Z [[32minfo[39m]: Checking algorithm executable at: D:\CODE\GR1\GR2\PDPTW\backend\algorithms\PDPTW_TEST.exe
+2025-07-14T02:25:16.587Z [[32minfo[39m]: Algorithms folder: D:\CODE\GR1\GR2\PDPTW\backend\algorithms
+2025-07-14T02:25:16.587Z [[32minfo[39m]: Executable name: PDPTW_TEST.exe
+2025-07-14T02:25:16.589Z [[32minfo[39m]: Executing algorithm: D:\CODE\GR1\GR2\PDPTW\backend\algorithms\PDPTW_TEST.exe uploads\instance-7da44fc6-5ea0-4f9a-bf6e-c38bc7d5b8ad.txt results\solution-7da44fc6-5ea0-4f9a-bf6e-c38bc7d5b8ad.txt 7 10 20 2 5 0.1 50 0.01 0.85 4 0.7 2
+2025-07-14T02:25:36.067Z [[32minfo[39m]: GET /api/algorithms - 127.0.0.1
+2025-07-14T02:25:36.072Z [[32minfo[39m]: GET /api/sample-instance - 127.0.0.1
+2025-07-14T02:25:36.073Z [[32minfo[39m]: GET /api/algorithms - 127.0.0.1
+2025-07-14T02:25:36.075Z [[32minfo[39m]: GET /api/sample-instance - 127.0.0.1
+2025-07-14T02:25:36.081Z [[32minfo[39m]: POST /api/validate-instance - 127.0.0.1
