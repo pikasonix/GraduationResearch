@@ -146,6 +146,33 @@ const Sidebar = ({
             <span>{useRealRouting ? 'Tắt đường thực tế' : 'Bật đường thực tế'}</span>
           </button>
 
+          {/* Routing Profile Selection */}
+          {useRealRouting && (
+            <div className="bg-blue-50 p-3 rounded-lg">
+              <label className="block text-xs font-medium text-gray-700 mb-2">Loại đường:</label>
+              <select
+                className="w-full text-xs px-2 py-1 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                defaultValue={localStorage.getItem('routingProfile') || 'walking'}
+                onChange={(e) => {
+                  // Store routing profile in localStorage
+                  localStorage.setItem('routingProfile', e.target.value);
+                  // Force refresh routes if solution exists
+                  if (solution && solution.routes) {
+                    // Trigger a re-render by dispatching a custom event
+                    window.dispatchEvent(new CustomEvent('routingProfileChanged'));
+                  }
+                }}
+              >
+                <option value="walking">Đi bộ (đường ngắn nhất)</option>
+                <option value="driving">Xe hơi (đường lớn)</option>
+                <option value="cycling">Xe đạp (cân bằng)</option>
+              </select>
+              <div className="text-xs text-gray-500 mt-1">
+                Đi bộ: Tìm đường ngắn nhất qua mọi loại đường
+              </div>
+            </div>
+          )}
+
           <div className="flex space-x-2">
             <button
               onClick={showCacheInfo}

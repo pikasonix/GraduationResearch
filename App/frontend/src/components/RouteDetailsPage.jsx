@@ -59,8 +59,10 @@ const RouteDetailsPage = ({ solution, instance, useRealRouting, toggleRealRoutin
                 return `${coords[1]},${coords[0]}`; // OSRM expects lon,lat
             }).join(';');
 
-            const url = `https://router.project-osrm.org/route/v1/driving/${coordPairs}?overview=full&geometries=geojson`;
-            console.log('Fetching real route for route details:', route.id);
+            // Get routing profile from localStorage, default to 'walking' for shortest path
+            const routingProfile = localStorage.getItem('routingProfile') || 'walking';
+            const url = `https://router.project-osrm.org/route/v1/${routingProfile}/${coordPairs}?overview=full&geometries=geojson`;
+            console.log('Fetching real route for route details:', route.id, 'using profile:', routingProfile);
 
             const response = await fetch(url);
             const data = await response.json();
@@ -166,6 +168,72 @@ const RouteDetailsPage = ({ solution, instance, useRealRouting, toggleRealRoutin
         setSelectedRouteId(routeId);
         setRouteDetail(route);
         await displayRouteOnMap(route);
+    };
+
+    const displaySegmentOnMap = async (fromNodeId, toNodeId) => {
+        if (!mapInstance.current || !instance?.nodes) return;
+
+        const fromNode = instance.nodes[fromNodeId];
+        const toNode = instance.nodes[toNodeId];
+
+        if (!fromNode || !toNode) return;
+
+        try {
+            let segmentCoords;
+
+            if (useRealRouting) {
+                // Get real route segment using OSRM
+                // Get routing profile from localStorage, default to 'walking' for shortest path
+                const routingProfile = localStorage.getItem('routingProfile') || 'walking';
+                const coordPairs = `${fromNode.coords[1]},${fromNode.coords[0]};${toNode.coords[1]},${toNode.coords[0]}`;
+                const url = `https://router.project-osrm.org/route/v1/${routingProfile}/${coordPairs}?overview=full&geometries=geojson`;
+
+                console.log('Fetching segment route from', fromNodeId, 'to', toNodeId, 'using profile:', routingProfile);
+                const response = await fetch(url);
+                const data = await response.json();
+
+                if (data.routes && data.routes.length > 0) {
+                    segmentCoords = data.routes[0].geometry.coordinates.map(coord => [coord[1], coord[0]]);
+                } else {
+                    // Fallback to straight line
+                    segmentCoords = [fromNode.coords, toNode.coords];
+                }
+            } else {
+                // Use straight line when real routing is disabled
+                segmentCoords = [fromNode.coords, toNode.coords];
+            }
+
+            // Clear existing highlighted segments
+            mapInstance.current.eachLayer((layer) => {
+                if (layer.options && layer.options.isSegmentHighlight) {
+                    mapInstance.current.removeLayer(layer);
+                }
+            });
+
+            // Add highlighted segment
+            const segmentLine = L.polyline(segmentCoords, {
+                color: '#ff4444',
+                weight: 6,
+                opacity: 0.9,
+                isSegmentHighlight: true
+            }).addTo(mapInstance.current);
+
+            // Add popup showing segment info
+            const distance = getDistanceBetweenPoints(fromNode.coords, toNode.coords);
+            segmentLine.bindPopup(`
+                <div class="text-sm">
+                    <strong>Segment: Node ${fromNodeId} → Node ${toNodeId}</strong><br>
+                    Distance: ${distance.toFixed(2)} km<br>
+                    Route type: ${useRealRouting ? 'Real routing' : 'Straight line'}
+                </div>
+            `).openPopup();
+
+            // Fit map to show the segment
+            mapInstance.current.fitBounds(segmentLine.getBounds(), { padding: [20, 20] });
+
+        } catch (error) {
+            console.error('Error displaying segment:', error);
+        }
     };
 
     const displayRouteOnMap = async (route) => {
@@ -352,13 +420,28 @@ const RouteDetailsPage = ({ solution, instance, useRealRouting, toggleRealRoutin
                                 <div className={`w-8 h-8 ${markerColor} rounded-full flex items-center justify-center text-white text-xs font-bold z-10`}>
                                     {index + 1}
                                 </div>
-                                <div className="flex-1 bg-white rounded-lg shadow-sm border p-4">
+                                <div
+                                    className={`flex-1 bg-white rounded-lg shadow-sm border p-4 transition-all duration-200 ${index > 0 ? 'cursor-pointer hover:shadow-md hover:border-blue-300' : ''
+                                        }`}
+                                    onClick={() => {
+                                        if (index > 0) {
+                                            const prevNodeId = timelineData.events[index - 1].nodeId;
+                                            displaySegmentOnMap(prevNodeId, event.nodeId);
+                                        }
+                                    }}
+                                    title={index > 0 ? `Click to show path from Node ${timelineData.events[index - 1].nodeId} to Node ${event.nodeId}` : ''}
+                                >
                                     <div className="flex items-center space-x-2 mb-3">
                                         <span className="text-lg">{nodeIcon}</span>
                                         <div>
                                             <div className="font-semibold text-gray-800">Node {event.nodeId}</div>
                                             <div className="text-xs text-gray-500">{nodeLabel}</div>
                                         </div>
+                                        {index > 0 && (
+                                            <div className="ml-auto">
+                                                <i className="fas fa-route text-blue-500 text-sm" title="Click to show segment path"></i>
+                                            </div>
+                                        )}
                                     </div>
 
                                     <div className="grid grid-cols-2 gap-4 text-sm text-gray-600">
@@ -379,8 +462,13 @@ const RouteDetailsPage = ({ solution, instance, useRealRouting, toggleRealRoutin
                                     </div>
 
                                     {index > 0 && (
-                                        <div className="mt-3 pt-3 border-t border-gray-100 text-xs text-gray-500">
-                                            <div>Travel from previous: {event.distance.toFixed(1)}km ({event.travelTime.toFixed(1)}h)</div>
+                                        <div className="mt-3 pt-3 border-t border-gray-100 text-xs text-gray-500 bg-blue-50 p-2 rounded">
+                                            <div className="flex items-center space-x-1 mb-1">
+                                                <i className="fas fa-route text-blue-600"></i>
+                                                <span className="font-medium text-blue-700">Segment từ Node {timelineData.events[index - 1].nodeId}</span>
+                                            </div>
+                                            <div>Khoảng cách: {event.distance.toFixed(1)}km</div>
+                                            <div>Thời gian di chuyển: {event.travelTime.toFixed(1)}h</div>
                                         </div>
                                     )}
                                 </div>
@@ -415,8 +503,8 @@ const RouteDetailsPage = ({ solution, instance, useRealRouting, toggleRealRoutin
                         <button
                             onClick={toggleRealRouting}
                             className={`flex items-center space-x-2 px-4 py-2 text-sm font-medium rounded-lg transition-colors duration-200 ${useRealRouting
-                                    ? 'bg-green-600 hover:bg-green-700 text-white'
-                                    : 'bg-gray-600 hover:bg-gray-700 text-white'
+                                ? 'bg-green-600 hover:bg-green-700 text-white'
+                                : 'bg-gray-600 hover:bg-gray-700 text-white'
                                 }`}
                         >
                             <i className={`fas ${useRealRouting ? 'fa-route' : 'fa-map-marked-alt'}`}></i>

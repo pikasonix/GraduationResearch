@@ -181,8 +181,10 @@ const MapComponent = ({
     }
 
     try {
-      const url = `https://router.project-osrm.org/route/v1/driving/${startCoord[1]},${startCoord[0]};${endCoord[1]},${endCoord[0]}?overview=full&geometries=geojson`;
-      console.log(`Fetching route from API: ${cacheKey}`);
+      // Get routing profile from localStorage, default to 'walking' for shortest path
+      const routingProfile = localStorage.getItem('routingProfile') || 'walking';
+      const url = `https://router.project-osrm.org/route/v1/${routingProfile}/${startCoord[1]},${startCoord[0]};${endCoord[1]},${endCoord[0]}?overview=full&geometries=geojson`;
+      console.log(`Fetching route from API (${routingProfile}): ${cacheKey}`);
       const response = await fetch(url);
       const data = await response.json();
 
@@ -232,7 +234,9 @@ const MapComponent = ({
 
       try {
         console.log(`Fetching full route for route ${route.id}`);
-        const url = `https://router.project-osrm.org/route/v1/driving/${coordPairs}?overview=full&geometries=geojson`;
+        // Get routing profile from localStorage, default to 'walking' for shortest path
+        const routingProfile = localStorage.getItem('routingProfile') || 'walking';
+        const url = `https://router.project-osrm.org/route/v1/${routingProfile}/${coordPairs}?overview=full&geometries=geojson`;
         const response = await fetch(url);
         const data = await response.json();
         let routeCoords;
@@ -667,11 +671,22 @@ const MapComponent = ({
     window.testRouteInteractivity = testRouteInteractivity;
     window.toggleRealRouting = handleToggleRealRouting;
 
+    // Listen for routing profile changes
+    const handleProfileChange = () => {
+      console.log('Routing profile changed, redrawing routes...');
+      if (solution && solution.routes && solution.routes.length > 0) {
+        redrawRoutesWithNewMode();
+      }
+    };
+
+    window.addEventListener('routingProfileChanged', handleProfileChange);
+
     return () => {
       delete window.testRouteInteractivity;
       delete window.toggleRealRouting;
+      window.removeEventListener('routingProfileChanged', handleProfileChange);
     };
-  }, [testRouteInteractivity, handleToggleRealRouting]);
+  }, [testRouteInteractivity, handleToggleRealRouting, solution, redrawRoutesWithNewMode]);
 
   return (
     <div className="flex flex-col h-full">
