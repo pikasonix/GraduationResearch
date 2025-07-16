@@ -25,6 +25,11 @@ const AddInstancePage = ({ onBack, onInstanceCreated }) => {
     const [isGeneratingMatrix, setIsGeneratingMatrix] = useState(false);
     const [matrixGenerationProgress, setMatrixGenerationProgress] = useState(0);
     const [notification, setNotification] = useState(null); // { type: 'success'|'error'|'info', message: string }
+    const [showTableInput, setShowTableInput] = useState(false);
+    const [tableData, setTableData] = useState([]);
+    const [editingTableRow, setEditingTableRow] = useState(null);
+    const [isSelectingLocation, setIsSelectingLocation] = useState(false);
+    const [selectedTableRowIndex, setSelectedTableRowIndex] = useState(null);
 
     // Auto-hide notification after 3 seconds
     useEffect(() => {
@@ -38,6 +43,126 @@ const AddInstancePage = ({ onBack, onInstanceCreated }) => {
 
     const showNotification = (type, message) => {
         setNotification({ type, message });
+    };
+
+    // Table/Excel input functions
+    const createEmptyTableRow = () => {
+        // Generate next available ID
+        const existingIds = tableData.map(row => parseInt(row.id) || 0);
+        const nextId = existingIds.length === 0 ? 0 : Math.max(...existingIds) + 1;
+
+        return {
+            id: nextId,
+            type: nextId === 0 ? 'depot' : 'regular', // depot, pickup, delivery, regular
+            lat: '',
+            lng: '',
+            demand: nextId === 0 ? 0 : 1,
+            earliestTime: 0,
+            latestTime: 480,
+            serviceDuration: nextId === 0 ? 0 : 10,
+            pickupId: 0,
+            deliveryId: 0
+        };
+    };
+
+    const addTableRow = () => {
+        setTableData(prev => [...prev, createEmptyTableRow()]);
+    };
+
+    const removeTableRow = (index) => {
+        setTableData(prev => prev.filter((_, i) => i !== index));
+    };
+
+    const updateTableRow = (index, field, value) => {
+        setTableData(prev => prev.map((row, i) =>
+            i === index ? { ...row, [field]: value } : row
+        ));
+    };
+
+    // Handle location selection for table
+    const startLocationSelection = (rowIndex) => {
+        setSelectedTableRowIndex(rowIndex);
+        setIsSelectingLocation(true);
+        showNotification('info', 'Click vào bản đồ để chọn vị trí cho node này');
+    };
+
+    const stopLocationSelection = () => {
+        setIsSelectingLocation(false);
+        setSelectedTableRowIndex(null);
+    };
+
+    const applyTableData = () => {
+        try {
+            // Validate data
+            const errors = [];
+            const processedNodes = [];
+
+            tableData.forEach((row, index) => {
+                if (!row.lat || !row.lng) {
+                    errors.push(`Dòng ${index + 1}: Thiếu tọa độ`);
+                    return;
+                }
+
+                const node = {
+                    id: parseInt(row.id) || processedNodes.length,
+                    lat: parseFloat(row.lat),
+                    lng: parseFloat(row.lng),
+                    demand: parseInt(row.demand) || 0,
+                    earliestTime: parseInt(row.earliestTime) || 0,
+                    latestTime: parseInt(row.latestTime) || 480,
+                    serviceDuration: parseInt(row.serviceDuration) || 0,
+                    pickupId: parseInt(row.pickupId) || 0,
+                    deliveryId: parseInt(row.deliveryId) || 0,
+                    isDepot: row.type === 'depot',
+                    isPickup: row.type === 'pickup',
+                    isDelivery: row.type === 'delivery'
+                };
+
+                // Validate node type constraints
+                if (node.isDepot && node.demand !== 0) {
+                    errors.push(`Dòng ${index + 1}: Depot phải có demand = 0`);
+                }
+                if (node.isPickup && node.demand <= 0) {
+                    errors.push(`Dòng ${index + 1}: Pickup phải có demand > 0`);
+                }
+                if (node.isDelivery && node.demand >= 0) {
+                    errors.push(`Dòng ${index + 1}: Delivery phải có demand < 0`);
+                }
+
+                processedNodes.push(node);
+            });
+
+            if (errors.length > 0) {
+                showNotification('error', 'Lỗi validation:\n' + errors.join('\n'));
+                return;
+            }
+
+            // Apply to nodes
+            setNodes(processedNodes);
+            setNextNodeId(Math.max(...processedNodes.map(n => n.id)) + 1);
+            setShowTableInput(false);
+            showNotification('success', `Đã áp dụng ${processedNodes.length} nodes từ bảng!`);
+
+        } catch (error) {
+            showNotification('error', 'Lỗi khi áp dụng dữ liệu: ' + error.message);
+        }
+    };
+
+    const loadNodesIntoTable = () => {
+        const tableRows = nodes.map(node => ({
+            id: node.id,
+            type: node.isDepot ? 'depot' : node.isPickup ? 'pickup' : node.isDelivery ? 'delivery' : 'regular',
+            lat: node.lat,
+            lng: node.lng,
+            demand: node.demand,
+            earliestTime: node.earliestTime,
+            latestTime: node.latestTime,
+            serviceDuration: node.serviceDuration,
+            pickupId: node.pickupId,
+            deliveryId: node.deliveryId
+        }));
+        setTableData(tableRows);
+        setShowTableInput(true);
     };
 
     // Map state
@@ -108,12 +233,18 @@ const AddInstancePage = ({ onBack, onInstanceCreated }) => {
     }, [nodes.length, nextNodeId, instanceData.routeTime]);
 
     const handleMapClick = useCallback((e) => {
-        console.log('Map clicked, isAddingNode:', isAddingNode); // Debug log
+        console.log('Map clicked, isAddingNode:', isAddingNode, 'isSelectingLocation:', isSelectingLocation); // Debug log
         if (isAddingNode) {
             const { lat, lng } = e.latlng;
             addNewNode(lat, lng);
+        } else if (isSelectingLocation && selectedTableRowIndex !== null) {
+            const { lat, lng } = e.latlng;
+            updateTableRow(selectedTableRowIndex, 'lat', lat.toFixed(6));
+            updateTableRow(selectedTableRowIndex, 'lng', lng.toFixed(6));
+            stopLocationSelection();
+            showNotification('success', `Đã cập nhật tọa độ cho dòng ${selectedTableRowIndex + 1}`);
         }
-    }, [isAddingNode, addNewNode]);
+    }, [isAddingNode, isSelectingLocation, selectedTableRowIndex, addNewNode, updateTableRow, stopLocationSelection, showNotification]);
 
     // Separate effect for map click handler to handle isAddingNode changes
     useEffect(() => {
@@ -122,10 +253,10 @@ const AddInstancePage = ({ onBack, onInstanceCreated }) => {
         // Remove existing click handler
         mapInstance.current.off('click', handleMapClick);
 
-        // Add click handler if in adding mode
-        if (isAddingNode) {
+        // Add click handler if in adding mode or selecting location
+        if (isAddingNode || isSelectingLocation) {
             mapInstance.current.on('click', handleMapClick);
-            console.log('Map click handler added for adding nodes'); // Debug log
+            console.log('Map click handler added for adding nodes or selecting location'); // Debug log
         } else {
             console.log('Map click handler removed'); // Debug log
         }
@@ -135,7 +266,7 @@ const AddInstancePage = ({ onBack, onInstanceCreated }) => {
                 mapInstance.current.off('click', handleMapClick);
             }
         };
-    }, [isAddingNode, handleMapClick]);
+    }, [isAddingNode, isSelectingLocation, handleMapClick]);
 
     // Update markers when nodes change
     useEffect(() => {
@@ -593,13 +724,13 @@ const AddInstancePage = ({ onBack, onInstanceCreated }) => {
             {/* Notification Toast */}
             {notification && (
                 <div className={`fixed top-4 right-4 z-50 px-4 py-3 rounded-lg shadow-lg transition-all duration-300 ${notification.type === 'success' ? 'bg-green-500 text-white' :
-                        notification.type === 'error' ? 'bg-red-500 text-white' :
-                            'bg-blue-500 text-white'
+                    notification.type === 'error' ? 'bg-red-500 text-white' :
+                        'bg-blue-500 text-white'
                     }`}>
                     <div className="flex items-center space-x-2">
                         <i className={`fas ${notification.type === 'success' ? 'fa-check-circle' :
-                                notification.type === 'error' ? 'fa-exclamation-circle' :
-                                    'fa-info-circle'
+                            notification.type === 'error' ? 'fa-exclamation-circle' :
+                                'fa-info-circle'
                             }`}></i>
                         <span className="text-sm font-medium">{notification.message}</span>
                         <button
@@ -850,6 +981,27 @@ const AddInstancePage = ({ onBack, onInstanceCreated }) => {
                                     Xóa tất cả nodes
                                 </button>
                             </div>
+                        </div>
+
+                        {/* Table Input Toggle */}
+                        <div className="space-y-4">
+                            <button
+                                onClick={() => setShowTableInput(!showTableInput)}
+                                className="w-full flex items-center justify-center px-3 py-2 text-sm font-medium text-purple-700 bg-purple-100 hover:bg-purple-200 rounded-lg transition-colors duration-200"
+                            >
+                                <i className="fas fa-table mr-2"></i>
+                                {showTableInput ? 'Đóng bảng nhập liệu' : 'Dùng bảng nhập liệu'}
+                            </button>
+
+                            {nodes.length > 0 && (
+                                <button
+                                    onClick={loadNodesIntoTable}
+                                    className="w-full flex items-center justify-center px-3 py-2 text-sm font-medium text-orange-700 bg-orange-100 hover:bg-orange-200 rounded-lg transition-colors duration-200"
+                                >
+                                    <i className="fas fa-download mr-2"></i>
+                                    Load nodes vào bảng
+                                </button>
+                            )}
                         </div>
 
                         {/* Node Management */}
@@ -1116,18 +1268,21 @@ const AddInstancePage = ({ onBack, onInstanceCreated }) => {
 
                 {/* Map */}
                 <div className="flex-1 bg-gray-50 relative">
-                    {isAddingNode && (
+                    {(isAddingNode || isSelectingLocation) && (
                         <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-10 bg-blue-600 text-white px-4 py-2 rounded-lg shadow-lg pointer-events-none">
                             <div className="flex items-center space-x-2">
                                 <i className="fas fa-crosshairs animate-pulse"></i>
-                                <span className="font-medium">Click vào bản đồ để thêm node</span>
+                                <span className="font-medium">
+                                    {isAddingNode ? 'Click vào bản đồ để thêm node' :
+                                        isSelectingLocation ? `Chọn vị trí cho dòng ${selectedTableRowIndex + 1}` : ''}
+                                </span>
                             </div>
                         </div>
                     )}
                     <div
                         ref={mapRef}
                         className="w-full h-full"
-                        style={{ cursor: isAddingNode ? 'crosshair' : 'default' }}
+                        style={{ cursor: isAddingNode || isSelectingLocation ? 'crosshair' : 'default' }}
                     ></div>
                 </div>
 
@@ -1158,6 +1313,235 @@ const AddInstancePage = ({ onBack, onInstanceCreated }) => {
                     </div>
                 </div>
             </div>
+
+            {/* Table Input Section - Bottom Panel */}
+            {showTableInput && (
+                <div className="bg-white border-t border-gray-200 p-4">
+                    {/* Warning about location selection */}
+                    {isSelectingLocation && (
+                        <div className="mb-4 bg-blue-50 border border-blue-200 rounded-lg p-3">
+                            <div className="flex items-center text-blue-800">
+                                <i className="fas fa-crosshairs mr-2"></i>
+                                <span className="font-medium">
+                                    Đang chọn vị trí cho dòng {selectedTableRowIndex + 1}. Click vào bản đồ để chọn tọa độ.
+                                </span>
+                                <button
+                                    onClick={stopLocationSelection}
+                                    className="ml-auto px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700"
+                                >
+                                    Hủy
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
+                    <div className="flex justify-between items-center mb-4">
+                        <h3 className="text-lg font-semibold text-gray-800">Bảng nhập liệu Node</h3>
+                        <div className="flex space-x-2">
+                            <button
+                                onClick={addTableRow}
+                                className="px-3 py-2 text-sm bg-blue-500 text-white rounded hover:bg-blue-600"
+                            >
+                                <i className="fas fa-plus mr-1"></i>
+                                Thêm dòng
+                            </button>
+                            <button
+                                onClick={applyTableData}
+                                disabled={tableData.length === 0}
+                                className="px-3 py-2 text-sm bg-green-500 text-white rounded hover:bg-green-600 disabled:opacity-50"
+                            >
+                                <i className="fas fa-check mr-1"></i>
+                                Áp dụng ({tableData.length} nodes)
+                            </button>
+                            <button
+                                onClick={() => setShowTableInput(false)}
+                                className="px-3 py-2 text-sm bg-gray-500 text-white rounded hover:bg-gray-600"
+                            >
+                                <i className="fas fa-times mr-1"></i>
+                                Đóng
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className="overflow-x-auto max-h-[33vh] overflow-y-auto border border-gray-200 rounded-lg">
+                        <table className="w-full text-sm">
+                            <thead className="bg-gray-50 sticky top-0">
+                                <tr>
+                                    <th className="px-3 py-2 text-left border-b border-gray-200">
+                                        <div className="flex items-center space-x-1">
+                                            <span>ID</span>
+                                            <i className="fas fa-question-circle text-blue-500 text-xs cursor-help" title="Số thứ tự node (depot phải là 0)"></i>
+                                        </div>
+                                    </th>
+                                    <th className="px-3 py-2 text-left border-b border-gray-200">
+                                        <div className="flex items-center space-x-1">
+                                            <span>Loại</span>
+                                            <i className="fas fa-question-circle text-blue-500 text-xs cursor-help" title="depot/pickup/delivery/regular"></i>
+                                        </div>
+                                    </th>
+                                    <th className="px-3 py-2 text-left border-b border-gray-200">
+                                        <div className="flex items-center space-x-1">
+                                            <span>Tọa độ</span>
+                                            <i className="fas fa-question-circle text-blue-500 text-xs cursor-help" title="Nhập tọa độ hoặc click 📍 để chọn trên bản đồ"></i>
+                                        </div>
+                                    </th>
+                                    <th className="px-3 py-2 text-left border-b border-gray-200">
+                                        <div className="flex items-center space-x-1">
+                                            <span>Demand</span>
+                                            <i className="fas fa-question-circle text-blue-500 text-xs cursor-help" title="Depot=0, Pickup>0, Delivery<0"></i>
+                                        </div>
+                                    </th>
+                                    <th className="px-3 py-2 text-left border-b border-gray-200">
+                                        <div className="flex items-center space-x-1">
+                                            <span>Time Window</span>
+                                            <i className="fas fa-question-circle text-blue-500 text-xs cursor-help" title="ETW (sớm nhất), LTW (muộn nhất) - tính bằng phút"></i>
+                                        </div>
+                                    </th>
+                                    <th className="px-3 py-2 text-left border-b border-gray-200">
+                                        <div className="flex items-center space-x-1">
+                                            <span>Service</span>
+                                            <i className="fas fa-question-circle text-blue-500 text-xs cursor-help" title="Thời gian phục vụ (phút)"></i>
+                                        </div>
+                                    </th>
+                                    <th className="px-3 py-2 text-left border-b border-gray-200">
+                                        <div className="flex items-center space-x-1">
+                                            <span>Liên kết</span>
+                                            <i className="fas fa-question-circle text-blue-500 text-xs cursor-help" title="P (Pickup ID), D (Delivery ID) cho các cặp node"></i>
+                                        </div>
+                                    </th>
+                                    <th className="px-3 py-2 text-left border-b border-gray-200">Thao tác</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {tableData.map((row, index) => (
+                                    <tr key={index} className="hover:bg-gray-50 border-b border-gray-100">
+                                        <td className="px-3 py-2">
+                                            <input
+                                                type="number"
+                                                value={row.id}
+                                                onChange={(e) => updateTableRow(index, 'id', e.target.value)}
+                                                className="w-16 px-2 py-1 text-sm border rounded"
+                                            />
+                                        </td>
+                                        <td className="px-3 py-2">
+                                            <select
+                                                value={row.type}
+                                                onChange={(e) => updateTableRow(index, 'type', e.target.value)}
+                                                className="w-24 px-2 py-1 text-sm border rounded"
+                                            >
+                                                <option value="depot">Depot</option>
+                                                <option value="pickup">Pickup</option>
+                                                <option value="delivery">Delivery</option>
+                                                <option value="regular">Regular</option>
+                                            </select>
+                                        </td>
+                                        <td className="px-3 py-2">
+                                            <div className="flex items-center space-x-1">
+                                                <input
+                                                    type="number"
+                                                    step="0.000001"
+                                                    value={row.lat}
+                                                    onChange={(e) => updateTableRow(index, 'lat', e.target.value)}
+                                                    className="w-28 px-2 py-1 text-sm border rounded"
+                                                    placeholder="Latitude"
+                                                />
+                                                <input
+                                                    type="number"
+                                                    step="0.000001"
+                                                    value={row.lng}
+                                                    onChange={(e) => updateTableRow(index, 'lng', e.target.value)}
+                                                    className="w-28 px-2 py-1 text-sm border rounded"
+                                                    placeholder="Longitude"
+                                                />
+                                                <button
+                                                    onClick={() => startLocationSelection(index)}
+                                                    className={`px-2 py-1 text-xs rounded transition-colors ${isSelectingLocation && selectedTableRowIndex === index
+                                                        ? 'bg-red-500 text-white hover:bg-red-600'
+                                                        : 'bg-blue-500 text-white hover:bg-blue-600'
+                                                        }`}
+                                                    title="Click để chọn vị trí trên bản đồ"
+                                                >
+                                                    <i className={`fas ${isSelectingLocation && selectedTableRowIndex === index
+                                                        ? 'fa-times'
+                                                        : 'fa-map-marker-alt'
+                                                        }`}></i>
+                                                </button>
+                                            </div>
+                                        </td>
+                                        <td className="px-3 py-2">
+                                            <input
+                                                type="number"
+                                                value={row.demand}
+                                                onChange={(e) => updateTableRow(index, 'demand', e.target.value)}
+                                                className="w-20 px-2 py-1 text-sm border rounded"
+                                            />
+                                        </td>
+                                        <td className="px-3 py-2">
+                                            <div className="flex space-x-1">
+                                                <input
+                                                    type="number"
+                                                    value={row.earliestTime}
+                                                    onChange={(e) => updateTableRow(index, 'earliestTime', e.target.value)}
+                                                    className="w-16 px-2 py-1 text-sm border rounded"
+                                                    placeholder="ETW"
+                                                />
+                                                <input
+                                                    type="number"
+                                                    value={row.latestTime}
+                                                    onChange={(e) => updateTableRow(index, 'latestTime', e.target.value)}
+                                                    className="w-16 px-2 py-1 text-sm border rounded"
+                                                    placeholder="LTW"
+                                                />
+                                            </div>
+                                        </td>
+                                        <td className="px-3 py-2">
+                                            <input
+                                                type="number"
+                                                value={row.serviceDuration}
+                                                onChange={(e) => updateTableRow(index, 'serviceDuration', e.target.value)}
+                                                className="w-16 px-2 py-1 text-sm border rounded"
+                                            />
+                                        </td>
+                                        <td className="px-3 py-2">
+                                            <div className="flex space-x-1">
+                                                <input
+                                                    type="number"
+                                                    value={row.pickupId}
+                                                    onChange={(e) => updateTableRow(index, 'pickupId', e.target.value)}
+                                                    className="w-12 px-2 py-1 text-sm border rounded"
+                                                    placeholder="P"
+                                                />
+                                                <input
+                                                    type="number"
+                                                    value={row.deliveryId}
+                                                    onChange={(e) => updateTableRow(index, 'deliveryId', e.target.value)}
+                                                    className="w-12 px-2 py-1 text-sm border rounded"
+                                                    placeholder="D"
+                                                />
+                                            </div>
+                                        </td>
+                                        <td className="px-3 py-2">
+                                            <button
+                                                onClick={() => removeTableRow(index)}
+                                                className="px-2 py-1 text-sm bg-red-500 text-white rounded hover:bg-red-600"
+                                            >
+                                                <i className="fas fa-trash"></i>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    {tableData.length === 0 && (
+                        <div className="text-center py-8 text-gray-500">
+                            <i className="fas fa-table text-4xl mb-4"></i>
+                            <p>Chưa có dữ liệu. Nhấn "Thêm dòng" để bắt đầu.</p>
+                        </div>
+                    )}
+                </div>
+            )}
         </div>
     );
 };
