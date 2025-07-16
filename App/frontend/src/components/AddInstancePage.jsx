@@ -5,7 +5,7 @@ import config from '../config/config';
 const AddInstancePage = ({ onBack, onInstanceCreated }) => {
     // Instance metadata state
     const [instanceData, setInstanceData] = useState({
-        name: '',
+        name: `instance-${new Date().toISOString().slice(0, 19).replace(/[T:]/g, '-')}`,
         location: '',
         comment: '',
         routeTime: 480,
@@ -24,6 +24,21 @@ const AddInstancePage = ({ onBack, onInstanceCreated }) => {
     const [timeMatrix, setTimeMatrix] = useState({});
     const [isGeneratingMatrix, setIsGeneratingMatrix] = useState(false);
     const [matrixGenerationProgress, setMatrixGenerationProgress] = useState(0);
+    const [notification, setNotification] = useState(null); // { type: 'success'|'error'|'info', message: string }
+
+    // Auto-hide notification after 3 seconds
+    useEffect(() => {
+        if (notification) {
+            const timer = setTimeout(() => {
+                setNotification(null);
+            }, 3000);
+            return () => clearTimeout(timer);
+        }
+    }, [notification]);
+
+    const showNotification = (type, message) => {
+        setNotification({ type, message });
+    };
 
     // Map state
     const mapRef = useRef(null);
@@ -226,24 +241,25 @@ const AddInstancePage = ({ onBack, onInstanceCreated }) => {
 
     const handleNodeDelete = (nodeId) => {
         if (nodeId === 0) {
-            alert('Cannot delete depot node!');
+            showNotification('error', 'Không thể xóa depot node!');
             return;
         }
 
         setNodes(prev => prev.filter(node => node.id !== nodeId));
         setSelectedNodeId(null);
         setEditingNode(null);
+        showNotification('success', `Node ${nodeId} đã được xóa!`);
     };
 
     const generateInstanceFile = () => {
         if (nodes.length === 0) {
-            alert('Please add at least one node (depot)!');
+            showNotification('error', 'Vui lòng thêm ít nhất một node (depot)!');
             return null;
         }
 
         const hasDepot = nodes.some(node => node.id === 0);
         if (!hasDepot) {
-            alert('Instance must have a depot node with ID 0!');
+            showNotification('error', 'Instance phải có depot node với ID 0!');
             return null;
         }
 
@@ -255,11 +271,11 @@ const AddInstancePage = ({ onBack, onInstanceCreated }) => {
             if (pickup.deliveryId > 0) {
                 const correspondingDelivery = nodes.find(n => n.id === pickup.deliveryId);
                 if (!correspondingDelivery) {
-                    alert(`Pickup node ${pickup.id} references non-existent delivery node ${pickup.deliveryId}!`);
+                    showNotification('error', `Pickup node ${pickup.id} tham chiếu đến delivery node ${pickup.deliveryId} không tồn tại!`);
                     return null;
                 }
                 if (!correspondingDelivery.isDelivery) {
-                    alert(`Pickup node ${pickup.id} references node ${pickup.deliveryId} which is not a delivery node!`);
+                    showNotification('error', `Pickup node ${pickup.id} tham chiếu đến node ${pickup.deliveryId} không phải là delivery node!`);
                     return null;
                 }
                 // Set the delivery node's pickup reference
@@ -271,11 +287,11 @@ const AddInstancePage = ({ onBack, onInstanceCreated }) => {
             if (delivery.pickupId > 0) {
                 const correspondingPickup = nodes.find(n => n.id === delivery.pickupId);
                 if (!correspondingPickup) {
-                    alert(`Delivery node ${delivery.id} references non-existent pickup node ${delivery.pickupId}!`);
+                    showNotification('error', `Delivery node ${delivery.id} tham chiếu đến pickup node ${delivery.pickupId} không tồn tại!`);
                     return null;
                 }
                 if (!correspondingPickup.isPickup) {
-                    alert(`Delivery node ${delivery.id} references node ${delivery.pickupId} which is not a pickup node!`);
+                    showNotification('error', `Delivery node ${delivery.id} tham chiếu đến node ${delivery.pickupId} không phải là pickup node!`);
                     return null;
                 }
             }
@@ -346,7 +362,7 @@ const AddInstancePage = ({ onBack, onInstanceCreated }) => {
     // Function to generate time matrix using OSRM API
     const generateTimeMatrix = async () => {
         if (nodes.length < 2) {
-            alert('Cần ít nhất 2 nodes để tạo ma trận thời gian!');
+            showNotification('error', 'Cần ít nhất 2 nodes để tạo ma trận thời gian!');
             return;
         }
 
@@ -401,12 +417,10 @@ const AddInstancePage = ({ onBack, onInstanceCreated }) => {
             }
 
             setTimeMatrix(newTimeMatrix);
-            console.log('Time matrix generated:', newTimeMatrix);
-            alert('Ma trận thời gian đã được tạo thành công!');
-
+            console.log('Time matrix generated:', newTimeMatrix); showNotification('success', 'Ma trận thời gian đã được tạo thành công!');
         } catch (error) {
             console.error('Error generating time matrix:', error);
-            alert('Lỗi khi tạo ma trận thời gian: ' + error.message);
+            showNotification('error', 'Lỗi khi tạo ma trận thời gian: ' + error.message);
         } finally {
             setIsGeneratingMatrix(false);
             setMatrixGenerationProgress(0);
@@ -419,7 +433,7 @@ const AddInstancePage = ({ onBack, onInstanceCreated }) => {
         if (!confirmClear) return;
 
         setTimeMatrix({});
-        alert('Ma trận thời gian đã được xóa!');
+        showNotification('success', 'Ma trận thời gian đã được xóa!');
     };
 
     const downloadInstanceFile = () => {
@@ -436,7 +450,7 @@ const AddInstancePage = ({ onBack, onInstanceCreated }) => {
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
 
-        alert('Instance file đã được tải xuống!');
+        showNotification('success', 'Instance file đã được tải xuống!');
     };
 
     const loadInstanceIntoApp = () => {
@@ -558,7 +572,7 @@ const AddInstancePage = ({ onBack, onInstanceCreated }) => {
             mapInstance.current.setView([21.0285, 105.8542], 13);
         }
 
-        alert('Instance mẫu Hanoi đã được tạo! Bạn có thể tạo ma trận thời gian để có instance hoàn chỉnh.');
+        showNotification('success', 'Instance mẫu Hanoi đã được tạo! Bạn có thể tạo ma trận thời gian để có instance hoàn chỉnh.');
     };
 
     const clearAllNodes = () => {
@@ -571,11 +585,33 @@ const AddInstancePage = ({ onBack, onInstanceCreated }) => {
         setEditingNode(null);
         setTimeMatrix({}); // Clear time matrix as well
 
-        alert('Đã xóa tất cả nodes và ma trận thời gian!');
+        showNotification('success', 'Đã xóa tất cả nodes và ma trận thời gian!');
     };
 
     return (
         <div className="flex flex-col h-screen">
+            {/* Notification Toast */}
+            {notification && (
+                <div className={`fixed top-4 right-4 z-50 px-4 py-3 rounded-lg shadow-lg transition-all duration-300 ${notification.type === 'success' ? 'bg-green-500 text-white' :
+                        notification.type === 'error' ? 'bg-red-500 text-white' :
+                            'bg-blue-500 text-white'
+                    }`}>
+                    <div className="flex items-center space-x-2">
+                        <i className={`fas ${notification.type === 'success' ? 'fa-check-circle' :
+                                notification.type === 'error' ? 'fa-exclamation-circle' :
+                                    'fa-info-circle'
+                            }`}></i>
+                        <span className="text-sm font-medium">{notification.message}</span>
+                        <button
+                            onClick={() => setNotification(null)}
+                            className="ml-2 text-white hover:text-gray-200"
+                        >
+                            <i className="fas fa-times"></i>
+                        </button>
+                    </div>
+                </div>
+            )}
+
             {/* Header */}
             <div className="bg-white border-b border-gray-200 p-4">
                 <div className="flex items-center justify-between">
@@ -641,7 +677,7 @@ const AddInstancePage = ({ onBack, onInstanceCreated }) => {
                                     value={instanceData.name}
                                     onChange={(e) => setInstanceData(prev => ({ ...prev, name: e.target.value }))}
                                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                    placeholder="vd: custom-instance-1"
+                                    placeholder="Tên sẽ được tạo tự động theo thời gian"
                                 />
                             </div>
 
@@ -820,18 +856,6 @@ const AddInstancePage = ({ onBack, onInstanceCreated }) => {
                         <div className="space-y-4">
                             <h3 className="text-sm font-semibold text-gray-700">Quản lý Nodes</h3>
 
-                            {/* Help Text */}
-                            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-800">
-                                <div className="font-medium mb-1">💡 Hướng dẫn:</div>
-                                <ul className="text-xs space-y-1">
-                                    <li>• Node 0 luôn là depot (kho)</li>
-                                    <li>• Pickup nodes: demand &gt; 0 (tự động set khi chọn loại)</li>
-                                    <li>• Delivery nodes: demand &lt; 0 (tự động set khi chọn loại)</li>
-                                    <li>• Pickup và delivery có thể được ghép đôi</li>
-                                    <li>• Có thể nhập số âm trực tiếp cho delivery</li>
-                                </ul>
-                            </div>
-
                             <button
                                 onClick={() => {
                                     console.log('Toggle adding node. Current state:', isAddingNode); // Debug log
@@ -873,53 +897,168 @@ const AddInstancePage = ({ onBack, onInstanceCreated }) => {
                                 <div className="space-y-2">
                                     <h4 className="text-sm font-medium text-gray-700">Danh sách Nodes:</h4>
                                     <div className="max-h-40 overflow-y-auto space-y-1">
-                                        {nodes.sort((a, b) => a.id - b.id).map(node => {
-                                            const isSelected = selectedNodeId === node.id;
-                                            let nodeTypeColor = 'text-gray-600';
-                                            let nodeTypeIcon = '●';
-                                            let nodeTypeName = 'Depot';
+                                        {/* Depot Node */}
+                                        {(() => {
+                                            const depotNode = nodes.find(n => n.isDepot);
+                                            if (!depotNode) return null;
 
-                                            if (node.isPickup) {
-                                                nodeTypeColor = 'text-green-600';
-                                                nodeTypeIcon = '▲';
-                                                nodeTypeName = 'Pickup';
-                                            } else if (node.isDelivery) {
-                                                nodeTypeColor = 'text-red-600';
-                                                nodeTypeIcon = '▼';
-                                                nodeTypeName = 'Delivery';
-                                            }
-
+                                            const isSelected = selectedNodeId === depotNode.id;
                                             return (
                                                 <div
-                                                    key={node.id}
+                                                    key={depotNode.id}
                                                     className={`node-list-item cursor-pointer p-2 rounded border text-xs transition-all duration-200 ${isSelected
                                                         ? 'selected bg-blue-50 border-blue-300'
                                                         : 'bg-white border-gray-200 hover:bg-gray-50'
                                                         }`}
                                                     onClick={() => {
-                                                        setSelectedNodeId(node.id);
-                                                        setEditingNode(node);
-
-                                                        // Center map on the selected node
+                                                        setSelectedNodeId(depotNode.id);
+                                                        setEditingNode(depotNode);
                                                         if (mapInstance.current) {
-                                                            mapInstance.current.setView([node.lat, node.lng], 15);
+                                                            mapInstance.current.setView([depotNode.lat, depotNode.lng], 15);
                                                         }
                                                     }}
                                                 >
                                                     <div className="flex items-center justify-between">
                                                         <div className="flex items-center space-x-2">
-                                                            <span className={`${nodeTypeColor} font-medium`}>
-                                                                {nodeTypeIcon} {node.id}
+                                                            <span className="text-gray-600 font-medium">
+                                                                ● {depotNode.id}
                                                             </span>
-                                                            <span className="text-gray-500">{nodeTypeName}</span>
+                                                            <span className="text-gray-500">Depot</span>
                                                         </div>
-                                                        <span className="text-gray-400 text-xs">
-                                                            {node.demand !== 0 && `D:${node.demand}`}
-                                                        </span>
                                                     </div>
                                                 </div>
                                             );
-                                        })}
+                                        })()}
+
+                                        {/* Pickup-Delivery Pairs */}
+                                        {(() => {
+                                            const pickupNodes = nodes.filter(n => n.isPickup).sort((a, b) => a.id - b.id);
+                                            const deliveryNodes = nodes.filter(n => n.isDelivery);
+                                            const regularNodes = nodes.filter(n => !n.isDepot && !n.isPickup && !n.isDelivery).sort((a, b) => a.id - b.id);
+
+                                            const pairs = [];
+                                            const usedDeliveries = new Set();
+
+                                            // Create pickup-delivery pairs
+                                            pickupNodes.forEach(pickup => {
+                                                const delivery = deliveryNodes.find(d => d.pickupId === pickup.id || pickup.deliveryId === d.id);
+                                                if (delivery) {
+                                                    usedDeliveries.add(delivery.id);
+                                                    pairs.push({ pickup, delivery });
+                                                } else {
+                                                    pairs.push({ pickup, delivery: null });
+                                                }
+                                            });
+
+                                            // Add unpaired deliveries
+                                            deliveryNodes.forEach(delivery => {
+                                                if (!usedDeliveries.has(delivery.id)) {
+                                                    pairs.push({ pickup: null, delivery });
+                                                }
+                                            });
+
+                                            return (
+                                                <>
+                                                    {pairs.map((pair, index) => (
+                                                        <div key={`pair-${index}`} className="space-y-1">
+                                                            {pair.pickup && (
+                                                                <div
+                                                                    className={`node-list-item cursor-pointer p-2 rounded border text-xs transition-all duration-200 ${selectedNodeId === pair.pickup.id
+                                                                        ? 'selected bg-blue-50 border-blue-300'
+                                                                        : 'bg-white border-gray-200 hover:bg-gray-50'
+                                                                        }`}
+                                                                    onClick={() => {
+                                                                        setSelectedNodeId(pair.pickup.id);
+                                                                        setEditingNode(pair.pickup);
+                                                                        if (mapInstance.current) {
+                                                                            mapInstance.current.setView([pair.pickup.lat, pair.pickup.lng], 15);
+                                                                        }
+                                                                    }}
+                                                                >
+                                                                    <div className="flex items-center justify-between">
+                                                                        <div className="flex items-center space-x-2">
+                                                                            <span className="text-green-600 font-medium">
+                                                                                ▲ {pair.pickup.id}
+                                                                            </span>
+                                                                            <span className="text-gray-500">Pickup</span>
+                                                                            {pair.delivery && (
+                                                                                <span className="text-xs text-gray-400">→ {pair.delivery.id}</span>
+                                                                            )}
+                                                                        </div>
+                                                                        <span className="text-gray-400 text-xs">
+                                                                            D:{pair.pickup.demand}
+                                                                        </span>
+                                                                    </div>
+                                                                </div>
+                                                            )}
+                                                            {pair.delivery && (
+                                                                <div
+                                                                    className={`node-list-item cursor-pointer p-2 rounded border text-xs transition-all duration-200 ml-4 ${selectedNodeId === pair.delivery.id
+                                                                        ? 'selected bg-blue-50 border-blue-300'
+                                                                        : 'bg-white border-gray-200 hover:bg-gray-50'
+                                                                        }`}
+                                                                    onClick={() => {
+                                                                        setSelectedNodeId(pair.delivery.id);
+                                                                        setEditingNode(pair.delivery);
+                                                                        if (mapInstance.current) {
+                                                                            mapInstance.current.setView([pair.delivery.lat, pair.delivery.lng], 15);
+                                                                        }
+                                                                    }}
+                                                                >
+                                                                    <div className="flex items-center justify-between">
+                                                                        <div className="flex items-center space-x-2">
+                                                                            <span className="text-red-600 font-medium">
+                                                                                ▼ {pair.delivery.id}
+                                                                            </span>
+                                                                            <span className="text-gray-500">Delivery</span>
+                                                                            {pair.pickup && (
+                                                                                <span className="text-xs text-gray-400">← {pair.pickup.id}</span>
+                                                                            )}
+                                                                        </div>
+                                                                        <span className="text-gray-400 text-xs">
+                                                                            D:{pair.delivery.demand}
+                                                                        </span>
+                                                                    </div>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    ))}
+
+                                                    {/* Regular nodes (not paired) */}
+                                                    {regularNodes.map(node => {
+                                                        const isSelected = selectedNodeId === node.id;
+                                                        return (
+                                                            <div
+                                                                key={node.id}
+                                                                className={`node-list-item cursor-pointer p-2 rounded border text-xs transition-all duration-200 ${isSelected
+                                                                    ? 'selected bg-blue-50 border-blue-300'
+                                                                    : 'bg-white border-gray-200 hover:bg-gray-50'
+                                                                    }`}
+                                                                onClick={() => {
+                                                                    setSelectedNodeId(node.id);
+                                                                    setEditingNode(node);
+                                                                    if (mapInstance.current) {
+                                                                        mapInstance.current.setView([node.lat, node.lng], 15);
+                                                                    }
+                                                                }}
+                                                            >
+                                                                <div className="flex items-center justify-between">
+                                                                    <div className="flex items-center space-x-2">
+                                                                        <span className="text-gray-600 font-medium">
+                                                                            ● {node.id}
+                                                                        </span>
+                                                                        <span className="text-gray-500">Regular</span>
+                                                                    </div>
+                                                                    <span className="text-gray-400 text-xs">
+                                                                        {node.demand !== 0 && `D:${node.demand}`}
+                                                                    </span>
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </>
+                                            );
+                                        })()}
                                     </div>
                                 </div>
                             )}
@@ -1008,6 +1147,7 @@ const AddInstancePage = ({ onBack, onInstanceCreated }) => {
                                 nodes={nodes}
                                 onUpdate={handleNodeUpdate}
                                 onDelete={handleNodeDelete}
+                                showNotification={showNotification}
                             />
                         ) : (
                             <div className="text-center text-gray-500 py-8">
@@ -1023,7 +1163,7 @@ const AddInstancePage = ({ onBack, onInstanceCreated }) => {
 };
 
 // Node Editor Component
-const NodeEditor = ({ node, nodes, onUpdate, onDelete }) => {
+const NodeEditor = ({ node, nodes, onUpdate, onDelete, showNotification }) => {
     const [editedNode, setEditedNode] = useState({ ...node });
 
     useEffect(() => {
@@ -1033,22 +1173,22 @@ const NodeEditor = ({ node, nodes, onUpdate, onDelete }) => {
     const handleSave = () => {
         // Validation
         if (editedNode.isPickup && editedNode.demand <= 0) {
-            alert('Pickup node must have positive demand (> 0)!');
+            showNotification('error', 'Pickup node phải có demand dương (> 0)!');
             return;
         }
 
         if (editedNode.isDelivery && editedNode.demand >= 0) {
-            alert('Delivery node must have negative demand (< 0)!');
+            showNotification('error', 'Delivery node phải có demand âm (< 0)!');
             return;
         }
 
         if (editedNode.earliestTime >= editedNode.latestTime) {
-            alert('Earliest time must be less than latest time!');
+            showNotification('error', 'Thời gian sớm nhất phải nhỏ hơn thời gian muộn nhất!');
             return;
         }
 
         if (editedNode.serviceDuration < 0) {
-            alert('Service duration cannot be negative!');
+            showNotification('error', 'Thời gian phục vụ không thể âm!');
             return;
         }
 
@@ -1056,7 +1196,13 @@ const NodeEditor = ({ node, nodes, onUpdate, onDelete }) => {
         if (editedNode.isPickup && editedNode.deliveryId > 0) {
             const deliveryNode = nodes.find(n => n.id === editedNode.deliveryId);
             if (!deliveryNode || !deliveryNode.isDelivery) {
-                alert('Selected delivery node does not exist or is not a delivery node!');
+                showNotification('error', 'Delivery node được chọn không tồn tại hoặc không phải là delivery node!');
+                return;
+            }
+            // Check if total demand is valid (pickup + delivery >= 0, not negative)
+            const total = editedNode.demand + deliveryNode.demand;
+            if (total < 0) {
+                showNotification('error', `Lỗi: Tổng pickup (${editedNode.demand}) + delivery (${deliveryNode.demand}) = ${total} < 0. Không thể giao nhiều hơn lấy! Vui lòng điều chỉnh lại demand.`);
                 return;
             }
         }
@@ -1064,13 +1210,19 @@ const NodeEditor = ({ node, nodes, onUpdate, onDelete }) => {
         if (editedNode.isDelivery && editedNode.pickupId > 0) {
             const pickupNode = nodes.find(n => n.id === editedNode.pickupId);
             if (!pickupNode || !pickupNode.isPickup) {
-                alert('Selected pickup node does not exist or is not a pickup node!');
+                showNotification('error', 'Pickup node được chọn không tồn tại hoặc không phải là pickup node!');
+                return;
+            }
+            // Check if total demand is valid (pickup + delivery >= 0, not negative)
+            const total = pickupNode.demand + editedNode.demand;
+            if (total < 0) {
+                showNotification('error', `Lỗi: Tổng pickup (${pickupNode.demand}) + delivery (${editedNode.demand}) = ${total} < 0. Không thể giao nhiều hơn lấy! Vui lòng điều chỉnh lại demand.`);
                 return;
             }
         }
 
         onUpdate(editedNode);
-        alert('Node đã được cập nhật!');
+        showNotification('success', 'Node đã được cập nhật!');
     };
 
     const setNodeType = (type) => {
@@ -1114,6 +1266,17 @@ const NodeEditor = ({ node, nodes, onUpdate, onDelete }) => {
             if (excludeType === 'pickup' && n.isPickup) return false;
             if (excludeType === 'delivery' && n.isDelivery) return false;
             if (excludeType === 'depot' && n.isDepot) return false;
+
+            // For pickup selection in delivery node: only show pickups without delivery
+            if (excludeType === 'delivery' && n.isPickup) {
+                return n.deliveryId === 0; // Only pickups that don't have a delivery yet
+            }
+
+            // For delivery selection in pickup node: only show deliveries without pickup
+            if (excludeType === 'pickup' && n.isDelivery) {
+                return n.pickupId === 0; // Only deliveries that don't have a pickup yet
+            }
+
             return true;
         });
     };
@@ -1158,47 +1321,138 @@ const NodeEditor = ({ node, nodes, onUpdate, onDelete }) => {
                 </div>
             </div>
 
+            {/* Pickup/Delivery Pairing - Show BEFORE Demand */}
+            {editedNode.isPickup && (
+                <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Delivery node tương ứng
+                    </label>
+                    <select
+                        value={editedNode.deliveryId}
+                        onChange={(e) => {
+                            const deliveryId = parseInt(e.target.value) || 0;
+                            setEditedNode(prev => {
+                                const updated = { ...prev, deliveryId };
+                                // Auto-set demand based on corresponding delivery node
+                                if (deliveryId > 0) {
+                                    const deliveryNode = nodes.find(n => n.id === deliveryId);
+                                    if (deliveryNode && deliveryNode.demand < 0) {
+                                        updated.demand = Math.abs(deliveryNode.demand);
+                                    }
+                                }
+                                return updated;
+                            });
+                        }}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                        <option value={0}>Không có</option>
+                        {getAvailableNodes('pickup').map(n => (
+                            <option key={n.id} value={n.id}>Node {n.id} (D: {n.demand})</option>
+                        ))}
+                    </select>
+                    {editedNode.deliveryId > 0 && (
+                        <div className="text-xs text-blue-600 mt-1">
+                            💡 Demand được tự động điều chỉnh theo delivery node
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {editedNode.isDelivery && (
+                <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Pickup node tương ứng
+                    </label>
+                    <select
+                        value={editedNode.pickupId}
+                        onChange={(e) => {
+                            const pickupId = parseInt(e.target.value) || 0;
+                            setEditedNode(prev => {
+                                const updated = { ...prev, pickupId };
+                                // Auto-set demand based on corresponding pickup node
+                                if (pickupId > 0) {
+                                    const pickupNode = nodes.find(n => n.id === pickupId);
+                                    if (pickupNode && pickupNode.demand > 0) {
+                                        updated.demand = -pickupNode.demand;
+                                    }
+                                }
+                                return updated;
+                            });
+                        }}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                        <option value={0}>Không có</option>
+                        {getAvailableNodes('delivery').map(n => (
+                            <option key={n.id} value={n.id}>Node {n.id} (D: {n.demand})</option>
+                        ))}
+                    </select>
+                </div>
+            )}
+
             {/* Demand */}
             <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Nhu cầu {editedNode.isPickup ? '(pickup: số dương)' : editedNode.isDelivery ? '(delivery: số âm)' : '(0 cho depot)'}
+                    Nhu cầu {editedNode.isPickup ? '(pickup)' : editedNode.isDelivery ? '(delivery)' : '(depot luôn = 0)'}
                 </label>
-                <input
-                    type="text"
-                    value={editedNode.demand}
-                    onChange={(e) => {
-                        const value = e.target.value;
-                        // Allow empty string, minus sign, and valid numbers
-                        if (value === '' || value === '-' || /^-?\d+$/.test(value)) {
-                            const numValue = value === '' || value === '-' ? 0 : parseInt(value);
-
-                            // Auto-correct based on node type
-                            let correctedValue = numValue;
-                            if (editedNode.isPickup && numValue <= 0) {
-                                correctedValue = Math.abs(numValue) || 1;
-                            } else if (editedNode.isDelivery && numValue >= 0) {
-                                correctedValue = -Math.abs(numValue) || -1;
-                            } else if (editedNode.isDepot) {
-                                correctedValue = 0;
+                {editedNode.isDepot ? (
+                    <div className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-100 text-gray-500">
+                        0 (Depot không có demand)
+                    </div>
+                ) : (
+                    <div className="flex items-center space-x-2">
+                        <div className={`px-3 py-2 border rounded-md font-medium text-center min-w-12 ${editedNode.isPickup ? 'bg-green-100 border-green-300 text-green-700' : 'bg-red-100 border-red-300 text-red-700'}`}>
+                            {editedNode.isPickup ? '+' : '-'}
+                        </div>
+                        <input
+                            type="number"
+                            value={Math.abs(editedNode.demand)}
+                            onChange={(e) => {
+                                const value = parseInt(e.target.value) || 0;
+                                const absoluteValue = Math.abs(value);
+                                const finalValue = editedNode.isPickup ? absoluteValue : -absoluteValue;
+                                setEditedNode(prev => ({ ...prev, demand: finalValue || (editedNode.isPickup ? 1 : -1) }));
+                            }}
+                            min="0"
+                            className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            placeholder="Nhập số dương"
+                        />
+                    </div>
+                )}
+                {!editedNode.isDepot && Math.abs(editedNode.demand) === 0 && (
+                    <div className="text-xs text-amber-600 mt-1">
+                        ⚠️ Demand không thể bằng 0
+                    </div>
+                )}
+                {/* Validation for pickup-delivery pair balance */}
+                {(() => {
+                    if (editedNode.isPickup && editedNode.deliveryId > 0) {
+                        const deliveryNode = nodes.find(n => n.id === editedNode.deliveryId);
+                        if (deliveryNode) {
+                            const total = editedNode.demand + deliveryNode.demand;
+                            if (total < 0) {
+                                return (
+                                    <div className="text-xs text-red-600 mt-1">
+                                        Lỗi: Tổng pickup ({editedNode.demand}) + delivery ({deliveryNode.demand}) = {total} &lt; 0. Không thể giao nhiều hơn lấy!
+                                    </div>
+                                );
                             }
-
-                            setEditedNode(prev => ({ ...prev, demand: correctedValue }));
                         }
-                    }}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    disabled={editedNode.isDepot}
-                    placeholder={editedNode.isPickup ? "Nhập số dương" : editedNode.isDelivery ? "Nhập số âm" : "0"}
-                />
-                {editedNode.isPickup && editedNode.demand <= 0 && (
-                    <div className="text-xs text-amber-600 mt-1">
-                        ⚠️ Pickup node cần demand dương
-                    </div>
-                )}
-                {editedNode.isDelivery && editedNode.demand >= 0 && (
-                    <div className="text-xs text-amber-600 mt-1">
-                        ⚠️ Delivery node cần demand âm
-                    </div>
-                )}
+                    }
+                    if (editedNode.isDelivery && editedNode.pickupId > 0) {
+                        const pickupNode = nodes.find(n => n.id === editedNode.pickupId);
+                        if (pickupNode) {
+                            const total = pickupNode.demand + editedNode.demand;
+                            if (total < 0) {
+                                return (
+                                    <div className="text-xs text-red-600 mt-1">
+                                        Lỗi: Tổng pickup ({pickupNode.demand}) + delivery ({editedNode.demand}) = {total} &lt; 0. Không thể giao nhiều hơn lấy!
+                                    </div>
+                                );
+                            }
+                        }
+                    }
+                    return null;
+                })()}
             </div>
 
             {/* Time Window */}
@@ -1238,43 +1492,6 @@ const NodeEditor = ({ node, nodes, onUpdate, onDelete }) => {
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
             </div>
-
-            {/* Pickup/Delivery Pairing */}
-            {editedNode.isPickup && (
-                <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Delivery node tương ứng
-                    </label>
-                    <select
-                        value={editedNode.deliveryId}
-                        onChange={(e) => setEditedNode(prev => ({ ...prev, deliveryId: parseInt(e.target.value) || 0 }))}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                        <option value={0}>Không có</option>
-                        {getAvailableNodes('pickup').map(n => (
-                            <option key={n.id} value={n.id}>Node {n.id}</option>
-                        ))}
-                    </select>
-                </div>
-            )}
-
-            {editedNode.isDelivery && (
-                <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Pickup node tương ứng
-                    </label>
-                    <select
-                        value={editedNode.pickupId}
-                        onChange={(e) => setEditedNode(prev => ({ ...prev, pickupId: parseInt(e.target.value) || 0 }))}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                        <option value={0}>Không có</option>
-                        {getAvailableNodes('delivery').map(n => (
-                            <option key={n.id} value={n.id}>Node {n.id}</option>
-                        ))}
-                    </select>
-                </div>
-            )}
 
             {/* Action Buttons */}
             <div className="space-y-2 pt-4">
