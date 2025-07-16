@@ -31,6 +31,12 @@ const AddInstancePage = ({ onBack, onInstanceCreated }) => {
     const [isSelectingLocation, setIsSelectingLocation] = useState(false);
     const [selectedTableRowIndex, setSelectedTableRowIndex] = useState(null);
 
+    // Search state
+    const [searchQuery, setSearchQuery] = useState('');
+    const [searchResults, setSearchResults] = useState([]);
+    const [isSearching, setIsSearching] = useState(false);
+    const [showSearchResults, setShowSearchResults] = useState(false);
+
     // Auto-hide notification after 3 seconds
     useEffect(() => {
         if (notification) {
@@ -40,6 +46,15 @@ const AddInstancePage = ({ onBack, onInstanceCreated }) => {
             return () => clearTimeout(timer);
         }
     }, [notification]);
+
+    // Cleanup search timeout on unmount
+    useEffect(() => {
+        return () => {
+            if (window.searchTimeout) {
+                clearTimeout(window.searchTimeout);
+            }
+        };
+    }, []);
 
     const showNotification = (type, message) => {
         setNotification({ type, message });
@@ -89,6 +104,72 @@ const AddInstancePage = ({ onBack, onInstanceCreated }) => {
     const stopLocationSelection = () => {
         setIsSelectingLocation(false);
         setSelectedTableRowIndex(null);
+    };
+
+    // Search functions
+    const searchLocation = async (query) => {
+        if (!query || query.length < 3) {
+            setSearchResults([]);
+            setShowSearchResults(false);
+            return;
+        }
+
+        setIsSearching(true);
+        try {
+            const response = await fetch(
+                `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5&countrycodes=vn&accept-language=vi,en`
+            );
+            const data = await response.json();
+
+            const formattedResults = data.map(item => ({
+                display_name: item.display_name,
+                lat: parseFloat(item.lat),
+                lng: parseFloat(item.lon),
+                importance: item.importance || 0
+            }));
+
+            setSearchResults(formattedResults);
+            setShowSearchResults(formattedResults.length > 0);
+        } catch (error) {
+            console.error('Search error:', error);
+            showNotification('error', 'Lỗi khi tìm kiếm địa điểm');
+            setSearchResults([]);
+            setShowSearchResults(false);
+        } finally {
+            setIsSearching(false);
+        }
+    };
+
+    const handleSearchInputChange = (e) => {
+        const query = e.target.value;
+        setSearchQuery(query);
+
+        // Debounce search
+        if (window.searchTimeout) {
+            clearTimeout(window.searchTimeout);
+        }
+
+        window.searchTimeout = setTimeout(() => {
+            searchLocation(query);
+        }, 500);
+    };
+
+    const selectSearchResult = (result) => {
+        if (mapInstance.current) {
+            mapInstance.current.setView([result.lat, result.lng], 15);
+            showNotification('success', `Đã chuyển đến: ${result.display_name.split(',')[0]}`);
+        }
+        setShowSearchResults(false);
+        setSearchQuery('');
+    };
+
+    const clearSearch = () => {
+        setSearchQuery('');
+        setSearchResults([]);
+        setShowSearchResults(false);
+        if (window.searchTimeout) {
+            clearTimeout(window.searchTimeout);
+        }
     };
 
     const applyTableData = () => {
@@ -1268,6 +1349,64 @@ const AddInstancePage = ({ onBack, onInstanceCreated }) => {
 
                 {/* Map */}
                 <div className="flex-1 bg-gray-50 relative">
+                    {/* Search Box */}
+                    <div className="absolute top-4 right-4 w-80" style={{ zIndex: 9999 }}>
+                        <div className="relative">
+                            <div className="flex">
+                                <div className="relative flex-1">
+                                    <input
+                                        type="text"
+                                        value={searchQuery}
+                                        onChange={handleSearchInputChange}
+                                        placeholder="Hoàn Kiếm, Hà Nội..."
+                                        className="w-full px-4 py-2 pr-10 text-sm bg-white border border-gray-300 rounded-l-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 shadow-lg"
+                                    />
+                                    {isSearching && (
+                                        <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                                            <i className="fas fa-spinner animate-spin text-gray-400"></i>
+                                        </div>
+                                    )}
+                                    {searchQuery && !isSearching && (
+                                        <button
+                                            onClick={clearSearch}
+                                            className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                                        >
+                                            <i className="fas fa-times"></i>
+                                        </button>
+                                    )}
+                                </div>
+                                <button
+                                    onClick={() => searchLocation(searchQuery)}
+                                    disabled={!searchQuery || isSearching}
+                                    className="px-4 py-2 bg-blue-600 text-white rounded-r-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed shadow-lg transition-colors"
+                                >
+                                    <i className="fas fa-search"></i>
+                                </button>
+                            </div>
+
+                            {/* Search Results */}
+                            {showSearchResults && searchResults.length > 0 && (
+                                <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto z-30">
+                                    {searchResults.map((result, index) => (
+                                        <div
+                                            key={index}
+                                            onClick={() => selectSearchResult(result)}
+                                            className="px-4 py-3 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-b-0"
+                                        >
+                                            <div className="text-sm font-medium text-gray-900 truncate">
+                                                {result.display_name.split(',')[0]}
+                                            </div>
+                                            <div className="text-xs text-gray-500 truncate">
+                                                {result.display_name}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Node Adding Indicator */}
                     {(isAddingNode || isSelectingLocation) && (
                         <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-10 bg-blue-600 text-white px-4 py-2 rounded-lg shadow-lg pointer-events-none">
                             <div className="flex items-center space-x-2">
@@ -1279,6 +1418,7 @@ const AddInstancePage = ({ onBack, onInstanceCreated }) => {
                             </div>
                         </div>
                     )}
+
                     <div
                         ref={mapRef}
                         className="w-full h-full"
