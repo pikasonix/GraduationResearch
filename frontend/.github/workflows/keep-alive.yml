@@ -1,0 +1,32 @@
+name: Keep Server Alive
+
+on:
+  # Run every 5 days
+  schedule:
+    - cron: '0 0 */5 * *'
+  # Allow manual trigger
+  workflow_dispatch:
+
+jobs:
+  ping:
+    name: Keep Function Warm
+    runs-on: ubuntu-latest
+    env:
+      # Store these as repository secrets (Settings → Secrets & variables → Actions)
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+
+    steps:
+      - name: Send HTTP Request
+        run: |
+          # fail early if secrets are not provided
+          if [ -z "$NEXT_PUBLIC_SUPABASE_URL" ] || [ -z "$NEXT_PUBLIC_SUPABASE_ANON_KEY" ]; then
+            echo "Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY secrets"
+            exit 1
+          fi
+
+          curl -X POST "$NEXT_PUBLIC_SUPABASE_URL/functions/v1/rebuild-website" \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer $NEXT_PUBLIC_SUPABASE_ANON_KEY" \
+            -d '{}' \
+            || echo "Ping sent"

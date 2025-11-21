@@ -1,0 +1,18 @@
+Instance name:    bar-n100-4
+Authors:          PDPTW Solver
+Date:             2025-11-20
+Reference:        LNS with SA/RTR
+Solution
+Route 1 : 29 21 71 79 44 94 12 62
+Route 2 : 10 8 13 60 58 63 30 80
+Route 3 : 46 96 28 78 45 4 54 95
+Route 4 : 19 17 67 69 32 39 82 89
+Route 5 : 18 5 55 68 33 83 40 90
+Route 6 : 7 48 98 57
+Route 7 : 49 1 51 26 76 22 72 99
+Route 8 : 6 56 25 23 75 73
+Route 9 : 47 97 9 59 34 24 84 74
+Route 10 : 16 66 2 52 42 92 41 91
+Route 11 : 20 50 70 100 37 14 64 87
+Route 12 : 36 27 77 86 11 61 15 65
+Route 13 : 38 88 3 31 81 53 43 35 85 93

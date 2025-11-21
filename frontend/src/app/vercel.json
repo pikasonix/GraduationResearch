@@ -1,0 +1,8 @@
+{
+  "cronJobs": {
+    "daily-rebuild": {
+      "path": "/blog",
+      "schedule": "0 0 * * *"
+    }
+  }
+}
