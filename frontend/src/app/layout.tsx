@@ -5,7 +5,6 @@ import "./globals.css";
 import "@/components/common/legacy/styles/shapes-tailwind.css";
 import "@/components/common/legacy/styles/shapes.css";
 import "react-notion-x/src/styles.css";
-import 'leaflet/dist/leaflet.css';
 import { ReduxProvider } from "@/lib/redux/provider";
 import { DesktopLoginsSignups } from "./_DesktopLoginsSignups";
 import Link from "next/link";

@@ -8,15 +8,15 @@ import { useFileReader } from '@/hooks/useFileReader';
 import sampleInstance from '@/data/sampleInstance.js';
 import { useMapControls } from '@/hooks/useMapControls';
 import { PanelLeftOpen, PanelRightOpen } from "lucide-react";
+import { solverService, type Job } from '@/services/solverService';
 
-// Dynamically import components to avoid SSR issues with Leaflet
-const MapComponent = dynamic(() => import('@/components/map/MapComponent'), { ssr: false });
+// Dynamically import components to avoid SSR issues with Mapbox
+const MapComponent = dynamic(() => import('@/components/map/MapboxComponent'), { ssr: false });
 const Sidebar = dynamic(() => import('@/components/map/Sidebar'), { ssr: false });
 const GuidePage = dynamic(() => import('@/components/map/GuidePage'), { ssr: false });
 const AddInstancePage = dynamic(() => import('@/components/add-instance/AddInstanceBuilder'), { ssr: false });
-const TrackAsiaTrafficPage = dynamic(() => import('@/components/map/TrackAsiaTrafficPage'), { ssr: false });
 
-type ViewKey = 'map' | 'guide' | 'addInstance' | 'trafficMonitoring' | 'trackAsiaTraffic';
+type ViewKey = 'map' | 'guide' | 'addInstance' | 'trafficMonitoring';
 type RouteType = Route | any;
 
 function MapPageClient() {
@@ -56,9 +56,13 @@ function MapPageClient() {
     }, [setInstance]);
 
     const defaultParams = config.defaultParams;
+    console.log('🔧 Default params from config:', defaultParams);
     const [instanceText, setInstanceText] = useState('');
     const [params, setParams] = useState(defaultParams);
     const [loading, setLoading] = useState(false);
+    const [jobProgress, setJobProgress] = useState(0);
+    const [jobStatus, setJobStatus] = useState<string>('');
+    const [currentJobId, setCurrentJobId] = useState<string | null>(null);
 
     useEffect(() => {
         try {
@@ -99,8 +103,8 @@ function MapPageClient() {
         }
     }, [readInstanceFile, setInstanceText]);
 
-    const handleParamChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-        setParams(prev => ({ ...prev, [e.target.name]: Number(e.target.value) }));
+    const handleParamChange = useCallback((name: string, value: any) => {
+        setParams(prev => ({ ...prev, [name]: value }));
     }, []);
 
     const loadSolutionFromText = useCallback(async (solutionText: string) => {
@@ -141,6 +145,10 @@ function MapPageClient() {
         }
 
         setLoading(true);
+        setJobProgress(0);
+        setJobStatus('Đang khởi tạo...');
+        setCurrentJobId(null);
+        
         try {
             if (!instance) {
                 console.log('Instance not parsed yet, parsing now...');
@@ -153,49 +161,67 @@ function MapPageClient() {
                 console.log('Instance already parsed:', instance?.name);
             }
 
-            console.log('Running instance with params:', params);
-            const apiUrl = `${config.api.baseURL}${config.api.basePath}/solve`;
-            const response = await fetch(apiUrl, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ instance: instanceText, params }),
-            });
-            const rawBody = await response.text();
-            let data: any = null;
-            try {
-                data = rawBody ? JSON.parse(rawBody) : null;
-            } catch (parseError) {
-                console.error('Backend returned non-JSON payload:', rawBody);
-                throw new Error(`Máy chủ trả về dữ liệu không hợp lệ (status ${response.status}).`);
-            }
-            console.log('Response from backend:', data);
-            if (!response.ok) {
-                const message = (data && typeof data === 'object' && 'error' in data)
-                    ? (data.error || `Yêu cầu thất bại với mã ${response.status}`)
-                    : `Yêu cầu thất bại với mã ${response.status}`;
-                throw new Error(message);
-            }
-            if (data && data.success && data.result) {
-                console.log('Solution received, loading into visualizer...');
-                await loadSolutionFromText(data.result);
-            } else if (data && !data.success) {
-                console.error('Backend error:', data.error);
-                alert('Lỗi từ backend: ' + (data.error || 'Unknown error'));
-            } else {
-                console.error('Unexpected backend response:', data);
-                alert('Không nhận được kết quả hợp lệ từ backend.');
-            }
+            console.log('Submitting job with params:', params);
+            
+            // Use the new solver service with job queue
+            const result = await solverService.solveInstance(
+                instanceText,
+                params,
+                (job: Job) => {
+                    // Progress callback
+                    setCurrentJobId(job.jobId);
+                    setJobProgress(job.progress);
+                    
+                    let statusText = 'Đang xử lý...';
+                    if (job.status === 'pending') {
+                        statusText = 'Đang chờ trong hàng đợi...';
+                    } else if (job.status === 'processing') {
+                        statusText = `Đang giải (${job.progress}%)`;
+                        if (job.cost !== undefined) {
+                            statusText += ` - Chi phí hiện tại: ${job.cost.toFixed(2)}`;
+                        }
+                    }
+                    
+                    setJobStatus(statusText);
+                    console.log(`Job ${job.jobId}: ${job.status} (${job.progress}%)`);
+                }
+            );
+
+            console.log('Solution received, loading into visualizer...');
+            setJobStatus('Đang tải kết quả...');
+            await loadSolutionFromText(result);
+            setJobStatus('Hoàn thành!');
+            
         } catch (error: any) {
             console.error('Error running instance:', error);
-            alert('Lỗi kết nối: ' + (error?.message || error));
+            setJobStatus('Lỗi!');
+            alert('Lỗi: ' + (error?.message || error));
         } finally {
             setLoading(false);
+            setTimeout(() => {
+                setJobStatus('');
+                setJobProgress(0);
+                setCurrentJobId(null);
+            }, 3000);
         }
     }, [instanceText, instance, params, readInstanceFile, loadSolutionFromText]);
 
     const resetParameters = useCallback(() => {
         setParams(defaultParams);
     }, [defaultParams]);
+
+    const cancelJob = useCallback(async () => {
+        if (!currentJobId) return;
+        
+        try {
+            await solverService.cancelJob(currentJobId);
+            setJobStatus('Đã hủy');
+            setLoading(false);
+            console.log('Job cancelled:', currentJobId);
+        } catch (error: any) {
+            console.error('Error cancelling job:', error);
+        }
+    }, [currentJobId]);
 
     const handleDebugSolution = useCallback(() => {
         if (solution) {
@@ -223,7 +249,7 @@ function MapPageClient() {
             if (typeof window === 'undefined') return;
             const sp = new URLSearchParams(window.location.search);
             const v = sp.get('view');
-            if (v && ['map', 'guide', 'addInstance', 'trafficMonitoring', 'trackAsiaTraffic'].includes(v)) {
+            if (v && ['map', 'guide', 'addInstance', 'trafficMonitoring'].includes(v)) {
                 setCurrentView(v as ViewKey);
             }
         } catch {
@@ -306,8 +332,6 @@ function MapPageClient() {
                         }}
                     />
                 );
-            case 'trackAsiaTraffic':
-                return <TrackAsiaTrafficPage onBack={showMap} />;
             case 'map':
             default:
                 return (
@@ -353,6 +377,9 @@ function MapPageClient() {
                         handleParamChange={handleParamChange}
                         runInstance={runInstance}
                         loading={loading}
+                        jobProgress={jobProgress}
+                        jobStatus={jobStatus}
+                        onCancelJob={cancelJob}
                         resetParameters={resetParameters}
                         loadSampleInstance={loadSampleInstance}
                         collapsed={sidebarCollapsed}

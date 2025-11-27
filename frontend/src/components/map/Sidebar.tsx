@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { PanelLeftOpen, PanelRightOpen, FileCheck, FileCode, PencilLine, Download, Grid2x2Check, Play, RotateCw, LoaderCircle, Map } from 'lucide-react';
+import { SolverParametersForm } from './SolverParametersForm';
 
 // --- Types ---
 // Use broad/any types here to avoid collisions with other module-local types
@@ -24,9 +25,12 @@ interface SidebarProps {
     instanceText?: string;
     setInstanceText?: (text: string) => void;
     params?: Record<string, any>;
-    handleParamChange?: (e: React.ChangeEvent<HTMLInputElement>) => void;
+    handleParamChange?: (name: string, value: any) => void;
     runInstance?: () => void;
     loading?: boolean;
+    jobProgress?: number;
+    jobStatus?: string;
+    onCancelJob?: () => void;
     resetParameters?: () => void;
     // optional parent control: if false, parent hides component entirely
     sidebarVisible?: boolean;
@@ -75,6 +79,9 @@ const Sidebar: React.FC<SidebarProps> = ({
     handleParamChange,
     runInstance,
     loading,
+    jobProgress = 0,
+    jobStatus = '',
+    onCancelJob,
     resetParameters,
     sidebarVisible,
     toggleSidebar,
@@ -235,21 +242,69 @@ const Sidebar: React.FC<SidebarProps> = ({
                                     <span>Thay đổi tham số</span>
                                     <svg className={`w-5 h-5 transform transition-transform ${showParams ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
                                 </button>
-                                {showParams && (
+
+                                {/* Preset Templates - Always visible */}
+                                <div className="mt-3 space-y-2">
+                                    <h4 className="text-xs font-semibold uppercase tracking-wide text-gray-600 px-1">Mẫu cấu hình</h4>
+                                    <div className="flex gap-2">
+                                        <button
+                                            onClick={() => {
+                                                handleParamChange?.('iterations', 10000);
+                                                handleParamChange?.('max_non_improving', 2000);
+                                                handleParamChange?.('time_limit', 120);
+                                                handleParamChange?.('acceptance', 'greedy');
+                                            }}
+                                            className={`flex-1 text-center px-2 py-2 border rounded transition-colors ${
+                                                params?.iterations === 10000 && params?.time_limit === 120 && params?.acceptance === 'greedy'
+                                                    ? 'border-blue-500 bg-blue-50'
+                                                    : 'border-gray-300 hover:bg-blue-50 hover:border-blue-400'
+                                            }`}
+                                        >
+                                            <div className="font-medium text-xs text-gray-800">Nhanh</div>
+                                            <div className="text-[10px] text-gray-500">Max 2 phút</div>
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                handleParamChange?.('iterations', 50000);
+                                                handleParamChange?.('max_non_improving', 10000);
+                                                handleParamChange?.('time_limit', 300);
+                                                handleParamChange?.('acceptance', 'rtr');
+                                            }}
+                                            className={`flex-1 text-center px-2 py-2 border rounded transition-colors ${
+                                                params?.iterations === 50000 && params?.time_limit === 300 && params?.acceptance === 'rtr'
+                                                    ? 'border-blue-500 bg-blue-50'
+                                                    : 'border-gray-300 hover:bg-blue-50 hover:border-blue-400'
+                                            }`}
+                                        >
+                                            <div className="font-medium text-xs text-gray-800">Cân bằng</div>
+                                            <div className="text-[10px] text-gray-500">Max 5 phút</div>
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                handleParamChange?.('iterations', 100000);
+                                                handleParamChange?.('max_non_improving', 20000);
+                                                handleParamChange?.('time_limit', 600);
+                                                handleParamChange?.('acceptance', 'rtr');
+                                            }}
+                                            className={`flex-1 text-center px-2 py-2 border rounded transition-colors ${
+                                                params?.iterations === 100000 && params?.time_limit === 600 && params?.acceptance === 'rtr'
+                                                    ? 'border-blue-500 bg-blue-50'
+                                                    : 'border-gray-300 hover:bg-blue-50 hover:border-blue-400'
+                                            }`}
+                                        >
+                                            <div className="font-medium text-xs text-gray-800">Cao</div>
+                                            <div className="text-[10px] text-gray-500">Max 10 phút</div>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {showParams && params && handleParamChange && (
                                     <>
-                                        <div className="grid grid-cols-2 gap-4 mt-4">
-                                            {Object.keys(params || {}).map((key) => (
-                                                <div key={key}>
-                                                    <label className="block text-sm font-medium text-gray-700">{key}</label>
-                                                    <input
-                                                        type="number"
-                                                        name={key}
-                                                        value={params ? params[key] : ''}
-                                                        onChange={handleParamChange}
-                                                        className="w-full px-2 py-1 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                                    />
-                                                </div>
-                                            ))}
+                                        <div className="mt-4 max-h-96 overflow-y-auto pr-2 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+                                            <SolverParametersForm 
+                                                params={params}
+                                                onChange={handleParamChange}
+                                            />
                                         </div>
 
                                         <button
@@ -265,7 +320,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                             </div>
 
                             <button
-                                className="w-full bg-green-600 hover:bg-green-700 text-white px-4 py-2 mt-4 rounded font-medium transition-colors"
+                                className="w-full bg-green-600 hover:bg-green-700 text-white px-4 py-2 mt-4 rounded font-medium transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
                                 onClick={() => runInstance && runInstance()}
                                 disabled={loading}
                             >
@@ -281,6 +336,30 @@ const Sidebar: React.FC<SidebarProps> = ({
                                     </span>
                                 )}
                             </button>
+
+                            {/* Progress Bar and Status */}
+                            {loading && (
+                                <div className="mt-3 space-y-2">
+                                    <div className="flex items-center justify-between text-sm">
+                                        <span className="text-gray-600">{jobStatus}</span>
+                                        <span className="text-gray-600">{jobProgress}%</span>
+                                    </div>
+                                    <div className="w-full bg-gray-200 rounded-full h-2.5 overflow-hidden">
+                                        <div 
+                                            className="bg-green-600 h-2.5 rounded-full transition-all duration-300"
+                                            style={{ width: `${jobProgress}%` }}
+                                        ></div>
+                                    </div>
+                                    {onCancelJob && (
+                                        <button
+                                            onClick={onCancelJob}
+                                            className="w-full bg-red-500 hover:bg-red-600 text-white px-3 py-1.5 rounded text-sm transition-colors"
+                                        >
+                                            Hủy job
+                                        </button>
+                                    )}
+                                </div>
+                            )}
                         </div>
 
                         {/* Real Routing Controls */}

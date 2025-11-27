@@ -1,0 +1,17 @@
+Instance name:    lr107
+Authors:          PDPTW Solver
+Date:             2025-11-27
+Reference:        LNS with SA/RTR
+Solution
+Route 1 : 52 7 102 62 11 64 49 19 48 82 18 89
+Route 2 : 60 45 83 5 103 99 87 2
+Route 3 : 98 14 44 38 86 16 91 100 37 97
+Route 4 : 94 92 57 72 41 56 4 25 80 12
+Route 5 : 40 53 6 96 59 95 13 58
+Route 6 : 26 21 39 23 67 55 24 29 3 77
+Route 7 : 33 31 79 101 78 34 68 28
+Route 8 : 27 69 76 1 10 90 32 70
+Route 9 : 42 43 15 22 75 54 74 73
+Route 10 : 47 36 46 8 84 17 61 85 104 93
+Route 11 : 51 30 88 63
+Route 12 : 20 65 9 66 71 35 81 50

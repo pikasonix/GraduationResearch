@@ -25,18 +25,25 @@ const config = {
         goongKey: process.env.NEXT_PUBLIC_GOONG_API_KEY || '',
     },
     defaultParams: {
-        num_routes: Number(process.env.NEXT_PUBLIC_DEFAULT_NUM_ROUTES) || 7,
-        ants: Number(process.env.NEXT_PUBLIC_DEFAULT_ANTS) || 10,
-        iterations: Number(process.env.NEXT_PUBLIC_DEFAULT_ITERATIONS) || 20,
-        alpha: Number(process.env.NEXT_PUBLIC_DEFAULT_ALPHA) || 2.0,
-        beta: Number(process.env.NEXT_PUBLIC_DEFAULT_BETA) || 5.0,
-        rho: Number(process.env.NEXT_PUBLIC_DEFAULT_RHO) || 0.1,
-        tau_max: Number(process.env.NEXT_PUBLIC_DEFAULT_TAU_MAX) || 50.0,
-        tau_min: Number(process.env.NEXT_PUBLIC_DEFAULT_TAU_MIN) || 0.01,
-        greedy_bias: Number(process.env.NEXT_PUBLIC_DEFAULT_GREEDY_BIAS) || 0.85,
-        elite_solutions: Number(process.env.NEXT_PUBLIC_DEFAULT_ELITE_SOLUTIONS) || 4,
-        local_search_prob: Number(process.env.NEXT_PUBLIC_DEFAULT_LOCAL_SEARCH_PROB) || 0.7,
-        restart_threshold: Number(process.env.NEXT_PUBLIC_DEFAULT_RESTART_THRESHOLD) || 2,
+        // LNS parameters
+        iterations: Number(process.env.NEXT_PUBLIC_DEFAULT_ITERATIONS) || 100000,
+        max_non_improving: Number(process.env.NEXT_PUBLIC_DEFAULT_MAX_NON_IMPROVING) || 20000,
+        time_limit: Number(process.env.NEXT_PUBLIC_DEFAULT_TIME_LIMIT) || 300, // 5 minutes default
+        min_destroy: Number(process.env.NEXT_PUBLIC_DEFAULT_MIN_DESTROY) || 0.1,
+        max_destroy: Number(process.env.NEXT_PUBLIC_DEFAULT_MAX_DESTROY) || 0.4,
+        min_destroy_count: Number(process.env.NEXT_PUBLIC_DEFAULT_MIN_DESTROY_COUNT) || -1,
+        max_destroy_count: Number(process.env.NEXT_PUBLIC_DEFAULT_MAX_DESTROY_COUNT) || -1,
+        acceptance: (process.env.NEXT_PUBLIC_DEFAULT_ACCEPTANCE as 'sa' | 'rtr' | 'greedy') || 'rtr',
+        
+        // General configuration
+        seed: Number(process.env.NEXT_PUBLIC_DEFAULT_SEED) || 42,
+        max_vehicles: Number(process.env.NEXT_PUBLIC_DEFAULT_MAX_VEHICLES) || 0,
+        log_level: (process.env.NEXT_PUBLIC_DEFAULT_LOG_LEVEL as 'trace' | 'debug' | 'info' | 'warn' | 'error') || 'info',
+        authors: process.env.NEXT_PUBLIC_DEFAULT_AUTHORS || 'PDPTW Solver',
+        reference: process.env.NEXT_PUBLIC_DEFAULT_REFERENCE || 'LNS with SA/RTR',
+        
+        // Instance format
+        format: (process.env.NEXT_PUBLIC_DEFAULT_FORMAT as 'lilim' | 'sartori') || 'lilim',
     }
 };
 

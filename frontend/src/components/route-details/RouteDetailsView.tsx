@@ -3,7 +3,7 @@ import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { Map as MapIcon } from 'lucide-react';
 import type { Instance, Route, Solution } from '@/utils/dataModels';
 import dynamic from 'next/dynamic';
-const MapComponent = dynamic(() => import('@/components/map/MapComponent'), { ssr: false });
+const MapComponent = dynamic(() => import('@/components/map/MapboxComponent'), { ssr: false });
 import { createSolution } from '@/utils/dataModels';
 import { useRouter } from 'next/navigation';
 
