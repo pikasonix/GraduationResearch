@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback, useMemo } from "react";
+import { useSearchParams } from "next/navigation";
 import mapboxgl from "mapbox-gl";
 import type { Feature, FeatureCollection, LineString, Geometry } from 'geojson';
 import "mapbox-gl/dist/mapbox-gl.css";
@@ -19,6 +20,7 @@ import type { Station } from './StationPinTool';
 import { StationFilter } from './StationFilter';
 import { StationService } from './StationService';
 import { createStationMarkerElement } from './StationMarker';
+import { RouteSegmentsList } from './RouteSegmentsList';
 
 type Profile = 'driving' | 'walking' | 'cycling' | 'driving-traffic';
 
@@ -288,6 +290,51 @@ export default function RoutingMap() {
     // Map picking state (choose a point on map for start/end/waypoint)
     type PickTarget = { type: 'start' } | { type: 'end' } | { type: 'via'; index: number };
     const pickingRef = useRef<{ target: PickTarget; handler: (e: mapboxgl.MapMouseEvent) => void } | null>(null);
+
+    const [routeSegments, setRouteSegments] = useState<Array<{
+        from: { lat: number; lng: number; address?: string };
+        to: { lat: number; lng: number; address?: string };
+        index: number;
+        metrics?: {
+            distance: number;
+            travelTime: number;
+            arrivalTime: number;
+            waitTime: number;
+            demand: number;
+            load: number;
+            serviceDuration: number;
+        };
+    }>>([]);
+    const [selectedSegmentIndex, setSelectedSegmentIndex] = useState<number | null>(null);
+    const selectedSegmentMarkerRef = useRef<mapboxgl.Marker | null>(null);
+
+    // Effect to handle selected segment marker
+    useEffect(() => {
+        if (!mapRef.current) return;
+        
+        // Remove existing marker
+        if (selectedSegmentMarkerRef.current) {
+            selectedSegmentMarkerRef.current.remove();
+            selectedSegmentMarkerRef.current = null;
+        }
+
+        if (selectedSegmentIndex !== null && routeSegments[selectedSegmentIndex]) {
+            const segment = routeSegments[selectedSegmentIndex];
+            // Use createPinElement directly to avoid hoisting issues
+            const el = createPinElement('#8b5cf6', selectedSegmentIndex + 1); // Purple color
+            
+            // Add a pulsing effect to the marker element
+            const pulse = document.createElement('div');
+            pulse.className = 'absolute inset-0 rounded-full animate-ping bg-purple-400 opacity-75';
+            pulse.style.zIndex = '-1';
+            el.style.position = 'relative';
+            el.appendChild(pulse);
+
+            selectedSegmentMarkerRef.current = new mapboxgl.Marker({ element: el, anchor: 'center' as any })
+                .setLngLat([segment.from.lng, segment.from.lat])
+                .addTo(mapRef.current);
+        }
+    }, [selectedSegmentIndex, routeSegments]);
 
     // keep ref in sync with state
     useEffect(() => {
@@ -814,7 +861,22 @@ export default function RoutingMap() {
         const { lat, lng } = coords;
         const currentZoom = mapRef.current.getZoom();
         const targetZoom = keepZoom ? currentZoom : Math.max(currentZoom, 16.5);
-        mapRef.current.easeTo({ center: [lng, lat], zoom: targetZoom, duration: 450 });
+        
+        // Add padding to account for the segments list panel on the right
+        // and potentially sidebar on the left (though sidebar is not in this view)
+        // The panel is 340px wide + 16px margin = ~360px
+        // On mobile, we might want bottom padding
+        const isMobile = window.innerWidth < 768;
+        const padding = isMobile 
+            ? { bottom: 300, top: 50, left: 20, right: 20 } 
+            : { right: 360, top: 50, bottom: 50, left: 50 };
+
+        mapRef.current.easeTo({ 
+            center: [lng, lat], 
+            zoom: targetZoom, 
+            duration: 450,
+            padding: padding
+        });
     }, [keepZoom]);
 
     // Station handlers
@@ -1726,6 +1788,116 @@ export default function RoutingMap() {
         applyRouteSelection(currentRoutes, index, true);
     }, [applyRouteSelection, routes, selectedRouteIdx]);
 
+    const searchParams = useSearchParams();
+    const [hasInitialRoute, setHasInitialRoute] = useState(false);
+    const [shouldCalculateRoute, setShouldCalculateRoute] = useState(false);
+
+    useEffect(() => {
+        console.log("[RoutingMap] Checking searchParams", searchParams?.toString(), "hasInitialRoute:", hasInitialRoute);
+        if (!searchParams || hasInitialRoute) return;
+        const coordsParam = searchParams.get('coords');
+        const profileParam = searchParams.get('profile');
+        console.log("[RoutingMap] coordsParam:", coordsParam);
+        
+        if (coordsParam) {
+            try {
+                const points = coordsParam.split('|').map(p => {
+                    const parts = p.split(',');
+                    const lat = parseFloat(parts[0]);
+                    const lng = parseFloat(parts[1]);
+                    if (isNaN(lat) || isNaN(lng)) return null;
+                    return { lat, lng };
+                }).filter((p): p is { lat: number; lng: number } => p !== null);
+                
+                console.log("[RoutingMap] Parsed points:", points);
+
+                // Try to get timeline data from session storage
+                let timelineEvents: any[] = [];
+                if (typeof window !== 'undefined') {
+                    try {
+                        const stored = sessionStorage.getItem('routingTimelineData');
+                        if (stored) {
+                            const parsed = JSON.parse(stored);
+                            if (parsed && Array.isArray(parsed.events)) {
+                                timelineEvents = parsed.events;
+                            }
+                        }
+                    } catch (e) {
+                        console.error("Error parsing routingTimelineData", e);
+                    }
+                }
+
+                if (points.length >= 2) {
+                    // Create segments from points
+                    const newSegments = [];
+                    for (let i = 0; i < points.length - 1; i++) {
+                        // Try to find matching metrics
+                        // Segment i connects point i to point i+1
+                        // In timelineEvents, event[i+1] contains the travel info TO that node
+                        let metrics = undefined;
+                        if (timelineEvents.length > i + 1) {
+                            const nextEvent = timelineEvents[i + 1];
+                            const currentEvent = timelineEvents[i]; // For service duration if needed
+                            metrics = {
+                                distance: nextEvent.distance,
+                                travelTime: nextEvent.travelTime,
+                                arrivalTime: nextEvent.arrivalTime,
+                                waitTime: nextEvent.waitTime,
+                                demand: nextEvent.demand,
+                                load: nextEvent.load,
+                                serviceDuration: (nextEvent.serviceEndTime - nextEvent.serviceStartTime)
+                            };
+                        }
+
+                        newSegments.push({
+                            from: points[i],
+                            to: points[i + 1],
+                            index: i,
+                            metrics
+                        });
+                    }
+                    setRouteSegments(newSegments);
+
+                    // Also populate addresses for segments
+                    newSegments.forEach(async (seg, idx) => {
+                        const fromAddr = await reverseGeocode(seg.from.lng, seg.from.lat);
+                        const toAddr = await reverseGeocode(seg.to.lng, seg.to.lat);
+                        setRouteSegments(prev => prev.map((s, i) => 
+                            i === idx ? { 
+                                ...s, 
+                                from: { ...s.from, address: fromAddr || undefined },
+                                to: { ...s.to, address: toAddr || undefined }
+                            } : s
+                        ));
+                    });
+
+                    if (profileParam) {
+                        setProfile(profileParam as Profile);
+                    }
+                }
+            } catch (e) {
+                console.error("[RoutingMap] Error parsing route params:", e);
+            }
+            setHasInitialRoute(true);
+        }
+    }, [searchParams, hasInitialRoute, reverseGeocode]);
+
+    useEffect(() => {
+        if (shouldCalculateRoute) {
+            console.log("[RoutingMap] shouldCalculateRoute is true. Checking dependencies...", { startPoint, endPoint, mapReady });
+        }
+        if (shouldCalculateRoute && startPoint && endPoint && mapReady) {
+            console.log("[RoutingMap] All conditions met. Scheduling calculateRoute...");
+            // Small delay to ensure state propagation and map readiness
+            const timer = setTimeout(() => {
+                console.log("[RoutingMap] Executing calculateRoute now.");
+                calculateRoute();
+                setShouldCalculateRoute(false);
+            }, 100);
+            return () => clearTimeout(timer);
+        }
+    }, [shouldCalculateRoute, startPoint, endPoint, mapReady, calculateRoute]);
+
     useEffect(() => {
         if (!simPlaying) {
             if (simRAFRef.current != null) cancelAnimationFrame(simRAFRef.current);
@@ -2187,16 +2359,38 @@ export default function RoutingMap() {
                 isCongestionVisible={isCongestionVisible}
             />
 
-            {/* Station List */}
-            <div className="absolute top-80 right-4 z-10 w-80">
-                <StationFilter
-                    onStationClick={handleStationClick}
-                    onStationDelete={handleStationDelete}
-                    onStationAdded={handleStationAdded}
-                    onStationNavigate={handleStationNavigate}
-                    map={mapRef.current}
-                />
-            </div>
+            {/* Route Segments List (replaces StationFilter when segments exist) */}
+            {routeSegments.length > 0 ? (
+                <div className="absolute top-80 right-4 z-10 w-80">
+                    <RouteSegmentsList
+                        segments={routeSegments}
+                        selectedSegmentIndex={selectedSegmentIndex}
+                        onSelectSegment={(seg) => {
+                            setSelectedSegmentIndex(seg.index);
+                            setStartPoint(seg.from);
+                            setEndPoint(seg.to);
+                            setWaypoints([]);
+                            setStartLabel(seg.from.address || '');
+                            setEndLabel(seg.to.address || '');
+                            setWaypointLabels([]);
+                            setShouldCalculateRoute(true);
+                            
+                            // Focus map on the segment start
+                            focusOnCoordinate(seg.from);
+                        }}
+                    />
+                </div>
+            ) : (
+                <div className="absolute top-80 right-4 z-10 w-80">
+                    <StationFilter
+                        onStationClick={handleStationClick}
+                        onStationDelete={handleStationDelete}
+                        onStationAdded={handleStationAdded}
+                        onStationNavigate={handleStationNavigate}
+                        map={mapRef.current}
+                    />
+                </div>
+            )}
             {error ? (
                 <div className="p-4 text-red-600 text-sm">{error}</div>
             ) : null}

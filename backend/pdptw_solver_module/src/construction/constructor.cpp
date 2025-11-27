@@ -113,14 +113,47 @@ void Constructor::build_route_for_vehicle(
     Solution &solution,
     size_t vehicle_id,
     const std::vector<size_t> &requests) {
+    
     for (size_t req_id : requests) {
-        auto candidate = Insertion::find_best_insertion(
-            solution,
-            req_id,
-            InsertionStrategy::BestCost);
+        // Tìm vị trí chèn tốt nhất CHỈ trong vehicle_id được chỉ định
+        // Không dùng Insertion::find_best_insertion vì nó tìm trên toàn bộ các xe
+        
+        InsertionCandidate best_candidate; // Default: cost = infinity, feasible = false
 
-        if (candidate.feasible) {
-            Insertion::insert_request(solution, candidate);
+        size_t depot_start = vehicle_id * 2;
+        size_t depot_end = vehicle_id * 2 + 1;
+
+        // Duyệt qua tất cả vị trí pickup có thể
+        size_t pickup_after = depot_start;
+        const size_t MAX_ITER = 1000; // Safety break
+        size_t pickup_iter = 0;
+
+        while (pickup_after != depot_end && pickup_iter++ < MAX_ITER) {
+            // Duyệt qua tất cả vị trí delivery có thể (phải sau pickup)
+            size_t delivery_after = pickup_after;
+            size_t delivery_iter = 0;
+
+            while (delivery_after != depot_end && delivery_iter++ < MAX_ITER) {
+                // Kiểm tra tính khả thi
+                if (Insertion::is_feasible_insertion(solution, req_id, vehicle_id, pickup_after, delivery_after)) {
+                    Num cost = Insertion::calculate_insertion_cost(solution, req_id, vehicle_id, pickup_after, delivery_after);
+                    
+                    if (cost < best_candidate.cost_increase) {
+                        best_candidate = InsertionCandidate(
+                            req_id, vehicle_id, pickup_after, delivery_after, cost, true);
+                    }
+                }
+
+                delivery_after = solution.succ(delivery_after);
+            }
+
+            pickup_after = solution.succ(pickup_after);
+        }
+
+        if (best_candidate.feasible) {
+            Insertion::insert_request(solution, best_candidate);
+        } else {
+            spdlog::warn("BinPacking: Failed to insert request {} into assigned vehicle {}", req_id, vehicle_id);
         }
     }
 }

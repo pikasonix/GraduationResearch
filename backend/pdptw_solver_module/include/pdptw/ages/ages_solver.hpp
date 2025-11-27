@@ -17,6 +17,8 @@ struct AGESParameters {
     bool count_successful_perturbations_only = true; // Chỉ đếm nhiễu loạn thành công
     bool use_shuffle_stack = true;                   // Xáo trộn stack sau perturbation
     double shift_probability = 0.5;                  // Xác suất shift vs exchange
+    bool use_k_ejection = true;                      // Sử dụng k-ejection
+    bool use_perturbation = true;                    // Sử dụng perturbation
 
     static AGESParameters default_params(size_t num_requests) {
         return AGESParameters{};

@@ -82,8 +82,28 @@ solution::Solution SolutionRecombiner::greedy_merge(const std::vector<PartialIns
 solution::Solution SolutionRecombiner::best_fit_merge(const std::vector<PartialInstance> &partials,
                                                       const std::vector<size_t> &unassigned_request_ids,
                                                       std::mt19937 &rng) const {
-    (void)rng;
-    return greedy_merge(partials, unassigned_request_ids);
+    // 1. Start with greedy merge
+    solution::Solution combined = greedy_merge(partials, unassigned_request_ids);
+
+    // 2. Get all unassigned requests
+    std::vector<size_t> pending_requests = combined.unassigned_requests().iter_request_ids();
+
+    // 3. Shuffle to randomize insertion order
+    std::shuffle(pending_requests.begin(), pending_requests.end(), rng);
+
+    // 4. Try to insert each request
+    for (size_t request_id : pending_requests) {
+        // Find best insertion position
+        auto candidate = construction::Insertion::find_best_insertion(
+            combined, request_id, construction::InsertionStrategy::BestCost);
+
+        // If feasible, apply insertion
+        if (candidate.feasible) {
+            construction::Insertion::insert_request(combined, candidate);
+        }
+    }
+
+    return combined;
 }
 
 } // namespace pdptw::decomposition

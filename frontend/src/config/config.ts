@@ -43,7 +43,7 @@ const config = {
         reference: process.env.NEXT_PUBLIC_DEFAULT_REFERENCE || 'LNS with SA/RTR',
         
         // Instance format
-        format: (process.env.NEXT_PUBLIC_DEFAULT_FORMAT as 'lilim' | 'sartori') || 'lilim',
+        format: (process.env.NEXT_PUBLIC_DEFAULT_FORMAT as 'lilim' | 'sartori') || 'sartori',
     }
 };
 

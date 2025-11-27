@@ -41,6 +41,12 @@ int main(int argc, char **argv) {
     int max_destroy_count = -1;
     unsigned int seed = 42;
     std::string acceptance = "rtr"; // RTR or SA or Greedy
+    std::string construction_strategy = "sequential"; // sequential, regret, binpacking
+    std::string recombine_strategy = "greedy"; // greedy, bestfit
+
+    // AGES Options
+    bool use_k_ejection = true;
+    bool use_perturbation = true;
 
     // Solution metadata
     std::string authors = "PDPTW Solver";
@@ -96,6 +102,17 @@ int main(int argc, char **argv) {
     app.add_option("--acceptance", acceptance, "Acceptance criterion: sa (Simulated Annealing), rtr (Record-to-Record), greedy (Only Improvements)")
         ->default_val("rtr")
         ->check(CLI::IsMember({"sa", "rtr", "greedy"}));
+
+    app.add_option("--construction", construction_strategy, "Construction strategy: sequential, regret, binpacking")
+        ->default_val("sequential")
+        ->check(CLI::IsMember({"sequential", "regret", "binpacking"}));
+
+    app.add_option("--recombine", recombine_strategy, "Recombination strategy: greedy, bestfit")
+        ->default_val("greedy")
+        ->check(CLI::IsMember({"greedy", "bestfit"}));
+
+    app.add_flag("--k-ejection,!--no-k-ejection", use_k_ejection, "Enable/Disable k-ejection in AGES (default: enabled)");
+    app.add_flag("--perturbation,!--no-perturbation", use_perturbation, "Enable/Disable perturbation in AGES (default: enabled)");
 
     app.add_option("--max-vehicles", max_vehicles, "Maximum vehicles (0=auto)")
         ->default_val(0);
@@ -161,10 +178,16 @@ int main(int argc, char **argv) {
     spdlog::info("Instance: {} ({} requests, {} vehicles)", instance_name, instance.num_requests(), instance.num_vehicles());
 
     // Construct Initial Solution
+    construction::ConstructionStrategy strategy = construction::ConstructionStrategy::SequentialInsertion;
+    if (construction_strategy == "regret") {
+        strategy = construction::ConstructionStrategy::RegretInsertion;
+    } else if (construction_strategy == "binpacking") {
+        strategy = construction::ConstructionStrategy::BinPackingFirst;
+    }
 
     solution::Solution initial_solution = construction::Constructor::construct(
         instance,
-        construction::ConstructionStrategy::SequentialInsertion);
+        strategy);
 
     solution::SolutionDescription init_desc(initial_solution);
     spdlog::info("Initial solution: {:.2f} ({} routes)", initial_solution.objective(), init_desc.num_routes());
@@ -218,6 +241,8 @@ int main(int argc, char **argv) {
     ages_params.use_shuffle_stack = true;
     ages_params.count_successful_perturbations_only = true;
     ages_params.shift_probability = 0.5;
+    ages_params.use_k_ejection = use_k_ejection;
+    ages_params.use_perturbation = use_perturbation;
 
     ages::AGESSolver ages_solver(instance, ages_params);
     utils::TimeLimit *limit_ptr = overall_time_limit ? &*overall_time_limit : nullptr;
@@ -264,6 +289,12 @@ int main(int argc, char **argv) {
             ls_params.split_settings.min_requests_per_group = 40;
             ls_params.split_settings.max_requests_per_group = 120;
             ls_params.split_settings.mode = decomposition::SplitMode::Geographic;
+            
+            if (recombine_strategy == "bestfit") {
+                ls_params.recombine_mode = decomposition::RecombineMode::BestFitMerge;
+            } else {
+                ls_params.recombine_mode = decomposition::RecombineMode::GreedyMerge;
+            }
 
             utils::TimeLimit *ls_limit = nullptr;
             if (overall_time_limit) {

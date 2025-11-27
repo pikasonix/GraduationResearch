@@ -43,10 +43,9 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   const navLinks = [
-    { href: "/map", label: "Dashboard" },
-    { href: "/add-instance", label: "Tạo Instance" },
-    { href: "/map?view=trackAsiaTraffic", label: "Track Asia Traffic" },
-    { href: "/map?view=guide", label: "Hướng dẫn" },
+    { href: "/map", label: "Dashboard", icon: "LayoutDashboard" },
+    { href: "/add-instance", label: "Tạo Instance", icon: "PlusCircle" },
+    { href: "/map?view=guide", label: "Hướng dẫn", icon: "BookOpen" },
   ];
   return (
     <html lang="en" suppressHydrationWarning={true}>
@@ -63,7 +62,7 @@ export default function RootLayout({
           <ProfileUpdater />
           <NavbarShadow />
           {/* Navigation Header */}
-          <ScrollHeader className="fixed w-full z-50">
+          <ScrollHeader className="fixed w-full z-50" hideOnScrollDown={false}>
             <nav
               className="w-full backdrop-blur-[20px] border-b-1 border-gray-200 transition-shadow duration-500"
               id="navbar"

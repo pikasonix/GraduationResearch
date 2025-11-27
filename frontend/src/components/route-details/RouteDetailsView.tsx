@@ -1,6 +1,6 @@
 "use client";
 import React, { useMemo, useState, useEffect, useRef } from 'react';
-import { Map as MapIcon } from 'lucide-react';
+import { Map as MapIcon, Truck } from 'lucide-react';
 import type { Instance, Route, Solution } from '@/utils/dataModels';
 import dynamic from 'next/dynamic';
 const MapComponent = dynamic(() => import('@/components/map/MapboxComponent'), { ssr: false });
@@ -80,18 +80,6 @@ export const RouteDetailsView: React.FC<RouteDetailsViewProps> = ({ route, insta
 
     const metrics = route ? calcMetrics(route, filteredInstance) : null;
 
-    const handleNavigateRouting = () => {
-        if (!route?.sequence || !instance?.nodes) return;
-        // Build lat,lng pairs separated by '|'
-        const coordsList = route.sequence
-            .map((nodeId: number) => instance.nodes.find((n: any) => n.id === nodeId))
-            .filter(Boolean)
-            .map((node: any) => `${node.coords[0]},${node.coords[1]}`)
-            .join('|');
-        const profile = (typeof window !== 'undefined' && (localStorage.getItem('routingProfile') || 'driving')) || 'driving';
-        router.push(`/routing?coords=${encodeURIComponent(coordsList)}&profile=${encodeURIComponent(profile)}`);
-    };
-
     interface TimelineEvent {
         nodeId: number;
         index: number;
@@ -165,6 +153,24 @@ export const RouteDetailsView: React.FC<RouteDetailsViewProps> = ({ route, insta
             totalDistance,
         };
     }, [route, filteredInstance]);
+
+    const handleNavigateRouting = () => {
+        if (!route?.sequence || !instance?.nodes) return;
+        // Build lat,lng pairs separated by '|'
+        const coordsList = route.sequence
+            .map((nodeId: number) => instance.nodes.find((n: any) => n.id === nodeId))
+            .filter(Boolean)
+            .map((node: any) => `${node.coords[0]},${node.coords[1]}`)
+            .join('|');
+
+        // Save timeline data to sessionStorage for the routing page to pick up
+        if (timelineData && typeof window !== 'undefined') {
+            sessionStorage.setItem('routingTimelineData', JSON.stringify(timelineData));
+        }
+
+        const profile = (typeof window !== 'undefined' && (localStorage.getItem('routingProfile') || 'driving')) || 'driving';
+        router.push(`/routing?coords=${encodeURIComponent(coordsList)}&profile=${encodeURIComponent(profile)}`);
+    };
 
     return (
         <div className="flex flex-col h-full">
@@ -253,6 +259,15 @@ export const RouteDetailsView: React.FC<RouteDetailsViewProps> = ({ route, insta
                             >
                                 <MapIcon size={16} />
                                 <span>Chỉ đường</span>
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => router.push('/dispatch')}
+                                className="inline-flex items-center gap-2 bg-white/10 hover:bg-white/20 text-white px-3 py-1.5 rounded-md text-sm font-medium transition-colors"
+                                title="Chuyển sang trang điều phối"
+                            >
+                                <Truck size={16} />
+                                <span>Dispatch</span>
                             </button>
                         </div>
                     </div>

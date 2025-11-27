@@ -131,16 +131,28 @@ solution::Solution AGESSolver::run(
                 abs.increment_single_request(req_id);
 
                 // Thử k-ejection
-                eject_and_insert(sol, u, stack, rng, abs);
+                if (params_.use_k_ejection) {
+                    eject_and_insert(sol, u, stack, rng, abs);
+                } else {
+                    // Nếu không dùng k-ejection, request vẫn nằm trong stack (đã pop ra nhưng chưa insert lại được)
+                    // eject_and_insert sẽ push lại vào stack nếu thất bại.
+                    // Vì ta không gọi nó, ta phải tự push lại.
+                    stack.push_back(u);
+                }
 
                 // Nhiễu loạn
-                std::uniform_int_distribution<size_t> pert_dist(
-                    params_.min_perturbation_moves,
-                    params_.max_perturbation_moves);
-                size_t num_perturbations = pert_dist(rng);
+                size_t performed_perturbations = 0;
+                size_t num_perturbations = 0;
+                
+                if (params_.use_perturbation) {
+                    std::uniform_int_distribution<size_t> pert_dist(
+                        params_.min_perturbation_moves,
+                        params_.max_perturbation_moves);
+                    num_perturbations = pert_dist(rng);
 
-                size_t performed_perturbations = perform_perturbation(
-                    sol, rng, num_perturbations);
+                    performed_perturbations = perform_perturbation(
+                        sol, rng, num_perturbations);
+                }
 
                 size_t counted = params_.count_successful_perturbations_only
                                      ? std::max(performed_perturbations, (size_t)1)
