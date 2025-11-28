@@ -176,13 +176,13 @@ export const RouteDetailsView: React.FC<RouteDetailsViewProps> = ({ route, insta
         <div className="flex flex-col h-full">
             <div className="flex flex-1 overflow-hidden">
                 <div className="w-80 bg-white shadow-xl border-r border-gray-200 flex flex-col overflow-hidden">
-                    <div className="bg-blue-600 text-white p-4 flex items-center justify-between">
+                    <div className="bg-white border-b border-gray-100 p-4 flex items-center justify-between">
                         <div className="flex items-center space-x-3">
-                            <h2 className="text-lg font-semibold">Route #{route?.id ?? 'N/A'}</h2>
+                            <h2 className="text-lg font-bold text-gray-800">Route #{route?.id ?? 'N/A'}</h2>
                         </div>
                         <div>
-                            <label className="inline-flex items-center cursor-pointer select-none">
-                                <span className="ml-3 text-sm p-2">Đường thực tế</span>
+                            <label className="inline-flex items-center cursor-pointer select-none group">
+                                <span className="mr-3 text-xs font-medium text-gray-500 group-hover:text-gray-700 transition-colors">Real Routing</span>
                                 <input
                                     type="checkbox"
                                     className="sr-only"
@@ -190,43 +190,74 @@ export const RouteDetailsView: React.FC<RouteDetailsViewProps> = ({ route, insta
                                     onChange={() => onToggleRealRouting()}
                                     aria-label="Toggle real routing"
                                 />
-                                <span className={`w-10 h-6 flex items-center rounded-full p-1 transition-colors ${useRealRouting ? 'bg-blue-800' : 'bg-gray-300'}`}>
-                                    <span className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform ${useRealRouting ? 'translate-x-4' : 'translate-x-0'}`} />
+                                <span className={`w-9 h-5 flex items-center rounded-full p-1 transition-colors duration-300 ${useRealRouting ? 'bg-blue-600' : 'bg-gray-200'}`}>
+                                    <span className={`bg-white w-3.5 h-3.5 rounded-full shadow-sm transform transition-transform duration-300 ${useRealRouting ? 'translate-x-4' : 'translate-x-0'}`} />
                                 </span>
                             </label>
                         </div>
                     </div>
-                    <div className="p-4 border-b border-gray-200 space-y-2 text-sm">
+                    <div className="p-4 border-b border-gray-100 bg-white">
                         {route && metrics ? (
-                            <>
-                                <div className="flex justify-between"><span className="text-gray-600">Số điểm:</span><span className="font-medium">{metrics.nodes}</span></div>
-                                <div className="flex justify-between"><span className="text-gray-600">Khoảng cách:</span><span className="font-medium">{metrics.distance.toFixed(2)} km</span></div>
-                                <div className="flex justify-between"><span className="text-gray-600">Thời gian:</span><span className="font-medium">{metrics.time.toFixed(1)} h</span></div>
-                                <div className="flex justify-between"><span className="text-gray-600">Chi phí:</span><span className="font-medium">{route.cost ?? 'N/A'}</span></div>
-                            </>
+                            <div className="grid grid-cols-2 gap-3">
+                                <div className="bg-gray-50 p-2.5 rounded-lg border border-gray-100">
+                                    <div className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-0.5">Points</div>
+                                    <div className="text-sm font-bold text-gray-800">{metrics.nodes}</div>
+                                </div>
+                                <div className="bg-gray-50 p-2.5 rounded-lg border border-gray-100">
+                                    <div className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-0.5">Distance</div>
+                                    <div className="text-sm font-bold text-gray-800">{metrics.distance.toFixed(1)} km</div>
+                                </div>
+                                <div className="bg-gray-50 p-2.5 rounded-lg border border-gray-100">
+                                    <div className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-0.5">Time</div>
+                                    <div className="text-sm font-bold text-gray-800">{metrics.time.toFixed(1)} h</div>
+                                </div>
+                                <div className="bg-gray-50 p-2.5 rounded-lg border border-gray-100">
+                                    <div className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-0.5">Cost</div>
+                                    <div className="text-sm font-bold text-gray-800">{route.cost ?? '-'}</div>
+                                </div>
+                            </div>
                         ) : (
-                            <div className="text-gray-500">Không có dữ liệu.</div>
+                            <div className="text-gray-400 text-sm text-center py-2">No data available</div>
                         )}
                     </div>
-                    <div className="flex-1 overflow-y-auto p-4">
-                        <h3 className="text-sm font-semibold text-gray-700 mb-3">Trình tự các điểm</h3>
-                        <div className="space-y-2">
+                    <div className="flex-1 overflow-y-auto p-4 bg-gray-50/50">
+                        <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 px-1">Sequence</h3>
+                        <div className="space-y-3">
                             {route?.sequence && instance?.nodes ? route.sequence.map((nodeId: number, idx: number) => {
                                 const node = instance.nodes.find((n: any) => n.id === nodeId); if (!node) return null;
-                                let nodeType = 'Delivery'; if (node.is_depot) nodeType = 'Depot'; else if (node.is_pickup) nodeType = 'Pickup';
+                                let nodeType = 'Delivery';
+                                let typeColor = 'text-orange-600 bg-orange-50';
+                                if (node.is_depot) { nodeType = 'Depot'; typeColor = 'text-gray-600 bg-gray-100'; }
+                                else if (node.is_pickup) { nodeType = 'Pickup'; typeColor = 'text-blue-600 bg-blue-50'; }
+
                                 return (
-                                    <div key={idx} className="flex items-center space-x-3 p-2 bg-gray-50 rounded border-l-4">
-                                        <span className="bg-gray-200 text-gray-700 rounded-full w-8 h-8 flex items-center justify-center text-sm font-semibold">{idx + 1}</span>
-                                        <div className="flex-1">
-                                            <div className="font-medium text-sm">{nodeType} {nodeId}</div>
-                                            <div className="text-xs text-gray-500">Demand: {node.demand || 0}, TW: [{node.time_window?.[0] || 0}, {node.time_window?.[1] || 0}]</div>
-                                            <div className="text-xs text-gray-400">Coords: [{node.coords[0].toFixed(4)}, {node.coords[1].toFixed(4)}]</div>
+                                    <div key={idx} className="flex items-center space-x-3 p-2.5 bg-white rounded-xl border border-gray-100 shadow-[0_2px_8px_rgba(0,0,0,0.04)] hover:shadow-md transition-shadow">
+                                        <div className="flex-shrink-0 w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center text-[10px] font-bold text-gray-500">
+                                            {idx + 1}
+                                        </div>
+                                        <div className="flex-1 min-w-0 overflow-hidden">
+                                            {/* Line 1: Info mixed */}
+                                            <div className="flex items-center gap-2 text-[11px] leading-tight mb-0.5">
+                                                <span className="font-bold text-gray-800 whitespace-nowrap">Node {nodeId}</span>
+                                                <span className={`px-1 rounded text-[10px] font-medium whitespace-nowrap ${typeColor}`}>
+                                                    {nodeType}
+                                                </span>
+                                                <span className="text-gray-300">|</span>
+                                                <span className="text-gray-500 whitespace-nowrap">D:{node.demand}</span>
+                                                <span className="text-gray-500 whitespace-nowrap">TW:[{node.time_window?.[0]}-{node.time_window?.[1]}]</span>
+                                            </div>
+
+                                            {/* Line 2: Coords */}
+                                            <div className="text-[10px] font-mono text-gray-400 select-all truncate leading-tight">
+                                                {node.coords[0]}, {node.coords[1]}
+                                            </div>
                                         </div>
                                     </div>
                                 );
-                            }) : <div className="text-xs text-gray-500">Không có sequence.</div>}
+                            }) : <div className="text-xs text-gray-500 text-center py-4">No sequence data</div>}
                         </div>
                     </div>
+
                 </div>
                 <div className="flex-1 bg-gray-50">
                     <MapComponent
@@ -243,225 +274,197 @@ export const RouteDetailsView: React.FC<RouteDetailsViewProps> = ({ route, insta
                         externalApiRef={externalApiRef}
                     />
                 </div>
-                <div className="w-80 bg-white border-l border-gray-200 flex flex-col overflow-hidden">
-                    <div className="bg-purple-600 text-white p-4">
-                        <div className="flex items-center justify-between">
-                            <div className="flex items-center space-x-3">
-                                <i className="fas fa-clock text-xl" />
-                                <h3 className="text-lg font-semibold">Timeline Route</h3>
+                <div className="w-80 bg-white border-l border-gray-200 flex flex-col overflow-hidden z-10">
+                    <div className="bg-white border-b border-gray-100 p-4">
+                        <div className="flex items-center justify-between mb-4">
+                            <h3 className="text-base font-bold text-gray-800 flex items-center gap-2">
+                                <i className="far fa-clock text-blue-600" />
+                                Timeline
+                            </h3>
+                            <div className="flex bg-gray-100/80 p-1 rounded-full border border-gray-200/50 backdrop-blur-sm">
+                                <button
+                                    type="button"
+                                    onClick={handleNavigateRouting}
+                                    disabled={!route?.sequence?.length}
+                                    className="flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-medium transition-all duration-200 text-gray-600 hover:text-blue-600 hover:bg-white hover:shadow-sm disabled:opacity-30"
+                                    title="Chỉ đường"
+                                >
+                                    <span>Chỉ đường</span>
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => router.push('/dispatch')}
+                                    className="flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-medium transition-all duration-200 text-gray-600 hover:text-blue-600 hover:bg-white hover:shadow-sm"
+                                    title="Dispatch"
+                                >
+                                    <span>Dispatch</span>
+                                </button>
                             </div>
-                            <button
-                                type="button"
-                                onClick={handleNavigateRouting}
-                                disabled={!route?.sequence?.length}
-                                className="inline-flex items-center gap-2 bg-white/10 hover:bg-white/20 disabled:opacity-50 disabled:cursor-not-allowed text-white px-3 py-1.5 rounded-md text-sm font-medium transition-colors"
-                                title="Chuyển sang trang định tuyến và chỉ đường"
-                            >
-                                <MapIcon size={16} />
-                                <span>Chỉ đường</span>
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => router.push('/dispatch')}
-                                className="inline-flex items-center gap-2 bg-white/10 hover:bg-white/20 text-white px-3 py-1.5 rounded-md text-sm font-medium transition-colors"
-                                title="Chuyển sang trang điều phối"
-                            >
-                                <Truck size={16} />
-                                <span>Dispatch</span>
-                            </button>
                         </div>
-                    </div>
-                    <div className="flex-1 overflow-y-auto">
-                        {timelineData ? (
-                            <div className="space-y-4 p-4">
-                                {/* Summary */}
-                                <div className="bg-white border border-gray-200 rounded-lg p-4 mb-2">
-                                    <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center">
-                                        <i className="far fa-chart-bar mr-2 text-blue-600" />
-                                        Timeline Summary
-                                    </h3>
-                                    <div className="grid grid-cols-2 gap-3 text-xs">
-                                        <div className="bg-blue-50 p-2 rounded-lg border-l-4 border-blue-400">
-                                            <div className="flex items-center space-x-2">
-                                                <i className="far fa-clock text-blue-600" />
-                                                <div className="text-blue-600 font-bold text-base">{timelineData.totalDuration.toFixed(1)}h</div>
-                                            </div>
-                                            <div className="text-gray-600 font-medium mt-1">Total Duration</div>
-                                        </div>
-                                        <div className="bg-green-50 p-2 rounded-lg border-l-4 border-green-400">
-                                            <div className="flex items-center space-x-2">
-                                                <i className="fas fa-route text-green-600" />
-                                                <div className="text-green-600 font-bold text-base">{timelineData.totalDistance.toFixed(1)}km</div>
-                                            </div>
-                                            <div className="text-gray-600 font-medium mt-1">Total Distance</div>
-                                        </div>
-                                    </div>
+
+                        {/* Clean Summary */}
+                        {timelineData && (
+                            <div className="flex items-center justify-between bg-gray-50 rounded-lg p-3">
+                                <div className="text-center flex-1 border-r border-gray-200">
+                                    <div className="text-lg font-bold text-gray-800">{timelineData.totalDuration.toFixed(1)}h</div>
+                                    <div className="text-[10px] uppercase tracking-wider text-gray-500 font-medium">Duration</div>
                                 </div>
-                                {/* Events */}
-                                <h3 className="text-sm font-semibold text-gray-700 mb-2 flex items-center">
-                                    <i className="far fa-clock mr-2 text-blue-600" />
-                                    Route Timeline
-                                </h3>
-                                <div className="relative">
-                                    <div className="absolute left-6 top-0 bottom-0 w-0.5 bg-gray-300" />
-                                    {timelineData.events.map((event, index) => {
-                                        const node = filteredInstance?.nodes?.find((n: any) => n.id === event.nodeId);
-                                        if (!node) return null;
-                                        // Node style classification
-                                        let markerColor = 'bg-gray-500';
-                                        let nodeIcon = 'fas fa-home';
-                                        let nodeLabel = 'Depot';
-                                        let iconBg = 'bg-gray-100';
-                                        let borderColor = 'border-gray-400';
-                                        let hoverBg = 'hover:bg-gray-100';
-                                        let hoverTextColor = 'hover:text-gray-900';
-                                        let hoverIconBg = 'hover:bg-gray-300';
-                                        let activeBg = 'bg-gray-200';
-                                        let activeTextColor = 'text-gray-900';
-                                        let activeIconBg = 'bg-gray-400';
-                                        if (node.is_pickup) {
-                                            markerColor = 'bg-blue-500'; nodeIcon = 'fas fa-arrow-up'; nodeLabel = 'Pickup'; iconBg = 'bg-blue-100'; borderColor = 'border-blue-400'; hoverBg = 'hover:bg-blue-100'; hoverTextColor = 'hover:text-blue-900'; hoverIconBg = 'hover:bg-blue-300'; activeBg = 'bg-blue-200'; activeTextColor = 'text-blue-900'; activeIconBg = 'bg-blue-400';
-                                        } else if (!node.is_depot) {
-                                            markerColor = 'bg-red-500'; nodeIcon = 'fas fa-arrow-down'; nodeLabel = 'Delivery'; iconBg = 'bg-red-100'; borderColor = 'border-red-400'; hoverBg = 'hover:bg-red-100'; hoverTextColor = 'hover:text-red-900'; hoverIconBg = 'hover:bg-red-300'; activeBg = 'bg-red-200'; activeTextColor = 'text-red-900'; activeIconBg = 'bg-red-400';
-                                        }
-                                        const twStart = event.timeWindow[0];
-                                        const twEnd = event.timeWindow[1];
-                                        const arrivalTime = event.arrivalTime;
-                                        const twDuration = twEnd - twStart;
-                                        const arrivalProgress = twDuration > 0 ? Math.max(0, Math.min(100, ((arrivalTime - twStart) / twDuration) * 100)) : 0;
-                                        let arrivalStatus: 'early' | 'on-time' | 'late' = 'on-time';
-                                        let statusColor = 'text-green-600';
-                                        let statusIcon = 'far fa-check-circle';
-                                        if (arrivalTime < twStart) { arrivalStatus = 'early'; statusColor = 'text-orange-600'; statusIcon = 'far fa-clock'; }
-                                        else if (arrivalTime > twEnd) { arrivalStatus = 'late'; statusColor = 'text-red-600'; statusIcon = 'fas fa-exclamation-triangle'; }
-                                        const hasWaitTime = event.waitTime > 0;
-                                        const isActive = clickedCardIndex === index;
-                                        const cardBgClass = isActive ? activeBg : 'bg-white';
-                                        const cardTextClass = isActive ? activeTextColor : '';
-                                        const cardIconBgClass = isActive ? activeIconBg : iconBg;
-                                        const serviceDuration = (event.serviceEndTime - event.serviceStartTime);
-                                        return (
-                                            <div key={index} className="relative flex items-start space-x-4 pb-8">
-                                                <div className={`w-12 h-12 ${markerColor} rounded-full flex items-center justify-center text-white text-sm font-bold z-10 shadow-lg`}>{index + 1}</div>
-                                                <div className="flex-1 space-y-3">
-                                                    {index > 0 && (
-                                                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                                                            <div className="flex items-center justify-between">
-                                                                <div className="flex items-center space-x-2">
-                                                                    <i className="fas fa-route text-blue-600" />
-                                                                    <div className="font-semibold text-blue-800 text-xs">
-                                                                        <div>Travel:</div>
-                                                                        <div className="flex items-center space-x-1">
-                                                                            <span>{timelineData.events[index - 1].nodeId}</span>
-                                                                            <i className="fas fa-arrow-right text-blue-800" />
-                                                                            <span>{timelineData.events[index].nodeId}</span>
-                                                                        </div>
-                                                                    </div>
-                                                                </div>
-                                                                <div className="flex space-x-3 text-[10px]">
-                                                                    <div className="text-center">
-                                                                        <div className="text-blue-600 font-bold">{event.distance.toFixed(1)}km</div>
-                                                                        <div className="text-[10px] text-gray-600">Distance</div>
-                                                                    </div>
-                                                                    <div className="text-center">
-                                                                        <div className="text-blue-600 font-bold">{event.travelTime.toFixed(1)}h</div>
-                                                                        <div className="text-[10px] text-gray-600">Time</div>
-                                                                    </div>
-                                                                </div>
+                                <div className="text-center flex-1">
+                                    <div className="text-lg font-bold text-gray-800">{timelineData.totalDistance.toFixed(1)}km</div>
+                                    <div className="text-[10px] uppercase tracking-wider text-gray-500 font-medium">Distance</div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="flex-1 overflow-y-auto bg-gray-50/50 p-4">
+                        {timelineData ? (
+                            <div className="relative pl-4">
+                                {/* Timeline Line */}
+                                <div className="absolute left-[35px] top-4 bottom-0 w-px bg-gray-200" />
+
+                                {timelineData.events.map((event, index) => {
+                                    const node = filteredInstance?.nodes?.find((n: any) => n.id === event.nodeId);
+                                    if (!node) return null;
+
+                                    // Node Styling
+                                    let nodeColor = 'bg-gray-800';
+                                    let ringColor = 'ring-gray-100';
+                                    let typeLabel = 'Depot';
+
+                                    if (node.is_pickup) {
+                                        nodeColor = 'bg-blue-600';
+                                        ringColor = 'ring-blue-50';
+                                        typeLabel = 'Pickup';
+                                    } else if (!node.is_depot) {
+                                        nodeColor = 'bg-orange-500';
+                                        ringColor = 'ring-orange-50';
+                                        typeLabel = 'Delivery';
+                                    }
+
+                                    const isActive = clickedCardIndex === index;
+                                    const arrivalTime = event.arrivalTime;
+                                    const twStart = event.timeWindow[0];
+                                    const twEnd = event.timeWindow[1];
+
+                                    // Status
+                                    let isLate = arrivalTime > twEnd;
+                                    let isEarly = arrivalTime < twStart;
+
+                                    return (
+                                        <div key={index} className="relative mb-6 last:mb-0">
+                                            {/* Node Dot */}
+                                            <div className={`absolute left-0 top-3 w-10 h-10 rounded-full border-4 border-white shadow-sm z-10 ${nodeColor} flex items-center justify-center text-sm text-white font-bold`}>
+                                                {index + 1}
+                                            </div>
+
+                                            {/* Travel Info (between nodes) */}
+                                            {index > 0 && (
+                                                <div className="ml-14 mb-3 flex items-center gap-3 text-[10px] text-gray-400">
+                                                    <span className="flex items-center gap-1 bg-white px-2 py-0.5 rounded-full border border-gray-100 shadow-sm">
+                                                        <i className="fas fa-road" />
+                                                        {event.distance.toFixed(1)}km
+                                                    </span>
+                                                    <span className="flex items-center gap-1 bg-white px-2 py-0.5 rounded-full border border-gray-100 shadow-sm">
+                                                        <i className="far fa-clock" />
+                                                        {event.travelTime.toFixed(1)}h
+                                                    </span>
+                                                </div>
+                                            )}
+
+                                            {/* Wait Time Block - Separated */}
+                                            {event.waitTime > 0 && (
+                                                <div className="ml-14 mb-3 bg-orange-50 border-l-4 border-orange-400 rounded-r-lg p-2 shadow-sm">
+                                                    <div className="flex items-center justify-between">
+                                                        <div className="flex items-center space-x-2">
+                                                            <i className="far fa-pause-circle text-orange-600" />
+                                                            <div>
+                                                                <div className="font-bold text-orange-800 text-[11px]">Wait Required</div>
+                                                                <div className="text-[10px] text-orange-600">Wait {event.waitTime.toFixed(1)}h for window</div>
                                                             </div>
                                                         </div>
-                                                    )}
-                                                    {hasWaitTime && (
-                                                        <div className="bg-orange-50 border-l-4 border-orange-400 rounded-lg p-3">
-                                                            <div className="flex items-center justify-between">
-                                                                <div className="flex items-center space-x-2">
-                                                                    <i className="far fa-pause-circle text-orange-600" />
-                                                                    <div>
-                                                                        <div className="font-semibold text-orange-800 text-xs">Wait Required</div>
-                                                                        <div className="text-[10px] text-orange-600">Need to wait {event.waitTime.toFixed(1)}h</div>
-                                                                    </div>
-                                                                </div>
-                                                                <div className="bg-orange-200 px-2 py-1 rounded text-orange-800 font-bold text-[10px]">+{event.waitTime.toFixed(1)}h</div>
+                                                        <div className="bg-orange-200 px-1.5 py-0.5 rounded text-orange-800 font-bold text-[10px]">+{event.waitTime.toFixed(1)}h</div>
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {/* Card */}
+                                            <div
+                                                className={`ml-14 bg-white rounded-xl border transition-all duration-200 cursor-pointer
+                                                    ${isActive
+                                                        ? 'border-blue-500 shadow-md ring-4 ring-blue-50/50'
+                                                        : 'border-gray-100 shadow-sm hover:border-blue-200 hover:shadow-md'
+                                                    }
+                                                `}
+                                                onClick={() => {
+                                                    if (index === 0) {
+                                                        setClickedCardIndex(0);
+                                                        externalApiRef.current?.clearSegmentHighlight?.();
+                                                        externalApiRef.current?.focusNode?.(event.nodeId);
+                                                        return;
+                                                    }
+                                                    setClickedCardIndex(index);
+                                                    const prevNodeId = timelineData.events[index - 1].nodeId;
+                                                    externalApiRef.current?.highlightSegment(prevNodeId, event.nodeId, selectedRoute || route);
+                                                }}
+                                            >
+                                                <div className="p-3">
+                                                    <div className="flex justify-between items-start mb-2">
+                                                        <div>
+                                                            <div className="flex items-center gap-2">
+                                                                <span className="font-bold text-gray-800 text-sm">Node {event.nodeId}</span>
+                                                                <span className={`text-[10px] px-1.5 py-0.5 rounded-md font-medium ${typeLabel === 'Pickup' ? 'bg-blue-50 text-blue-700' :
+                                                                    typeLabel === 'Delivery' ? 'bg-orange-50 text-orange-700' :
+                                                                        'bg-gray-100 text-gray-600'
+                                                                    }`}>
+                                                                    {typeLabel}
+                                                                </span>
+                                                            </div>
+                                                            <div className="text-[11px] text-gray-500 mt-0.5">
+                                                                {twStart}h - {twEnd}h
                                                             </div>
                                                         </div>
-                                                    )}
-                                                    <div
-                                                        className={`rounded-lg shadow-sm border-l-4 ${borderColor} p-4 transition-all duration-300 cursor-pointer ${(index === 0) ? `${cardBgClass} ${hoverBg} hover:shadow-lg` : (isActive ? `${activeBg} ${activeTextColor}` : `${cardBgClass} ${hoverBg} hover:shadow-lg ${hoverTextColor}`)}`}
-                                                        onClick={() => {
-                                                            if (index === 0) {
-                                                                // Focus depot only and clear any highlighted segment
-                                                                setClickedCardIndex(0);
-                                                                externalApiRef.current?.clearSegmentHighlight?.();
-                                                                externalApiRef.current?.focusNode?.(event.nodeId);
-                                                                return;
-                                                            }
-                                                            setClickedCardIndex(index);
-                                                            const prevNodeId = timelineData.events[index - 1].nodeId;
-                                                            externalApiRef.current?.highlightSegment(prevNodeId, event.nodeId, selectedRoute || route);
-                                                        }}
-                                                        title={index === 0 ? 'Focus depot' : `Click để highlight đoạn ${timelineData.events[index - 1].nodeId} → ${event.nodeId}`}
-                                                    >
-                                                        <div className="flex items-center justify-between mb-3">
-                                                            <div className="flex items-center space-x-3">
-                                                                <div className={`w-10 h-10 ${!isActive ? cardIconBgClass : ''} ${!isActive ? hoverIconBg : ''} rounded-full flex items-center justify-center transition-colors duration-300`}>
-                                                                    <i className={`${nodeIcon} text-base`} />
-                                                                </div>
-                                                                <div>
-                                                                    <div className="font-bold text-gray-800 text-sm">Node {event.nodeId}</div>
-                                                                    <div className="text-[11px] text-gray-600">{nodeLabel}</div>
-                                                                </div>
-                                                            </div>
-                                                            <div className="flex items-center space-x-2">
-                                                                <i className={`${statusIcon} ${statusColor} text-sm`} />
-                                                                {index > 0 && <i className="fas fa-map-marked-alt text-blue-500 text-sm" title="Click để hiển thị đoạn" />}
+                                                        <div className={`text-right ${isLate ? 'text-red-600' : isEarly ? 'text-orange-500' : 'text-green-600'}`}>
+                                                            <div className="font-bold text-xs">{arrivalTime.toFixed(2)}h</div>
+                                                            <div className="text-[10px] font-medium">
+                                                                {isLate ? 'Late' : isEarly ? 'Early' : 'On Time'}
                                                             </div>
                                                         </div>
-                                                        <div className="mb-3">
-                                                            <div className="flex justify-between text-[10px] text-gray-600 mb-1">
-                                                                <div>
-                                                                    <div>Window:</div>
-                                                                    <div>{twStart}h - {twEnd}h</div>
-                                                                </div>
-                                                                <div className={statusColor}>
-                                                                    <div>Arrive:</div>
-                                                                    <div>{arrivalTime.toFixed(1)}h ({arrivalStatus})</div>
-                                                                </div>
-                                                            </div>
-                                                            <div className="w-full bg-gray-200 rounded-full h-2">
-                                                                <div className={`h-2 rounded-full ${arrivalStatus === 'early' ? 'bg-orange-400' : arrivalStatus === 'late' ? 'bg-red-400' : 'bg-green-400'}`} style={{ width: `${arrivalProgress}%` }} />
+                                                    </div>
+
+                                                    {/* Metrics Grid */}
+                                                    <div className="grid grid-cols-3 gap-2 pt-2 border-t border-gray-50">
+                                                        <div className="text-center">
+                                                            <div className="text-[10px] text-gray-400 uppercase">Service</div>
+                                                            <div className="text-xs font-semibold text-gray-700">{(event.serviceEndTime - event.serviceStartTime).toFixed(1)}h</div>
+                                                        </div>
+                                                        <div className="text-center border-l border-gray-50">
+                                                            <div className="text-[10px] text-gray-400 uppercase">Demand</div>
+                                                            <div className={`text-xs font-semibold ${event.demand > 0 ? 'text-blue-600' : event.demand < 0 ? 'text-orange-600' : 'text-gray-700'}`}>
+                                                                {event.demand > 0 ? '+' : ''}{event.demand}
                                                             </div>
                                                         </div>
-                                                        <div className="grid grid-cols-3 gap-2 mb-3">
-                                                            <div className="bg-blue-50 p-1 rounded text-center">
-                                                                <div className="text-blue-600 font-bold text-[11px]">{serviceDuration.toFixed(1)}h</div>
-                                                                <div className="text-[10px] text-gray-600">Service</div>
-                                                            </div>
-                                                            <div className={`p-1 rounded text-center ${event.demand > 0 ? 'bg-green-50' : event.demand < 0 ? 'bg-red-50' : 'bg-gray-50'}`}>
-                                                                <div className={`font-bold text-[11px] ${event.demand > 0 ? 'text-green-600' : event.demand < 0 ? 'text-red-600' : 'text-gray-600'}`}>{event.demand > 0 ? '+' : ''}{event.demand}</div>
-                                                                <div className="text-[10px] text-gray-600">Demand</div>
-                                                            </div>
-                                                            <div className="bg-purple-50 p-1 rounded text-center">
-                                                                <div className="text-purple-600 font-bold text-[11px]">{event.load}</div>
-                                                                <div className="text-[10px] text-gray-600">Load</div>
-                                                            </div>
-                                                        </div>
-                                                        <div className="pt-2 border-t border-gray-100">
-                                                            <div className="text-[10px] text-gray-600 text-center">Service: {event.serviceStartTime.toFixed(1)}h - {event.serviceEndTime.toFixed(1)}h</div>
+                                                        <div className="text-center border-l border-gray-50">
+                                                            <div className="text-[10px] text-gray-400 uppercase">Load</div>
+                                                            <div className="text-xs font-semibold text-gray-700">{event.load}</div>
                                                         </div>
                                                     </div>
                                                 </div>
                                             </div>
-                                        );
-                                    })}
-                                </div>
+                                        </div>
+                                    );
+                                })}
                             </div>
                         ) : (
-                            <div className="p-4 text-gray-500 text-xs">Không có dữ liệu timeline.</div>
+                            <div className="flex flex-col items-center justify-center h-full text-gray-400">
+                                <i className="far fa-calendar-times text-3xl mb-2" />
+                                <span className="text-sm">No timeline data</span>
+                            </div>
                         )}
                     </div>
                 </div>
-            </div>
-        </div>
+            </div >
+        </div >
     );
 };
 
