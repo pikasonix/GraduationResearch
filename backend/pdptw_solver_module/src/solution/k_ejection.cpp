@@ -107,12 +107,6 @@ std::optional<KEjectionInsertion<1>> KEjectionOps::find_best_insertion_k_ejectio
                 double new_route_cost = temp_sol.fw_data()[sol.instance().vn_id_of(r_id) + 1].data.distance + candidate.cost_increase;
                 double delta = new_route_cost - original_cost;
                 
-                // Penalize ejection based on absence count (higher absence -> lower penalty -> more likely to eject)
-                // We want to eject requests that are "difficult" (high absence)
-                // So we subtract a bonus or add a reduced penalty?
-                // Let's just use pure cost for now, as absence is usually used in removal selection.
-                // Or we can use it as a tie breaker.
-                
                 if (delta < best_cost) {
                     best_cost = delta;
                     best_result = KEjectionInsertion<1>{

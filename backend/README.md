@@ -1,304 +1,54 @@
-# Backend Server - PDPTW Solver API
-
-Backend API server với **Job Queue System** để giải bài toán Pickup and Delivery Problem with Time Windows (PDPTW).
-
-## ✨ Đặc điểm
-
-- 🔄 **Job Queue**: Xử lý tuần tự, tránh quá tải
-- 📊 **Real-time Status**: Theo dõi tiến trình job
-- ⏱️ **Timeout Protection**: Tự động hủy job quá thời gian
-- 🧹 **Auto Cleanup**: Dọn dẹp job cũ tự động
-- 🚀 **Graceful Shutdown**: Đóng server an toàn
-- 📝 **RESTful API**: API rõ ràng, dễ sử dụng
-
-## 🏗️ Kiến trúc
-
-```
-Client → Express Server → Job Queue → Solver Worker → pdptw_solver.exe
-          ↓                  ↓
-      API Routes         Sequential
-                        Processing
-```
-
-**Lợi ích:**
-- Chỉ chạy 1 solver tại một thời điểm → Tránh treo server
-- Request được xếp hàng tự động → Không mất request
-- Client nhận jobId ngay lập tức → Không phải đợi
-- Poll status để biết tiến độ → Trải nghiệm tốt hơn
-
-## 📦 Cài đặt
-
-### 1. Install dependencies
-
-```bash
-npm install
-```
-
-### 2. Setup solver
-
-Đặt `pdptw_solver.exe` vào thư mục `bin/`:
-
-```
-backend/
-├── bin/
-│   └── pdptw_solver.exe  👈 Đặt file exe ở đây
-├── src/
-└── server.js
-```
-
-### 3. Configure
-
-Copy `.env.example` thành `.env`:
-
-```bash
-copy .env.example .env
-```
-
-## 🚀 Chạy server
-
-```bash
-npm start
-```
-
-Server sẽ chạy tại `http://localhost:3001`
-
-## 📡 API Endpoints
-
-### Submit Job
-
-```http
-POST /api/jobs/submit
-Content-Type: application/json
-
-{
-  "instance": "string - nội dung file instance",
-  "params": {
-    "max_iterations": 100000,
-    "time_limit": 300,
-    ...
-  }
-}
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "jobId": "uuid",
-  "message": "Job submitted successfully"
-}
-```
-
-### Get Job Status
-
-```http
-GET /api/jobs/:jobId
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "job": {
-    "id": "uuid",
-    "status": "processing",
-    "progress": 45,
-    "queuePosition": 0,
-    "result": null
-  }
-}
-```
-
-### Other Endpoints
-
-- `GET /api/jobs` - List all jobs
-- `GET /api/jobs/stats` - Queue statistics
-- `DELETE /api/jobs/:jobId` - Delete job
-- `GET /health` - Health check
-- `POST /api/solve` - Legacy endpoint (for backward compatibility)
-
-📖 **Chi tiết API**: Xem [API.md](./API.md)
-
-## 🧪 Test
-
-### Test với script có sẵn:
-
-```bash
-node test_queue.js
-```
-
-### Test thủ công:
-
-```bash
-# 1. Submit job
-curl -X POST http://localhost:3001/api/jobs/submit \
-  -H "Content-Type: application/json" \
-  -d '{"instance":"...","params":{...}}'
-
-# 2. Check status
-curl http://localhost:3001/api/jobs/{jobId}
-
-# 3. View queue stats
-curl http://localhost:3001/api/jobs/stats
-```
-
-## ⚙️ Cấu hình
-
-### Environment Variables
-
-| Variable | Default | Mô tả |
-|----------|---------|-------|
-| `PORT` | 3001 | Port server |
-| `HOST` | 0.0.0.0 | Host address |
-| `MAX_QUEUE_SIZE` | 100 | Số job tối đa trong queue |
-| `JOB_TIMEOUT` | 3600000 | Timeout mỗi job (1 hour) |
-| `CLEANUP_INTERVAL` | 300000 | Tần suất dọn dẹp (5 mins) |
-| `MAX_JOB_AGE` | 86400000 | Thời gian lưu job (24 hours) |
-
-### Solver Parameters
-
-```json
-{
-  "max_iterations": 100000,
-  "max_non_improving": 20000,
-  "time_limit": 0,
-  "min_destroy": 0.10,
-  "max_destroy": 0.40,
-  "seed": 42,
-  "acceptance": "rtr",
-  "log_level": "info",
-  "max_vehicles": 0,
-  "format": "auto"
-}
-```
-
-## 📂 Cấu trúc Project
-
-```
-backend/
-├── bin/
-│   └── pdptw_solver.exe       # Solver executable
-├── src/
-│   ├── queue/
-│   │   └── JobQueue.js        # Job queue manager
-│   ├── workers/
-│   │   ├── SolverWorker.js    # Solver worker
-│   │   └── pdptwSolverWorker.ts  # (TypeScript version)
-│   └── routes/
-│       └── jobRoutes.js       # API routes
-├── server.js                  # Main server
-├── test_queue.js              # Test script
-├── package.json
-├── .env
-└── README.md
-```
-
-## 🔄 Flow hoạt động
-
-```
-1. Client POST /api/jobs/submit
-   ↓
-2. Server tạo job, thêm vào queue
-   ↓
-3. Server trả về jobId ngay lập tức
-   ↓
-4. Queue xử lý job tuần tự (1 tại 1 thời điểm)
-   ↓
-5. Client poll GET /api/jobs/:jobId (mỗi 2-5s)
-   ↓
-6. Job hoàn thành, client lấy kết quả
-```
-
-## 🎯 Ví dụ sử dụng
-
-### JavaScript/Node.js
-
-```javascript
-// Submit job
-const response = await fetch('http://localhost:3001/api/jobs/submit', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({ instance, params })
-});
-const { jobId } = await response.json();
-
-// Poll status
-const poll = setInterval(async () => {
-  const res = await fetch(`http://localhost:3001/api/jobs/${jobId}`);
-  const { job } = await res.json();
-  
-  if (job.status === 'completed') {
-    clearInterval(poll);
-    console.log('Solution:', job.result.solution);
-  }
-}, 2000);
-```
-
-### Python
-
-```python
-import requests
-import time
-
-# Submit job
-response = requests.post('http://localhost:3001/api/jobs/submit', 
-  json={'instance': instance, 'params': params})
-job_id = response.json()['jobId']
-
-# Poll status
-while True:
-    response = requests.get(f'http://localhost:3001/api/jobs/{job_id}')
-    job = response.json()['job']
-    
-    if job['status'] == 'completed':
-        print(f"Solution: {job['result']['solution']}")
-        break
-    
-    time.sleep(2)
-```
-
-## 🐛 Troubleshooting
-
-### Queue đầy
-```
-Error: Queue is full. Please try again later.
-```
-→ Tăng `MAX_QUEUE_SIZE` hoặc đợi jobs cũ hoàn thành
-
-### Job timeout
-```
-Error: Job timeout exceeded
-```
-→ Tăng `JOB_TIMEOUT` hoặc giảm `time_limit` trong params
-
-### Solver not found
-```
-✗ Không tìm thấy pdptw_solver.exe
-```
-→ Đảm bảo file exe có trong `bin/` directory
-
-## 📊 Monitoring
-
-```bash
-# View queue stats
-curl http://localhost:3001/api/jobs/stats
-
-# View pending jobs
-curl http://localhost:3001/api/jobs?status=pending
-
-# Health check
-curl http://localhost:3001/health
-```
-
-## 🔐 Best Practices
-
-1. **Polling**: Poll mỗi 2-5 giây (không quá thường xuyên)
-2. **Timeout**: Luôn xử lý trường hợp timeout
-3. **Error Handling**: Kiểm tra status failed
-4. **Cleanup**: Xóa jobs cũ khi không cần
-5. **Monitoring**: Theo dõi queue stats thường xuyên
-
-## 📝 License
-
-ISC
-
+Dưới đây là nội dung đã được thêm dấu tiếng Việt hoàn chỉnh:
+
+# WAYO Backend
+
+Dự án backend cho hệ thống WAYO, cung cấp API và tích hợp bộ giải thuật tối ưu hóa lộ trình (PDPTW).
+
+## Cấu trúc dự án
+
+Dự án được tổ chức thành các thành phần chính sau:
+
+### 1. Backend Server (Node.js/TypeScript)
+Thư mục `src/` chứa mã nguồn của server:
+- **server.ts**: Điểm khởi chạy của ứng dụng Express.
+- **routes/**: Định nghĩa các API endpoint để frontend gọi đến.
+- **queue/**: Hệ thống hàng đợi (Job Queue) để quản lý các tác vụ xử lý lộ trình.
+- **workers/**: Các worker thực thi tác vụ, chịu trách nhiệm gọi file thực thi của thuật toán.
+- **types/**: Định nghĩa các interface và kiểu dữ liệu TypeScript.
+
+### 2. Solver Module (C++)
+Thư mục `pdptw_solver_module/` chứa mã nguồn của thuật toán tối ưu:
+- **apps/**: Chứa file `main.cpp`, điểm vào của chương trình C++.
+- **src/**: Cài đặt chi tiết các thuật toán:
+  - **construction/**: Xây dựng nghiệm ban đầu.
+  - **lns/**: Thuật toán Large Neighborhood Search.
+  - **ages/**: Tối ưu hóa số lượng xe (Fleet Minimization).
+  - **io/**: Đọc ghi dữ liệu.
+- **include/**: Các file header tương ứng.
+- **instances/**: Các file dữ liệu mẫu (benchmark).
+- **solutions/**: Thư mục chứa kết quả đầu ra.
+
+### 3. Các thư mục khác
+- **bin/**: Nơi chứa file thực thi (`.exe`) của solver sau khi build.
+- **storage/**: Lưu trữ tạm thời các file input/output trong quá trình xử lý.
+- **test_output/**: Kết quả chạy test.
+
+## Tính năng
+
+### Quản lý Tác vụ (Job Management)
+- Tiếp nhận yêu cầu tối ưu hóa từ Frontend thông qua API.
+- Sử dụng cơ chế hàng đợi để xử lý tuần tự các yêu cầu, tránh quá tải hệ thống.
+- Theo dõi trạng thái của từng tác vụ (đang chờ, đang xử lý, hoàn thành, thất bại).
+
+### Thuật toán Tối ưu (PDPTW Solver)
+- Giải quyết bài toán Pickup and Delivery Problem with Time Windows.
+- Hỗ trợ các ràng buộc về thời gian (Time Windows) và tải trọng xe.
+- Tối ưu hóa đồng thời hai mục tiêu:
+  1. Giảm thiểu số lượng xe sử dụng.
+  2. Giảm thiểu tổng quãng đường/chi phí di chuyển.
+- Sử dụng kết hợp các kỹ thuật hiện đại: Construction Heuristic, LNS (Large Neighborhood Search).
+
+### Tích hợp hệ thống
+- Giao tiếp giữa Node.js và C++ thông qua process spawning.
+- Xử lý file input/output tự động.
+- Validate dữ liệu đầu vào và kết quả đầu ra.

@@ -4,6 +4,9 @@ import React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeftToLine, MapPinPlus, X, Grid2x2X, Grid2x2Plus, WandSparkles, MapPinXInside, LoaderCircle, FileCode, Download, Play, Link } from 'lucide-react';
 import CoordinateInspectorTool from './CoordinateInspectorTool';
+import mapboxgl from 'mapbox-gl';
+import 'mapbox-gl/dist/mapbox-gl.css';
+import { createRoot } from 'react-dom/client';
 
 import type { NodeRow } from './NodeEditor';
 import TimeMatrixControls from './TimeMatrixControls';
@@ -13,6 +16,7 @@ import NodeDetailsPanel from './NodeDetailsPanel';
 import { useFileReader } from '@/hooks/useFileReader';
 import type { Instance } from '@/utils/dataModels';
 import { useRouter } from 'next/navigation';
+import config from '@/config/config';
 
 export interface AddInstanceBuilderProps {
     onBack?: () => void;
@@ -89,7 +93,7 @@ const AddInstanceBuilder: React.FC<AddInstanceBuilderProps> = ({ onBack, onInsta
     const isInspectingRef = useRef(false);
     const [inspectHover, setInspectHover] = useState<{ lat: number; lng: number } | null>(null);
     const [inspectPoint, setInspectPoint] = useState<{ x: number; y: number } | null>(null);
-    const inspectPopupRef = useRef<any | null>(null);
+    const inspectPopupRef = useRef<mapboxgl.Popup | null>(null);
     const [selectedTableRowIndex, setSelectedTableRowIndex] = useState<number | null>(null);
     const selectedRowIndexRef = useRef<number | null>(null);
     const routeTimeRef = useRef<number>(480);
@@ -114,10 +118,8 @@ const AddInstanceBuilder: React.FC<AddInstanceBuilderProps> = ({ onBack, onInsta
 
     // map refs
     const mapRef = useRef<HTMLDivElement | null>(null);
-    const mapInstance = useRef<any | null>(null); // leaflet Map when loaded
-    const markersRef = useRef<Map<number, any>>(new Map());
-    const leafletRef = useRef<any | null>(null);
-    const [leafletLoaded, setLeafletLoaded] = useState(false);
+    const mapInstance = useRef<mapboxgl.Map | null>(null);
+    const markersRef = useRef<Map<number, mapboxgl.Marker>>(new Map());
     const [mapReady, setMapReady] = useState(false);
 
     // sync next id based on current nodes (no auto depot)
@@ -132,7 +134,7 @@ const AddInstanceBuilder: React.FC<AddInstanceBuilderProps> = ({ onBack, onInsta
 
     const handleNodeClick = useCallback((node: NodeRow) => {
         if (mapInstance.current) {
-            mapInstance.current.setView([node.lat, node.lng], 15);
+            mapInstance.current.flyTo({ center: [node.lng, node.lat], zoom: 15 });
         }
     }, []);
 
@@ -258,7 +260,7 @@ const AddInstanceBuilder: React.FC<AddInstanceBuilderProps> = ({ onBack, onInsta
         const focus = mappedNodes.find(n => n.type === 'depot') || mappedNodes[0];
         if (focus && mapInstance.current) {
             try {
-                mapInstance.current.setView([focus.lat, focus.lng], 13);
+                mapInstance.current.flyTo({ center: [focus.lng, focus.lat], zoom: 13 });
             } catch { }
         }
         // keep table in sync if open
@@ -329,13 +331,12 @@ const AddInstanceBuilder: React.FC<AddInstanceBuilderProps> = ({ onBack, onInsta
     }, []);
 
     // Start interactive picking of coordinates for currently editing node
+    // Start interactive picking of coordinates for currently editing node
     const startPickForEditingNode = useCallback(() => {
-        // Remember previous map close-on-click option, then disable it while picking
+        // Change cursor to crosshair
         try {
-            const map = mapInstance.current;
-            if (map && pickPrevCloseRef.current === undefined) {
-                pickPrevCloseRef.current = !!map.options?.closePopupOnClick;
-                map.options.closePopupOnClick = false;
+            if (mapInstance.current) {
+                mapInstance.current.getCanvas().style.cursor = 'crosshair';
             }
         } catch { }
         setIsPickingNode(true);
@@ -374,15 +375,23 @@ const AddInstanceBuilder: React.FC<AddInstanceBuilderProps> = ({ onBack, onInsta
     }, []);
 
     // Cancel current linking drag (if any)
+    // Cancel current linking drag (if any)
     const cancelLinkingDrag = useCallback((silent = false) => {
-        const st = linkingDragRef.current;
-        try { st.tempLine?.remove(); } catch { }
+        // Remove temp line data
+        try {
+            (mapInstance.current?.getSource('temp-link-source') as mapboxgl.GeoJSONSource)?.setData({
+                type: 'FeatureCollection',
+                features: []
+            });
+        } catch { }
+
         linkingDragRef.current = { active: false, fromId: null, tempLine: null };
+
         // restore map dragging
         try {
             const map = mapInstance.current;
             if (map && mapDraggingPrevRef.current !== null) {
-                if (mapDraggingPrevRef.current) map.dragging.enable(); else map.dragging.disable();
+                if (mapDraggingPrevRef.current) map.dragPan.enable(); else map.dragPan.disable();
                 mapDraggingPrevRef.current = null;
             }
         } catch { }
@@ -442,7 +451,7 @@ const AddInstanceBuilder: React.FC<AddInstanceBuilderProps> = ({ onBack, onInsta
         try {
             const map = mapInstance.current;
             if (map && mapDraggingPrevRef.current !== null) {
-                if (mapDraggingPrevRef.current) map.dragging.enable(); else map.dragging.disable();
+                if (mapDraggingPrevRef.current) map.dragPan.enable(); else map.dragPan.disable();
                 mapDraggingPrevRef.current = null;
             }
         } catch { }
@@ -465,7 +474,7 @@ const AddInstanceBuilder: React.FC<AddInstanceBuilderProps> = ({ onBack, onInsta
         if (!mapInstance.current) return;
         const lat = parseFloat(result.lat);
         const lon = parseFloat(result.lon);
-        mapInstance.current.setView([lat, lon], 14);
+        mapInstance.current.flyTo({ center: [lon, lat], zoom: 14 });
     }, []);
     const clearSearch = useCallback(() => { setSearchQuery(''); setSearchResults([]); setShowSearchResults(false); }, []);
 
@@ -523,421 +532,337 @@ const AddInstanceBuilder: React.FC<AddInstanceBuilderProps> = ({ onBack, onInsta
         }
     }, [nodes, showTableInput, tableDirty]);
 
-    // Load Leaflet dynamically on the client and initialize map
+    // Mapbox initialization
     useEffect(() => {
-        if (typeof window === 'undefined') return; // never run on server
-        let mounted = true;
-        (async () => {
-            if (leafletRef.current) return;
-            // import Leaflet and its CSS dynamically
-            const L = await import('leaflet');
-            // Leaflet CSS is imported globally in the app layout (src/app/layout.tsx)
-            leafletRef.current = L;
-            if (!mounted) return;
-            setLeafletLoaded(true);
-        })();
-        return () => { mounted = false; };
-    }, []);
-
-    // map init when leaflet is ready
-    useEffect(() => {
-        if (!leafletLoaded || !leafletRef.current) return;
-        if (!mapRef.current || mapInstance.current) return;
-        const L = leafletRef.current;
-        const initial = nodes[0] || { lat: 21.0278, lng: 105.8342 };
-        mapInstance.current = L.map(mapRef.current).setView([initial.lat, initial.lng], 13);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap contributors' }).addTo(mapInstance.current);
-        mapInstance.current.on('click', (e: any) => {
-            const { lat, lng } = e.latlng;
-            if (isSelectingLocationRef.current && selectedRowIndexRef.current != null) {
-                const idx = selectedRowIndexRef.current;
-                setTableData(prev => prev.map((r, i) => i === idx ? { ...r, lat, lng } : r));
-                setTableDirty(true);
-                stopLocationSelection();
-            } else if (isInspectingRef.current) {
-                // Coordinate inspector click: open a popup with coords and place name + Google Maps link
-                try { mapInstance.current?.closePopup(); } catch { }
-                const L = leafletRef.current;
-                if (!L) return;
-                const latStr = lat.toFixed(6);
-                const lngStr = lng.toFixed(6);
-                const gmapsUrl = `https://www.google.com/maps/search/?api=1&query=${latStr},${lngStr}`;
-                const baseHtml = `
-                    <div class="text-sm">
-                        <div class="font-semibold">Tọa độ</div>
-                        <div class="mt-1 text-gray-800">${latStr}, ${lngStr}</div>
-                        <div class="mt-2 text-xs text-gray-500" id="inspect-place">Đang tra cứu địa danh...</div>
-                        <div class="mt-2">
-                            <a href=\"${gmapsUrl}\" target=\"_blank\" rel=\"noopener noreferrer\" class=\"inline-flex items-center gap-1 text-blue-600 hover:underline\">
-                                <span>Google Maps</span>
-                            </a>
-                        </div>
-                    </div>`;
-                const popup = L.popup({
-                    closeButton: true,
-                    autoClose: true,
-                    className: 'inspect-popup',
-                    offset: L.point(0, -10)
-                })
-                    .setLatLng([lat, lng])
-                    .setContent(baseHtml)
-                    .openOn(mapInstance.current);
-                inspectPopupRef.current = popup;
-                // Fetch place name and update
-                reverseGeocode(lat, lng).then(name => {
-                    const exists = inspectPopupRef.current === popup; // only update if still the same popup
-                    if (!exists) return;
-                    try {
-                        const container = popup.getElement() as HTMLElement | null;
-                        if (!container) return;
-                        const placeEl = container.querySelector('#inspect-place');
-                        if (placeEl) {
-                            placeEl.textContent = name || 'Không tìm thấy địa danh';
-                        }
-                    } catch { }
-                });
-            } else if (isPickingNodeRef.current && editingNodeRef.current) {
-                // If user is in node-picking mode, update the editing node coords
-                const current = editingNodeRef.current;
-                setNodes(prev => prev.map(n => n.id === current!.id ? { ...n, lat, lng } : n));
-                // also update editingNode state so NodeEditor shows new coords
-                setEditingNode(prev => prev ? { ...prev, lat, lng } : prev);
-                // re-render popup React root for this node if present so popup updates immediately
-                try {
-                    const root = popupRootsRef.current.get(current!.id);
-                    if (root) {
-                        const updatedNode = { ...current!, lat, lng };
-                        root.render(
-                            <NodeDetailsPanel
-                                variant="popover"
-                                node={updatedNode}
-                                nodes={nodesRef.current}
-                                onUpdate={handleNodeUpdate}
-                                onDelete={handleNodeDelete}
-                                showNotification={showNotification}
-                                onClose={() => { try { markersRef.current.get(updatedNode.id)?.closePopup(); } catch { } }}
-                                onStartPickCoordinates={startPickForEditingNode}
-                            />
-                        );
-                    }
-                } catch (e) { /* ignore */ }
-                // restore map closePopup behavior
-                try {
-                    const map = mapInstance.current;
-                    if (map && pickPrevCloseRef.current !== undefined) {
-                        map.options.closePopupOnClick = pickPrevCloseRef.current;
-                        pickPrevCloseRef.current = undefined;
-                    }
-                } catch { }
-                setIsPickingNode(false);
-                isPickingNodeRef.current = false;
-                showNotification('success', 'Đã chọn tọa độ cho node');
-            } else if (isLinkingModeRef.current && linkingDragRef.current.active) {
-                // Mouse click on map while dragging but not over a target: cancel
-                cancelLinkingDrag();
-            } else if (isAddingNodeRef.current) {
-                setNodes(prev => {
-                    const nextIdLocal = prev.length === 0 ? 0 : prev.reduce((m, n) => Math.max(m, n.id), 0) + 1;
-                    return [...prev, { id: nextIdLocal, type: 'regular', lat, lng, demand: 1, earliestTime: 0, latestTime: routeTimeRef.current, serviceDuration: 5 }];
-                });
-                setNextNodeId(id => id + 1);
-                setTimeMatrix([]);
-            }
-        });
-        // Cancel drag when mouse released on empty map area
-        mapInstance.current.on('mouseup', () => {
-            if (isLinkingModeRef.current && linkingDragRef.current.active) {
-                cancelLinkingDrag(true);
-            }
-        });
-        // While in linking mode, update temp green line as cursor moves and slow auto-pan
-        const onMoveForLink = (e: any) => {
-            if (!isLinkingModeRef.current) return;
-            const st = linkingDragRef.current;
-            if (!st.active || !st.tempLine) return;
-            const from = nodesRef.current.find(nn => nn.id === st.fromId);
-            if (!from) return;
-            try { st.tempLine.setLatLngs([[from.lat, from.lng], [e.latlng.lat, e.latlng.lng]]); } catch { }
-            // Slow auto-pan when cursor near map edges
-            try {
-                const map = mapInstance.current;
-                if (!map) return;
-                const now = (typeof performance !== 'undefined' ? performance.now() : Date.now());
-                const throttleMs = 40;
-                if (now - autoPanLastTsRef.current < throttleMs) return;
-                const size = map.getSize();
-                const pt = e.containerPoint || map.latLngToContainerPoint(e.latlng);
-                const edge = 40; // px from edge to trigger
-                let dx = 0, dy = 0;
-                const step = 20; // pan step in px
-                if (pt.x < edge) dx = -step;
-                else if (pt.x > size.x - edge) dx = step;
-                if (pt.y < edge) dy = -step;
-                else if (pt.y > size.y - edge) dy = step;
-                if (dx !== 0 || dy !== 0) {
-                    autoPanLastTsRef.current = now;
-                    map.panBy([dx, dy], { animate: true, duration: 0.2, easeLinearity: 0.25 });
-                }
-            } catch { }
-        };
-        mapInstance.current.on('mousemove', onMoveForLink);
-        setMapReady(true);
-        return () => {
-            try { mapInstance.current?.off('mouseup'); } catch { }
-            try { mapInstance.current?.off('mousemove', onMoveForLink); } catch { }
-            try { mapInstance.current?.remove(); } catch { }
-            mapInstance.current = null; setMapReady(false);
-            // cleanup any temp link
-            cancelLinkingDrag(true);
-        };
-    }, [leafletLoaded, mapRef.current, cancelLinkingDrag]);
-
-    // When inspecting is enabled, track mouse move to show live coordinates near cursor
-    useEffect(() => {
-        if (!mapReady || !mapInstance.current || !leafletRef.current) return;
-        const map = mapInstance.current;
-        const onMove = (e: any) => {
-            if (!isInspectingRef.current) return;
-            try {
-                const p = map.latLngToContainerPoint(e.latlng);
-                setInspectHover({ lat: e.latlng.lat, lng: e.latlng.lng });
-                setInspectPoint({ x: p.x, y: p.y });
-            } catch { }
-        };
-        if (isInspecting) {
-            map.on('mousemove', onMove);
+        if (typeof window === 'undefined') return;
+        console.log("AddInstanceBuilder: Map init effect running");
+        if (!mapRef.current) {
+            console.error("AddInstanceBuilder: mapRef is null");
+            return;
         }
+        if (mapInstance.current) {
+            console.log("AddInstanceBuilder: mapInstance already exists");
+            return;
+        }
+
+        const token = config.mapbox?.accessToken || (process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN as string) || "";
+        if (!token) {
+            console.error("AddInstanceBuilder: Missing Mapbox Access Token");
+            showNotification('error', 'Thiếu Mapbox Access Token');
+            return;
+        }
+        mapboxgl.accessToken = token;
+        console.log("AddInstanceBuilder: Token set, creating map...");
+
+        const initial = nodes[0] || { lat: 21.0278, lng: 105.8342 };
+
+        try {
+            mapInstance.current = new mapboxgl.Map({
+                container: mapRef.current,
+                style: config.mapbox?.style || 'mapbox://styles/mapbox/streets-v12',
+                center: [initial.lng, initial.lat], // Mapbox uses [lng, lat]
+                zoom: 13,
+                pitch: 0,
+                bearing: 0,
+                antialias: true
+            });
+
+            mapInstance.current.addControl(new mapboxgl.NavigationControl(), 'top-right');
+            mapInstance.current.addControl(new mapboxgl.FullscreenControl(), 'top-right');
+            mapInstance.current.addControl(new mapboxgl.ScaleControl({ unit: 'metric' }));
+
+            mapInstance.current.on('load', () => {
+                console.log("AddInstanceBuilder: Map loaded");
+                setMapReady(true);
+                mapInstance.current?.resize();
+
+                // Add source for temp linking line
+                if (!mapInstance.current?.getSource('temp-link-source')) {
+                    mapInstance.current?.addSource('temp-link-source', {
+                        type: 'geojson',
+                        data: { type: 'FeatureCollection', features: [] }
+                    });
+                    mapInstance.current?.addLayer({
+                        id: 'temp-link-layer',
+                        type: 'line',
+                        source: 'temp-link-source',
+                        paint: {
+                            'line-color': '#22c55e',
+                            'line-width': 3,
+                            'line-opacity': 0.9,
+                            'line-dasharray': [2, 1]
+                        }
+                    });
+                }
+            });
+
+            mapInstance.current.on('error', (e) => {
+                console.error("AddInstanceBuilder: Mapbox error", e);
+            });
+
+            // Map click handler
+            mapInstance.current.on('click', (e) => {
+                const { lng, lat } = e.lngLat;
+
+                if (isSelectingLocationRef.current && selectedRowIndexRef.current != null) {
+                    const idx = selectedRowIndexRef.current;
+                    setTableData(prev => prev.map((r, i) => i === idx ? { ...r, lat, lng } : r));
+                    setTableDirty(true);
+                    stopLocationSelection();
+                } else if (isPickingNodeRef.current && editingNodeRef.current) {
+                    const current = editingNodeRef.current;
+                    setNodes(prev => prev.map(n => n.id === current!.id ? { ...n, lat, lng } : n));
+                    setEditingNode(prev => (prev ? { ...prev, lat, lng } : prev));
+
+                    // Force update popup if exists
+                    // (Popup update logic will be handled in marker effect)
+
+                    setIsPickingNode(false);
+                    isPickingNodeRef.current = false;
+                    showNotification('success', 'Đã chọn tọa độ cho node');
+
+                    // Restore cursor
+                    if (mapInstance.current) mapInstance.current.getCanvas().style.cursor = '';
+                } else if (isAddingNodeRef.current) {
+                    setNodes(prev => {
+                        const nextIdLocal = prev.length === 0 ? 0 : prev.reduce((m, n) => Math.max(m, n.id), 0) + 1;
+                        return [...prev, { id: nextIdLocal, type: 'regular', lat, lng, demand: 1, earliestTime: 0, latestTime: routeTimeRef.current, serviceDuration: 5 }];
+                    });
+                    setNextNodeId(id => id + 1);
+                    setTimeMatrix([]);
+                    if (showTableInput) {
+                        // resync table from nodes on next render via effect; also consider table clean
+                        setTableDirty(false);
+                    }
+                }
+            });
+
+            // Mouse move for inspector and linking
+            mapInstance.current.on('mousemove', (e) => {
+                const { lng, lat } = e.lngLat;
+                const { x, y } = e.point;
+
+                // Update inspector state
+                if (isInspectingRef.current) {
+                    setInspectHover({ lat, lng });
+                    setInspectPoint({ x, y });
+                }
+
+                // Update temp linking line
+                if (isLinkingModeRef.current && linkingDragRef.current.active) {
+                    const fromId = linkingDragRef.current.fromId;
+                    if (fromId !== null) {
+                        const fromNode = nodesRef.current.find(n => n.id === fromId);
+                        if (fromNode) {
+                            const lineGeoJson: any = {
+                                type: 'Feature',
+                                geometry: {
+                                    type: 'LineString',
+                                    coordinates: [[fromNode.lng, fromNode.lat], [lng, lat]]
+                                }
+                            };
+                            (mapInstance.current?.getSource('temp-link-source') as mapboxgl.GeoJSONSource)?.setData(lineGeoJson);
+                        }
+                    }
+                }
+            });
+
+            // Cancel linking on mouseup anywhere on map (if not handled by marker)
+            mapInstance.current.on('mouseup', () => {
+                if (isLinkingModeRef.current && linkingDragRef.current.active) {
+                    cancelLinkingDrag(true);
+                }
+            });
+
+        } catch (e) {
+            console.error("Error initializing Mapbox:", e);
+            showNotification('error', 'Không thể khởi tạo bản đồ');
+        }
+
         return () => {
-            try { map.off('mousemove', onMove); } catch { }
+            if (mapInstance.current) {
+                mapInstance.current.remove();
+                mapInstance.current = null;
+                setMapReady(false);
+            }
         };
-    }, [isInspecting, mapReady]);
+    }, [showNotification, stopLocationSelection, cancelLinkingDrag, routeTimeRef]);
+
+
 
     // update markers & lines between paired pickup-delivery
-    const pairLinesRef = useRef<any[]>([]);
+    const pairLinesRef = useRef<mapboxgl.Marker[]>([]); // We'll use Markers (lines) or just GeoJSON layers for lines? 
+    // Actually for Mapbox it's better to use a GeoJSON source for all pair lines rather than individual objects if possible, 
+    // but for simplicity let's use a GeoJSON source 'pair-lines'
+
     const popupRootsRef = useRef<Map<number, any>>(new Map());
-    const popupResizeObsRef = useRef<Map<number, ResizeObserver>>(new Map());
+
+    // Update Pair Lines (Pickup -> Delivery links)
     useEffect(() => {
         if (!mapInstance.current || !mapReady) return;
-        // clear markers
+
+        const features: any[] = [];
+        nodes.forEach(n => {
+            if (n.deliveryId) {
+                const target = nodes.find(t => t.id === n.deliveryId);
+                if (target) {
+                    features.push({
+                        type: 'Feature',
+                        geometry: {
+                            type: 'LineString',
+                            coordinates: [[n.lng, n.lat], [target.lng, target.lat]]
+                        }
+                    });
+                }
+            }
+        });
+
+        const source = mapInstance.current.getSource('pair-lines-source') as mapboxgl.GeoJSONSource;
+        if (source) {
+            source.setData({ type: 'FeatureCollection', features });
+        } else {
+            mapInstance.current.addSource('pair-lines-source', {
+                type: 'geojson',
+                data: { type: 'FeatureCollection', features }
+            });
+            mapInstance.current.addLayer({
+                id: 'pair-lines-layer',
+                type: 'line',
+                source: 'pair-lines-source',
+                paint: {
+                    'line-color': '#3b82f6',
+                    'line-width': 2,
+                    'line-opacity': 0.6,
+                    'line-dasharray': [1, 1]
+                }
+            }, 'temp-link-layer'); // Below temp link
+        }
+    }, [nodes, mapReady]);
+
+    // Update Markers
+    useEffect(() => {
+        if (!mapInstance.current || !mapReady) return;
+
+        // cleanup old markers
         markersRef.current.forEach(m => m.remove());
         markersRef.current.clear();
-        // clear existing lines
-        pairLinesRef.current.forEach(l => l.remove());
-        pairLinesRef.current = [];
-        // add markers
-        const L = leafletRef.current;
-        if (!L) return;
+
+        // cleanup old popup roots
+        popupRootsRef.current.forEach(root => root.unmount());
+        popupRootsRef.current.clear();
+
         nodes.forEach(n => {
             const selected = editingNode && editingNode.id === n.id;
             const color = n.type === 'depot' ? '#000000' : n.type === 'pickup' ? '#2563eb' : n.type === 'delivery' ? '#dc2626' : '#6b7280';
-            const icon = L.divIcon({
-                className: 'node-marker',
-                html: `<div class="node-marker-inner ${selected ? 'selected' : ''}" style="background:${color};border:2px solid #ffffff;color:#fff;width:24px;height:24px;display:flex;align-items:center;justify-content:center;border-radius:50%;font-size:11px;font-weight:600;box-shadow:0 0 0 2px ${color}33;">${n.id}</div>`,
-                iconAnchor: [12, 12],
-                popupAnchor: [0, 0]
-            });
-            const marker = L.marker([n.lat, n.lng], { title: `#${n.id}`, icon }).addTo(mapInstance.current!);
-            // Bind popup container for React content
-            const container = document.createElement('div');
-            container.style.width = '100%';
-            marker.bindPopup(container, {
-                minWidth: 180,
-                maxWidth: 260,
+
+            // Create DOM element for marker
+            const el = document.createElement('div');
+            el.className = 'node-marker';
+            el.innerHTML = `<div class="node-marker-inner ${selected ? 'selected' : ''}" style="background:${color};border:2px solid #ffffff;color:#fff;width:24px;height:24px;display:flex;align-items:center;justify-content:center;border-radius:50%;font-size:11px;font-weight:600;box-shadow:0 0 0 2px ${color}33;cursor:pointer;">${n.id}</div>`;
+
+            // Create Marker
+            const marker = new mapboxgl.Marker({ element: el, anchor: 'center' })
+                .setLngLat([n.lng, n.lat])
+                .addTo(mapInstance.current!);
+
+            markersRef.current.set(n.id, marker);
+
+            // Popup Logic
+            const popupNode = document.createElement('div');
+            const popup = new mapboxgl.Popup({
                 closeButton: true,
-                autoClose: true,
+                closeOnClick: true,
+                maxWidth: '300px',
                 className: 'node-popup',
-                keepInView: false,
-                autoPan: false,
-                offset: L.point(140, 300)
+                offset: 15
+            }).setDOMContent(popupNode);
+
+            marker.setPopup(popup);
+
+            // Render Popup Content on Open
+            popup.on('open', () => {
+                const root = createRoot(popupNode);
+                popupRootsRef.current.set(n.id, root);
+
+                // We need to pass fresh callbacks and data
+                root.render(
+                    <NodeDetailsPanel
+                        variant="popover"
+                        node={n}
+                        nodes={nodesRef.current} // Use ref to avoid stale closure if possible, or trigger re-render
+                        onUpdate={handleNodeUpdate}
+                        onDelete={handleNodeDelete}
+                        showNotification={showNotification}
+                        onClose={() => popup.remove()}
+                        onStartPickCoordinates={startPickForEditingNode}
+                    />
+                );
+                setEditingNode(prev => (prev?.id === n.id ? prev : n)); // Set editing node when popup opens
             });
-            // Linking interactions
-            marker.on('mousedown', (e: any) => {
+
+            popup.on('close', () => {
+                const root = popupRootsRef.current.get(n.id);
+                if (root) {
+                    root.unmount();
+                    popupRootsRef.current.delete(n.id);
+                }
+                setEditingNode(prev => (prev?.id === n.id ? null : prev)); // Clear editing node when popup closes
+            });
+
+            // Event Listeners for Linking (Drag & Drop)
+            el.addEventListener('mousedown', (e) => {
                 if (!isLinkingModeRef.current) return;
-                try { e.originalEvent?.preventDefault(); e.originalEvent?.stopPropagation(); } catch { }
+                e.preventDefault();
+                e.stopPropagation();
+
                 if (n.type !== 'pickup' && n.type !== 'regular') {
                     showNotification('error', 'Điểm bắt đầu phải là pickup hoặc regular');
                     return;
                 }
-                // Start linking drag from this pickup
-                try { mapInstance.current?.closePopup(); } catch { }
-                const st = linkingDragRef.current;
-                // create a temp green line
-                try {
-                    const line = L.polyline([[n.lat, n.lng], [n.lat, n.lng]], { color: '#22c55e', weight: 3, opacity: 0.9 }).addTo(mapInstance.current!);
-                    linkingDragRef.current = { active: true, fromId: n.id, tempLine: line };
-                } catch {
-                    linkingDragRef.current = { active: true, fromId: n.id, tempLine: null };
+
+                // Close popup if open
+                popup.remove();
+
+                // Start Drag
+                linkingDragRef.current = { active: true, fromId: n.id, tempLine: null }; // tempLine managed by source now
+
+                // Disable map drag
+                if (mapInstance.current) {
+                    mapDraggingPrevRef.current = mapInstance.current.dragPan.isEnabled();
+                    mapInstance.current.dragPan.disable();
                 }
-                // Disable default map dragging while we manage slow autopan
-                try {
-                    const map = mapInstance.current;
-                    if (map) {
-                        mapDraggingPrevRef.current = map.dragging.enabled();
-                        map.dragging.disable();
-                    }
-                } catch { }
             });
-            marker.on('mousemove', (e: any) => {
-                const st = linkingDragRef.current;
-                if (!isLinkingModeRef.current || !st.active || !st.tempLine) return;
-                const from = nodesRef.current.find(nn => nn.id === st.fromId);
-                if (!from) return;
-                try { st.tempLine.setLatLngs([[from.lat, from.lng], [e.latlng.lat, e.latlng.lng]]); } catch { }
-            });
-            marker.on('mouseover', () => {
+
+            el.addEventListener('mouseenter', () => {
                 if (!isLinkingModeRef.current || !linkingDragRef.current.active) return;
                 hoveredMarkerIdRef.current = n.id;
             });
-            marker.on('mouseout', () => {
+
+            el.addEventListener('mouseleave', () => {
                 if (hoveredMarkerIdRef.current === n.id) hoveredMarkerIdRef.current = null;
             });
-            marker.on('mouseup', (e: any) => {
+
+            el.addEventListener('mouseup', (e) => {
                 if (!isLinkingModeRef.current || !linkingDragRef.current.active) return;
+                e.stopPropagation(); // Prevent map mouseup
+
                 const st = linkingDragRef.current;
-                if (!st.fromId || st.fromId === n.id) { cancelLinkingDrag(); return; }
-                const from = nodesRef.current.find(nn => nn.id === st.fromId);
-                const to = n;
-                if (!from) { cancelLinkingDrag(); return; }
-                if (to.type !== 'delivery' && to.type !== 'regular') {
+                if (!st.fromId || st.fromId === n.id) {
+                    cancelLinkingDrag();
+                    return;
+                }
+
+                // Check target node type
+                const targetNode = nodesRef.current.find(node => node.id === n.id);
+                if (!targetNode || (targetNode.type !== 'delivery' && targetNode.type !== 'regular')) {
                     showNotification('error', 'Điểm kết thúc phải là delivery hoặc regular');
                     cancelLinkingDrag(true);
                     return;
                 }
-                try { e.originalEvent?.preventDefault(); e.originalEvent?.stopPropagation(); } catch { }
-                finishLinking(from.id, to.id);
             });
-            marker.on('click', () => {
-                if (isLinkingModeRef.current || linkingDragRef.current.active) return;
-                // Only update when selection actually changes to avoid unnecessary rerenders
-                setEditingNode(prev => (prev?.id === n.id ? prev : n));
-            });
-            marker.on('popupopen', () => {
-                // Suppress opening popup while in linking mode
-                if (isLinkingModeRef.current || linkingDragRef.current.active) {
-                    try { marker.closePopup(); } catch { }
-                    return;
-                }
-                try {
-                    // Lazy import to avoid SSR issues at module init
-                    const { createRoot } = require('react-dom/client');
-                    let root = popupRootsRef.current.get(n.id);
-                    if (!root) {
-                        root = createRoot(container);
-                        popupRootsRef.current.set(n.id, root);
-                    }
-                    const onClose = () => { try { marker.closePopup(); } catch { } };
-                    root.render(
-                        <NodeDetailsPanel
-                            variant="popover"
-                            node={n}
-                            nodes={nodes}
-                            onUpdate={handleNodeUpdate}
-                            onDelete={handleNodeDelete}
-                            showNotification={showNotification}
-                            onClose={onClose}
-                            onStartPickCoordinates={startPickForEditingNode}
-                        />
-                    );
-                    // After React paints, measure and align popup to the RIGHT and slightly BELOW marker
-                    const alignRightCentered = () => {
-                        try {
-                            const popup = marker.getPopup();
-                            if (!popup) return;
-                            const rect = container.getBoundingClientRect();
-                            // minimal gap to keep popup close to marker
-                            const gap = 4;
-                            // Position close to the RIGHT of marker with minimal gap
-                            // Position slightly below marker center for better visual alignment
-                            popup.setOffset(L.point(Math.round(rect.width / 2 + gap + 16), Math.round(rect.height / 4)));
-                            popup.update();
-                        } catch { }
-                    };
-                    // Defer first alignment until layout is ready (a few frames for React to mount children)
-                    let rafId: number | null = null;
-                    let attempts = 0;
-                    const rafAlign = () => {
-                        attempts += 1;
-                        alignRightCentered();
-                        if (attempts < 5) {
-                            rafId = requestAnimationFrame(rafAlign);
-                        }
-                    };
-                    rafId = requestAnimationFrame(rafAlign);
-                    // Observe size changes and re-align
-                    const obs = new ResizeObserver(() => { alignRightCentered(); });
-                    obs.observe(container);
-                    popupResizeObsRef.current.set(n.id, obs);
-                    const onWinResize = () => alignRightCentered();
-                    window.addEventListener('resize', onWinResize);
-                    // Clean up resize listener when popup closes (handled below)
-                    // Store handler on the container for retrieval in popupclose
-                    (container as any).__onWinResize = onWinResize;
-                    (container as any).__rafId = rafId;
-                } catch { }
-            });
-            marker.on('popupclose', () => {
-                const root = popupRootsRef.current.get(n.id);
-                if (root) {
-                    // Defer unmount to avoid overlapping with React render
-                    setTimeout(() => { try { root.unmount(); } catch { } }, 0);
-                    popupRootsRef.current.delete(n.id);
-                }
-                const obs = popupResizeObsRef.current.get(n.id);
-                if (obs) {
-                    try { obs.disconnect(); } catch { }
-                    popupResizeObsRef.current.delete(n.id);
-                }
-                // Remove window resize listener and cancel any RAF
-                const c: any = (container as any);
-                if (c && c.__onWinResize) {
-                    try { window.removeEventListener('resize', c.__onWinResize); } catch { }
-                    c.__onWinResize = undefined;
-                }
-                if (c && c.__rafId) {
-                    try { cancelAnimationFrame(c.__rafId); } catch { }
-                    c.__rafId = undefined;
-                }
-                setEditingNode(prev => (prev?.id === n.id ? null : prev));
-            });
-            markersRef.current.set(n.id, marker);
         });
-        // draw lines for pairs: either pickup->delivery or via mutual references
-        nodes.forEach(p => {
-            if (p.type === 'pickup' && p.deliveryId) {
-                const d = nodes.find(n => n.id === p.deliveryId);
-                if (d && d.type === 'delivery') {
-                    const line = L.polyline([[p.lat, p.lng], [d.lat, d.lng]], { color: '#22c55e', weight: 2 }).addTo(mapInstance.current!);
-                    pairLinesRef.current.push(line);
-                }
-            }
-            if (p.type === 'delivery' && p.pickupId) {
-                const pick = nodes.find(n => n.id === p.pickupId);
-                if (pick && pick.type === 'pickup' && !pick.deliveryId) {
-                    // delivery references pickup but pickup not yet set its deliveryId
-                    const line = L.polyline([[pick.lat, pick.lng], [p.lat, p.lng]], { color: '#22c55e', weight: 2 }).addTo(mapInstance.current!);;
-                    pairLinesRef.current.push(line);
-                }
-            }
-        });
-    }, [nodes, mapReady]);
 
-    // Update marker icons when selection changes without rebuilding markers/popups
-    useEffect(() => {
-        if (!mapReady || !leafletRef.current) return;
-        const L = leafletRef.current;
-        nodes.forEach(n => {
-            const marker = markersRef.current.get(n.id);
-            if (!marker) return;
-            const selected = editingNode && editingNode.id === n.id;
-            const color = n.type === 'depot' ? '#000000' : n.type === 'pickup' ? '#2563eb' : n.type === 'delivery' ? '#dc2626' : '#6b7280';
-            const icon = L.divIcon({
-                className: 'node-marker',
-                html: `<div class="node-marker-inner ${selected ? 'selected' : ''}" style="background:${color};border:2px solid #ffffff;color:#fff;width:24px;height:24px;display:flex;align-items:center;justify-content:center;border-radius:50%;font-size:11px;font-weight:600;box-shadow:0 0 0 2px ${color}33;">${n.id}</div>`,
-                popupAnchor: [18, 0]
-            });
-            try { marker.setIcon(icon); } catch { /* ignore */ }
-        });
-    }, [editingNode, nodes, mapReady]);
+    }, [nodes, mapReady, editingNode, showNotification, startPickForEditingNode, finishLinking, cancelLinkingDrag]);
 
     const handleNodeUpdate = useCallback((updatedNode: NodeRow) => {
         setNodes(prev => {
@@ -1264,7 +1189,7 @@ const AddInstanceBuilder: React.FC<AddInstanceBuilderProps> = ({ onBack, onInsta
                             {inspectHover.lat.toFixed(6)}, {inspectHover.lng.toFixed(6)}
                         </div>
                     )}
-                    <div ref={mapRef} className="absolute inset-0" style={{ cursor: (isSelectingLocation || isAddingNode || isInspecting || isLinkingMode) ? 'crosshair' : 'default' }} />
+                    <div ref={mapRef} className="absolute inset-0 min-h-[500px]" style={{ cursor: (isSelectingLocation || isAddingNode || isInspecting || isLinkingMode) ? 'crosshair' : 'default' }} />
                 </div>
                 {/* Right node editor panel removed (using popovers on markers instead) */}
             </div>
