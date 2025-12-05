@@ -8,6 +8,14 @@ plugins {
     alias(libs.plugins.ksp) // Thay cho kapt
 }
 
+// Load local.properties
+import java.util.Properties
+val localProperties = Properties()
+val localPropertiesFile = rootProject.file("local.properties")
+if (localPropertiesFile.exists()) {
+    localProperties.load(localPropertiesFile.inputStream())
+}
+
 android {
     namespace = "com.pikasonix.wayo"
     compileSdk = 36
@@ -20,6 +28,11 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        
+        // Build Config fields from local.properties
+        buildConfigField("String", "SUPABASE_URL", "\"${localProperties.getProperty("SUPABASE_URL", "")}\"")
+        buildConfigField("String", "SUPABASE_ANON_KEY", "\"${localProperties.getProperty("SUPABASE_ANON_KEY", "")}\"")
+        buildConfigField("String", "MAPBOX_ACCESS_TOKEN", "\"${localProperties.getProperty("MAPBOX_ACCESS_TOKEN", "")}\"")
     }
 
     buildTypes {
@@ -40,6 +53,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true  // Enable BuildConfig generation
     }
 }
 
@@ -80,4 +94,28 @@ dependencies {
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
+
+    // 6. Supabase
+    implementation(platform(libs.supabase.bom))
+    implementation(libs.supabase.auth)
+    implementation(libs.supabase.postgrest)
+    implementation(libs.ktor.client.android)
+
+    // 7. Mapbox Maps
+    implementation(libs.mapbox.maps)
+
+    // 8. Material Icons Extended
+    implementation(libs.androidx.compose.material.icons.extended)
+
+    // 9. DataStore
+    implementation(libs.androidx.datastore.preferences)
+
+    // 10. Coroutines
+    implementation(libs.kotlinx.coroutines.android)
+
+    // 11. Google Play Services Location
+    implementation(libs.play.services.location)
+
+    // 12. Accompanist Permissions
+    implementation(libs.accompanist.permissions)
 }
