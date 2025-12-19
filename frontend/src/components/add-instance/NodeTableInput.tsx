@@ -5,7 +5,7 @@ import { MapPin, Plus, Trash2, Check, X } from 'lucide-react';
 
 export interface NodeTableRow {
     id: number | string;
-    type: 'depot' | 'pickup' | 'delivery' | 'regular' | string;
+    type: 'depot' | 'pickup' | 'delivery' | 'none' | string;
     lat: number | string;
     lng: number | string;
     demand: number | string;
@@ -85,7 +85,7 @@ const NodeTableInput: React.FC<NodeTableInputProps> = ({
                                         <option value="depot">Depot</option>
                                         <option value="pickup">Pickup</option>
                                         <option value="delivery">Delivery</option>
-                                        <option value="regular">Regular</option>
+                                        <option value="none">None</option>
                                     </select>
                                 </td>
                                 <td className="px-3 py-2">

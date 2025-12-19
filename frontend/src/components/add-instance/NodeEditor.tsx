@@ -5,7 +5,7 @@ import { MapPin } from 'lucide-react';
 
 export interface NodeRow {
     id: number;
-    type: 'depot' | 'pickup' | 'delivery' | 'regular';
+    type: 'depot' | 'pickup' | 'delivery' | 'none';
     lat: number;
     lng: number;
     demand: number;
@@ -33,8 +33,22 @@ interface NodeEditorProps {
 const NodeEditor: React.FC<NodeEditorProps> = ({ node, nodes, onUpdate, onDelete, showNotification, dense = false, onSaved, showId = true, showCoords = true, onStartPick }) => {
     const [edited, setEdited] = useState<NodeRow>({ ...node });
 
-    // Controls fill their grid cell; we use 2-col grids in dense mode for paired fields
-    const inputWidthClass = 'w-full';
+    const labelClass = dense ? 'text-[11px] text-gray-500' : 'text-xs text-gray-600';
+    const helpClass = dense ? 'text-[10px] text-gray-400' : 'text-xs text-gray-400';
+    const inputBaseClass = `w-full rounded-md border border-gray-300 bg-white text-gray-800 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 ${dense ? 'h-8 px-2 text-xs' : 'py-2 px-2 text-sm'}`;
+    const inputDisabledClass = 'bg-gray-100 text-gray-500';
+    const groupPrefixClass = dense ? 'text-[10px] text-gray-400 font-mono' : 'text-xs text-gray-400 font-mono';
+    const groupInputPad = dense ? 'pl-10' : 'pl-12';
+
+    const DenseInputGroup: React.FC<{ prefix: string; children: React.ReactNode }>
+        = ({ prefix, children }) => (
+            <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-2 flex items-center pointer-events-none">
+                    <span className={groupPrefixClass}>{prefix}</span>
+                </div>
+                {children}
+            </div>
+        );
 
     useEffect(() => { setEdited({ ...node }); }, [node]);
 
@@ -60,20 +74,6 @@ const NodeEditor: React.FC<NodeEditorProps> = ({ node, nodes, onUpdate, onDelete
             return next;
         });
     };
-
-    const numericInput = (label: string, value: number, onChange: (v: number) => void, extra?: { min?: number, disabled?: boolean }) => (
-        <div>
-            <label className={`${dense ? 'text-[11px]' : 'text-xs'} block`}>{label}</label>
-            <input
-                type="number"
-                value={value}
-                min={extra?.min}
-                disabled={extra?.disabled}
-                onChange={e => !extra?.disabled && onChange(Number(e.target.value))}
-                className={`${inputWidthClass} border ${dense ? 'px-2 py-1 h-8 text-xs' : 'px-2 py-1'} rounded ${extra?.disabled ? 'bg-gray-100 text-gray-500' : ''}`}
-            />
-        </div>
-    );
 
     // Pickups that are not yet paired with any delivery OR the current assigned pickup (when editing an existing delivery)
     const currentAssignedPickupId = edited.type === 'delivery' ? edited.pickupId : undefined;
@@ -110,86 +110,326 @@ const NodeEditor: React.FC<NodeEditorProps> = ({ node, nodes, onUpdate, onDelete
 
     return (
         <div
-            className={`${dense ? 'space-y-2 text-xs' : 'space-y-3 text-sm'}`}
+            className={`${dense ? 'space-y-2' : 'space-y-4'} text-gray-700`}
             onKeyDown={(e) => {
                 if (e.key === 'Enter') {
                     e.preventDefault();
-                    // Avoid saving if delivery invalid
                     if (!(edited.type === 'delivery' && !edited.pickupId)) handleSave();
                 }
             }}
         >
-            <div className={`grid ${dense ? 'grid-cols-2' : 'grid-cols-2'} gap-2 items-end`}>
-                {showId && numericInput('ID', edited.id, v => setEdited(p => ({ ...p, id: v })))}
-                {/* Type and Demand on same row: Type select + Demand numeric input */}
-                <div className="flex space-x-2">
-                    <div className="flex-1">
-                        <label className={`${dense ? 'text-[11px]' : 'text-xs'} block`}>Type</label>
-                        <select value={edited.type} onChange={e => setNodeType(e.target.value as any)} className={`${inputWidthClass} border ${dense ? 'px-2 py-1 h-8 text-xs' : 'px-2 py-1'} rounded`}>
-                            <option value="depot">Depot</option>
-                            <option value="pickup">Pickup</option>
-                            <option value="delivery">Delivery</option>
-                            <option value="regular">Regular</option>
-                        </select>
+            {/* ID & Type */}
+            <div className={dense ? 'flex items-end gap-2' : 'grid grid-cols-12 gap-2'}>
+                {showId && (
+                    <div className={dense ? 'shrink-0' : 'col-span-3'}>
+                        <label className={`${dense ? labelClass : 'text-[10px] font-bold text-gray-400 uppercase tracking-wider'} mb-1 block`}>ID</label>
+                        <div className={`${dense ? 'px-2 h-8' : 'px-2 py-1.5'} flex items-center justify-center bg-gray-100 border rounded text-xs font-mono font-bold text-gray-600 min-w-[52px]`}>
+                            {edited.id}
+                        </div>
                     </div>
-                </div>
-                <div className="flex-1">
-                    {numericInput(`Demand${demandDisabled ? ' (auto)' : ''}`, edited.demand, v => setEdited(p => ({ ...p, demand: v })), { disabled: demandDisabled })}
+                )}
+                <div className={dense ? 'flex-1' : (showId ? 'col-span-9' : 'col-span-12')}>
+                    {dense ? (
+                        <div className="flex items-center gap-1 rounded-lg border border-gray-200 bg-gray-50 px-2 py-1">
+                            <button
+                                type="button"
+                                onClick={() => setNodeType('depot')}
+                                aria-pressed={edited.type === 'depot'}
+                                className={`inline-flex items-center rounded px-2 py-1 text-xs font-medium shadow-sm ${edited.type === 'depot' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'}`}
+                                title="Depot"
+                            >
+                                Depot
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setNodeType('pickup')}
+                                aria-pressed={edited.type === 'pickup'}
+                                className={`inline-flex items-center rounded px-2 py-1 text-xs font-medium shadow-sm ${edited.type === 'pickup' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'}`}
+                                title="Pickup"
+                            >
+                                Pickup
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setNodeType('delivery')}
+                                aria-pressed={edited.type === 'delivery'}
+                                className={`inline-flex items-center rounded px-2 py-1 text-xs font-medium shadow-sm ${edited.type === 'delivery' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'}`}
+                                title="Delivery"
+                            >
+                                Delivery
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setNodeType('none')}
+                                aria-pressed={edited.type === 'none'}
+                                className={`inline-flex items-center rounded px-2 py-1 text-xs font-medium shadow-sm ${edited.type === 'none' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'}`}
+                                title="None"
+                            >
+                                None
+                            </button>
+                        </div>
+                    ) : (
+                        <>
+                            <label className={`${dense ? labelClass : 'text-[10px] font-bold text-gray-400 uppercase tracking-wider'} mb-1 block`}>Loại</label>
+                            <select
+                                value={edited.type}
+                                onChange={e => setNodeType(e.target.value as any)}
+                                className={`${inputBaseClass} ${dense ? '' : ''}`}
+                            >
+                                <option value="depot">Depot</option>
+                                <option value="pickup">Pickup</option>
+                                <option value="delivery">Delivery</option>
+                                <option value="none">None</option>
+                            </select>
+                        </>
+                    )}
                 </div>
             </div>
+
+            {/* Coordinates */}
             {showCoords && (
-                <div className={`flex items-start gap-2`}>
-                    <div className="flex-1">
-                        <label className={`${dense ? 'text-[11px]' : 'text-xs'} block`}>Lat</label>
-                        <input
-                            type="number"
-                            value={edited.lat}
-                            onChange={e => setEdited(p => ({ ...p, lat: Number(e.target.value) }))}
-                            className={`${inputWidthClass} border ${dense ? 'px-2 py-1 h-8 text-xs' : 'px-2 py-1'} rounded`}
-                        />
-                    </div>
-                    <div className="flex-1">
-                        <label className={`${dense ? 'text-[11px]' : 'text-xs'} block`}>Lng</label>
-                        <input
-                            type="number"
-                            value={edited.lng}
-                            onChange={e => setEdited(p => ({ ...p, lng: Number(e.target.value) }))}
-                            className={`${inputWidthClass} border ${dense ? 'px-2 py-1 h-8 text-xs' : 'px-2 py-1'} rounded`}
-                        />
-                    </div>
-                    <div className="flex items-end">
-                        <button type="button" onClick={() => onStartPick?.()} title="Chọn tọa độ trên bản đồ" className="ml-2 p-2 rounded bg-gray-100 hover:bg-gray-200 border">
-                            <MapPin className="h-4 w-4" />
-                        </button>
+                <div>
+                    <div className={dense ? 'grid grid-cols-[1fr_1fr_auto] gap-2 items-end' : 'flex rounded-md shadow-sm'}>
+                        {dense ? (
+                            <>
+                                <div>
+                                    <DenseInputGroup prefix="Lat">
+                                        <input
+                                            type="number"
+                                            value={edited.lat}
+                                            onChange={e => setEdited(p => ({ ...p, lat: Number(e.target.value) }))}
+                                            className={`${inputBaseClass} ${groupInputPad}`}
+                                            title="Latitude"
+                                        />
+                                    </DenseInputGroup>
+                                </div>
+                                <div>
+                                    <DenseInputGroup prefix="Lng">
+                                        <input
+                                            type="number"
+                                            value={edited.lng}
+                                            onChange={e => setEdited(p => ({ ...p, lng: Number(e.target.value) }))}
+                                            className={`${inputBaseClass} ${groupInputPad}`}
+                                            title="Longitude"
+                                        />
+                                    </DenseInputGroup>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => onStartPick?.()}
+                                    title="Chọn trên bản đồ"
+                                    className="h-8 px-3 inline-flex items-center justify-center rounded-md border border-gray-300 bg-gray-50 hover:bg-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                                >
+                                    <MapPin size={14} className="text-blue-600" />
+                                </button>
+                            </>
+                        ) : (
+                            <>
+                                <label className={`${dense ? labelClass : 'text-[10px] font-bold text-gray-400 uppercase tracking-wider'} mb-1 block`}>Tọa độ</label>
+                                <div className="relative flex-grow focus-within:z-10">
+                                    <div className="absolute inset-y-0 left-0 pl-2 flex items-center pointer-events-none">
+                                        <span className="text-gray-400 text-xs font-mono">Lat</span>
+                                    </div>
+                                    <input
+                                        type="number"
+                                        value={edited.lat}
+                                        onChange={e => setEdited(p => ({ ...p, lat: Number(e.target.value) }))}
+                                        className={`block w-full pl-8 pr-2 py-2 text-xs border-gray-300 rounded-l-md focus:ring-blue-500 focus:border-blue-500 border-r-0`}
+                                        placeholder="Lat"
+                                    />
+                                </div>
+                                <div className="relative flex-grow focus-within:z-10">
+                                    <div className="absolute inset-y-0 left-0 pl-2 flex items-center pointer-events-none">
+                                        <span className="text-gray-400 text-xs font-mono">Lng</span>
+                                    </div>
+                                    <input
+                                        type="number"
+                                        value={edited.lng}
+                                        onChange={e => setEdited(p => ({ ...p, lng: Number(e.target.value) }))}
+                                        className={`block w-full pl-8 pr-2 py-2 text-xs border-gray-300 focus:ring-blue-500 focus:border-blue-500`}
+                                        placeholder="Lng"
+                                    />
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => onStartPick?.()}
+                                    title="Chọn trên bản đồ"
+                                    className="-ml-px relative inline-flex items-center px-3 py-1 border border-gray-300 text-xs font-medium rounded-r-md text-gray-700 bg-gray-50 hover:bg-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                                >
+                                    <MapPin size={14} className="text-blue-600" />
+                                </button>
+                            </>
+                        )}
                     </div>
                 </div>
             )}
-            <div className={`grid ${dense ? 'grid-cols-2' : 'grid-cols-2'} gap-2`}>
-                {numericInput('Earliest', edited.earliestTime, v => setEdited(p => ({ ...p, earliestTime: v })))}
-                {numericInput('Latest', edited.latestTime, v => setEdited(p => ({ ...p, latestTime: v })))}
+
+            {/* Main numeric fields */}
+            <div className={dense ? 'grid grid-cols-2 gap-2' : 'space-y-4'}>
+                {/* Demand */}
+                <div className={dense ? '' : ''}>
+                    {dense ? (
+                        <DenseInputGroup prefix={'Dem'}>
+                            <input
+                                type="number"
+                                value={edited.demand}
+                                disabled={demandDisabled}
+                                onChange={e => setEdited(p => ({ ...p, demand: Number(e.target.value) }))}
+                                className={`${inputBaseClass} ${groupInputPad} ${demandDisabled ? inputDisabledClass : ''}`}
+                                title={demandDisabled ? 'Demand (auto cho Delivery)' : 'Demand'}
+                            />
+                        </DenseInputGroup>
+                    ) : (
+                        <>
+                            <label className={`${dense ? labelClass : 'text-[10px] font-bold text-gray-400 uppercase tracking-wider'} mb-1 block`}>
+                                Demand {demandDisabled && <span className={helpClass}> (auto)</span>}
+                            </label>
+                            <input
+                                type="number"
+                                value={edited.demand}
+                                disabled={demandDisabled}
+                                onChange={e => setEdited(p => ({ ...p, demand: Number(e.target.value) }))}
+                                className={`${inputBaseClass} ${demandDisabled ? inputDisabledClass : ''}`}
+                            />
+                        </>
+                    )}
+                </div>
+
+                {/* Service */}
+                <div>
+                    {dense ? (
+                        <DenseInputGroup prefix="Svc">
+                            <input
+                                type="number"
+                                value={edited.serviceDuration}
+                                onChange={e => setEdited(p => ({ ...p, serviceDuration: Number(e.target.value) }))}
+                                className={`${inputBaseClass} ${groupInputPad}`}
+                                title="Service duration (phút)"
+                            />
+                        </DenseInputGroup>
+                    ) : (
+                        <>
+                            <label className={`${dense ? labelClass : 'text-[10px] font-bold text-gray-400 uppercase tracking-wider'} mb-1 block`}>Service (phút)</label>
+                            <input
+                                type="number"
+                                value={edited.serviceDuration}
+                                onChange={e => setEdited(p => ({ ...p, serviceDuration: Number(e.target.value) }))}
+                                className={inputBaseClass}
+                            />
+                        </>
+                    )}
+                </div>
+
+                {/* Time window */}
+                <div>
+                    {dense ? (
+                        <DenseInputGroup prefix="ETW">
+                            <input
+                                type="number"
+                                value={edited.earliestTime}
+                                onChange={e => setEdited(p => ({ ...p, earliestTime: Number(e.target.value) }))}
+                                className={`${inputBaseClass} ${groupInputPad}`}
+                                title="Earliest time window"
+                            />
+                        </DenseInputGroup>
+                    ) : (
+                        <>
+                            <label className={`${dense ? labelClass : 'text-[10px] font-bold text-gray-400 uppercase tracking-wider'} mb-1 block`}>ETW</label>
+                            <input
+                                type="number"
+                                value={edited.earliestTime}
+                                onChange={e => setEdited(p => ({ ...p, earliestTime: Number(e.target.value) }))}
+                                className={inputBaseClass}
+                                placeholder="Min"
+                            />
+                        </>
+                    )}
+                </div>
+                <div>
+                    {dense ? (
+                        <DenseInputGroup prefix="LTW">
+                            <input
+                                type="number"
+                                value={edited.latestTime}
+                                onChange={e => setEdited(p => ({ ...p, latestTime: Number(e.target.value) }))}
+                                className={`${inputBaseClass} ${groupInputPad}`}
+                                title="Latest time window"
+                            />
+                        </DenseInputGroup>
+                    ) : (
+                        <>
+                            <label className={`${dense ? labelClass : 'text-[10px] font-bold text-gray-400 uppercase tracking-wider'} mb-1 block`}>LTW</label>
+                            <input
+                                type="number"
+                                value={edited.latestTime}
+                                onChange={e => setEdited(p => ({ ...p, latestTime: Number(e.target.value) }))}
+                                className={inputBaseClass}
+                                placeholder="Max"
+                            />
+                        </>
+                    )}
+                </div>
             </div>
-            {numericInput('Service (max)', edited.serviceDuration, v => setEdited(p => ({ ...p, serviceDuration: v })))}
+
+            {/* Delivery - Pickup Constraint */}
+            {edited.type === 'delivery' && (
+                <div className={`${dense ? 'p-0' : 'bg-red-50 border border-red-100 rounded-md p-2'}`}>
+                    {dense ? (
+                        <DenseInputGroup prefix="Pickup">
+                            <select
+                                value={edited.pickupId || ''}
+                                onChange={e => handlePickupSelection(Number(e.target.value))}
+                                className={`block w-full rounded-md border ${edited.pickupId ? 'border-gray-300' : 'border-red-300'} bg-white text-xs text-gray-800 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 h-8 px-2 ${groupInputPad}`}
+                            >
+                                <option value="">-- Chọn --</option>
+                                {availablePickups.map(p => <option key={p.id} value={p.id}>#{p.id} (Dem: {p.demand})</option>)}
+                            </select>
+                        </DenseInputGroup>
+                    ) : (
+                        <>
+                            <label className={`${dense ? labelClass : 'block text-[10px] font-bold text-red-700 uppercase'} mb-1 block`}>Pickup *</label>
+                            <select
+                                value={edited.pickupId || ''}
+                                onChange={e => handlePickupSelection(Number(e.target.value))}
+                                className={`block w-full rounded-md border ${edited.pickupId ? 'border-gray-300' : 'border-red-300'} bg-white text-xs text-gray-800 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 ${dense ? 'h-8 px-2' : 'py-2 px-2'}`}
+                            >
+                                <option value="">-- Chọn điểm lấy hàng --</option>
+                                {availablePickups.map(p => <option key={p.id} value={p.id}>#{p.id} (Demand: {p.demand})</option>)}
+                            </select>
+                        </>
+                    )}
+                    {!edited.pickupId && <p className="mt-1 text-[10px] text-red-600 font-medium">Bắt buộc chọn pickup.</p>}
+                </div>
+            )}
 
             {edited.type === 'pickup' && (
-                <p className="text-[11px] text-gray-500">Pickup không cần chọn delivery ngay; tạo delivery sau.</p>
-            )}
-            {edited.type === 'delivery' && (
-                <div className="space-y-1">
-                    <label className={`${dense ? 'text-[11px]' : 'text-xs'} block`}>Chọn Pickup</label>
-                    <select
-                        value={edited.pickupId || ''}
-                        onChange={e => handlePickupSelection(Number(e.target.value))}
-                        className={`${inputWidthClass} border ${dense ? 'px-2 py-1 h-8 text-xs' : 'px-2 py-1'} rounded`}
-                    >
-                        <option value="">-- Chọn pickup --</option>
-                        {availablePickups.map(p => <option key={p.id} value={p.id}>#{p.id} d={p.demand}</option>)}
-                    </select>
-                    {!edited.pickupId && <p className="text-[11px] text-red-600">Bắt buộc.</p>}
+                <div className={dense ? 'text-[11px] text-gray-500' : 'bg-blue-50 border border-blue-100 rounded p-2 text-blue-700 text-xs'}>
+                    {dense ? (
+                        <span>Pickup có thể ghép Delivery sau.</span>
+                    ) : (
+                        <>
+                            <span className="font-semibold">Lưu ý:</span> Bạn có thể tạo điểm Delivery sau và ghép với điểm Pickup này.
+                        </>
+                    )}
                 </div>
             )}
-            <div className="flex space-x-2 pt-2">
-                <button onClick={handleSave} disabled={edited.type === 'delivery' && !edited.pickupId} className={`flex-1 ${dense ? 'h-8 px-2 text-sm' : 'px-3 py-2'} bg-blue-600 text-white rounded disabled:opacity-50`}>Lưu</button>
-                <button onClick={() => { if (confirm('Xóa node này?')) onDelete(edited.id); }} className={`${dense ? 'h-8 px-2 text-sm' : 'px-3 py-2'} bg-red-600 text-white rounded`}>Xóa</button>
+
+            {/* Actions */}
+            <div className={`${dense ? 'pt-1' : 'pt-2'} flex items-center gap-2`}>
+                <button
+                    onClick={handleSave}
+                    disabled={edited.type === 'delivery' && !edited.pickupId}
+                    className={`flex-1 flex justify-center items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-medium rounded-md transition-colors ${dense ? 'h-8 text-xs' : 'py-2 text-sm'} ${dense ? '' : 'shadow-sm'}`}
+                >
+                    Lưu
+                </button>
+                <button
+                    onClick={() => { if (confirm('Xóa node này?')) onDelete(edited.id); }}
+                    className={`flex items-center justify-center px-3 bg-white border border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 rounded-md transition-colors ${dense ? 'h-8 text-xs' : 'py-2 text-sm'} ${dense ? '' : 'shadow-sm'}`}
+                    title="Xóa node"
+                >
+                    <span className="font-medium">Xóa</span>
+                </button>
             </div>
         </div>
     );

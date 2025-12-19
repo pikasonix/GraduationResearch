@@ -2,7 +2,6 @@
 
 import React from 'react';
 import NodeEditor, { NodeRow } from './NodeEditor';
-import { X, MapPin } from 'lucide-react';
 
 type Variant = 'panel' | 'popover';
 
@@ -29,11 +28,11 @@ const NodeDetailsPanel: React.FC<NodeDetailsPanelProps> = ({
 }) => {
     if (variant === 'popover') {
         return (
-            <div className="w-full min-w-[170px] max-w-[260px] rounded overflow-hidden shadow-lg">
-                <div className="bg-green-600 text-white px-3 py-2 flex items-center">
-                    <h3 className="text-sm font-semibold flex-1">Chỉnh sửa Node {node ? `#${node.id}` : ''}</h3>
+            <div className="w-full min-w-[170px] max-w-[260px] rounded-md border border-gray-200 bg-white shadow-lg">
+                <div className="px-3 pt-3 pb-2">
+                    <h3 className="text-xs font-semibold text-gray-800">Node {node ? `#${node.id}` : ''}</h3>
                 </div>
-                <div className="p-3 bg-white max-h-[420px] overflow-auto">
+                <div className="px-3 pb-3 max-h-[420px] overflow-auto">
                     {node ? (
                         <NodeEditor
                             node={node}

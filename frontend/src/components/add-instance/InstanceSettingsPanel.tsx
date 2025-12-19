@@ -156,7 +156,7 @@ const InstanceSettingsPanel: React.FC<InstanceSettingsPanelProps> = ({
                                     const unpairedPickups = nodes.filter(n => n.type === 'pickup' && !pairedPickupIds.has(n.id));
                                     const unpairedDeliveries = nodes.filter(n => n.type === 'delivery' && !pairedDeliveryIds.has(n.id));
                                     const depots = nodes.filter(n => n.type === 'depot');
-                                    const regulars = nodes.filter(n => n.type === 'regular');
+                                    const nones = nodes.filter(n => n.type === 'none');
 
                                     const renderNodeRow = (n: NodeRow) => (
                                         <div key={n.id} className="flex items-center justify-between p-2 text-xs cursor-pointer hover:bg-gray-100" onClick={() => onNodeClick(n)}>
@@ -202,10 +202,10 @@ const InstanceSettingsPanel: React.FC<InstanceSettingsPanelProps> = ({
                                                     {unpairedDeliveries.map(renderNodeRow)}
                                                 </div>
                                             )}
-                                            {regulars.length > 0 && (
+                                            {nones.length > 0 && (
                                                 <div>
-                                                    <div className="px-2 py-1 text-[10px] font-semibold text-gray-600">Regular ({regulars.length})</div>
-                                                    {regulars.map(renderNodeRow)}
+                                                    <div className="px-2 py-1 text-[10px] font-semibold text-gray-600">None ({nones.length})</div>
+                                                    {nones.map(renderNodeRow)}
                                                 </div>
                                             )}
                                             {depots.length > 0 && (

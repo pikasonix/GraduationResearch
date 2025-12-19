@@ -8,7 +8,7 @@ import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { createRoot } from 'react-dom/client';
 
-import type { NodeRow } from './NodeEditor';
+import { NodeRow } from './NodeEditor';
 import TimeMatrixControls from './TimeMatrixControls';
 import NodeTableInput from './NodeTableInput';
 import InstanceSettingsPanel from './InstanceSettingsPanel';
@@ -144,7 +144,7 @@ const AddInstanceBuilder: React.FC<AddInstanceBuilderProps> = ({ onBack, onInsta
             { id: 0, type: 'depot', lat: 21.0278, lng: 105.8342, demand: 0, earliestTime: 0, latestTime: 1440, serviceDuration: 0 },
             { id: 1, type: 'pickup', lat: 21.03, lng: 105.835, demand: 5, earliestTime: 60, latestTime: 300, serviceDuration: 10, deliveryId: 2 },
             { id: 2, type: 'delivery', lat: 21.032, lng: 105.837, demand: -5, earliestTime: 80, latestTime: 360, serviceDuration: 10, pickupId: 1 },
-            { id: 3, type: 'regular', lat: 21.025, lng: 105.83, demand: 3, earliestTime: 0, latestTime: 480, serviceDuration: 5 },
+            { id: 3, type: 'none', lat: 21.025, lng: 105.83, demand: 3, earliestTime: 0, latestTime: 480, serviceDuration: 5 },
         ];
         setNodes(sampleNodes);
         setInstanceData(prev => ({ ...prev, name: 'sample-instance', location: 'Hanoi', comment: 'Generated sample instance', capacity: 100 }));
@@ -217,8 +217,10 @@ const AddInstanceBuilder: React.FC<AddInstanceBuilderProps> = ({ onBack, onInsta
     }, [generateInstanceFile, router]);
 
     const clearAllNodes = useCallback(() => {
-        setNodes([]);
-        setTimeMatrix([]);
+        if (window.confirm('Bạn có chắc chắn muốn xóa hết các điểm không?')) {
+            setNodes([]);
+            setTimeMatrix([]);
+        }
     }, []);
 
     const showNotification = useCallback((type: 'success' | 'error' | 'info', message: string) => {
@@ -229,7 +231,7 @@ const AddInstanceBuilder: React.FC<AddInstanceBuilderProps> = ({ onBack, onInsta
     // Map parsed Instance (from reader) to local builder state
     const applyParsedInstance = useCallback((inst: Instance) => {
         const mappedNodes: NodeRow[] = (inst.nodes || []).map(n => {
-            const type: NodeRow['type'] = n.is_depot ? 'depot' : n.is_pickup ? 'pickup' : n.is_delivery ? 'delivery' : 'regular';
+            const type: NodeRow['type'] = n.is_depot ? 'depot' : n.is_pickup ? 'pickup' : n.is_delivery ? 'delivery' : 'none';
             const pickupId = n.is_delivery && n.pair >= 0 ? n.pair : undefined;
             const deliveryId = n.is_pickup && n.pair >= 0 ? n.pair : undefined;
             return {
@@ -304,7 +306,7 @@ const AddInstanceBuilder: React.FC<AddInstanceBuilderProps> = ({ onBack, onInsta
     // Table helpers
     const createEmptyTableRow = useCallback(() => ({
         id: 0,
-        type: 'regular',
+        type: 'none',
         lat: 0,
         lng: 0,
         demand: 0,
@@ -323,12 +325,29 @@ const AddInstanceBuilder: React.FC<AddInstanceBuilderProps> = ({ onBack, onInsta
         setIsSelectingLocation(true);
         isSelectingLocationRef.current = true;
         setSelectedTableRowIndex(rowIndex);
+        selectedRowIndexRef.current = rowIndex; // Crucial for map click listener
+
+        // Visual feedback
+        try {
+            if (mapInstance.current) {
+                mapInstance.current.getCanvas().style.cursor = 'crosshair';
+            }
+        } catch { }
+
         showNotification('info', 'Chọn vị trí trên bản đồ cho dòng ' + (rowIndex + 1));
     }, [showNotification]);
+
     const stopLocationSelection = useCallback(() => {
         setIsSelectingLocation(false);
         isSelectingLocationRef.current = false;
         // keep the selected row index for potential further edits rather than clearing immediately
+
+        // Restore cursor
+        try {
+            if (mapInstance.current) {
+                mapInstance.current.getCanvas().style.cursor = '';
+            }
+        } catch { }
     }, []);
 
     // Start interactive picking of coordinates for currently editing node
@@ -362,6 +381,14 @@ const AddInstanceBuilder: React.FC<AddInstanceBuilderProps> = ({ onBack, onInsta
     const onToggleInspect = useCallback(() => {
         setIsInspecting(prev => {
             const next = !prev;
+            if (next) {
+                // Turn off other modes
+                setIsAddingNode(false);
+                setIsLinkingMode(false);
+                if (isSelectingLocationRef.current) stopLocationSelection();
+                if (isPickingNodeRef.current) setIsPickingNode(false);
+            }
+
             // close any existing inspect popup when turning off
             if (!next && inspectPopupRef.current) {
                 try { inspectPopupRef.current.remove(); } catch { }
@@ -373,7 +400,7 @@ const AddInstanceBuilder: React.FC<AddInstanceBuilderProps> = ({ onBack, onInsta
             }
             return next;
         });
-    }, []);
+    }, [stopLocationSelection]);
 
     // Cancel current linking drag (if any)
     // Cancel current linking drag (if any)
@@ -437,15 +464,28 @@ const AddInstanceBuilder: React.FC<AddInstanceBuilderProps> = ({ onBack, onInsta
             if (to.pickupId && to.pickupId !== fromId) {
                 next = next.map(n => (n.id === to.pickupId && n.type === 'pickup') ? { ...n, deliveryId: undefined } : n);
             }
-            // Apply type conversions if needed and new link
-            const newFrom = { ...from, type: from.type === 'regular' ? 'pickup' as const : from.type, deliveryId: toId };
-            const newTo = { ...to, type: to.type === 'regular' ? 'delivery' as const : to.type, pickupId: fromId };
+            // Apply type conversions and new link
+            // When a pair is created, we force roles: from = pickup, to = delivery.
+            // Also sync delivery demand from pickup demand (delivery = -|pickup|).
+            const pickupDemand = Math.abs(from.demand ?? 0);
+            const newFrom = {
+                ...from,
+                type: 'pickup' as const,
+                demand: pickupDemand,
+                deliveryId: toId,
+            };
+            const newTo = {
+                ...to,
+                type: 'delivery' as const,
+                pickupId: fromId,
+                demand: -pickupDemand,
+            };
             next[fromIdx] = newFrom;
             next[toIdx] = newTo;
             return next;
         });
         setTimeMatrix([]);
-        showNotification('success', `Đã ghép pickup #${fromId} → delivery #${toId}`);
+        showNotification('success', `Đã ghép #${fromId} → #${toId}`);
         // clear temp line
         cancelLinkingDrag(true);
         // ensure map dragging restored
@@ -479,10 +519,32 @@ const AddInstanceBuilder: React.FC<AddInstanceBuilderProps> = ({ onBack, onInsta
     }, []);
     const clearSearch = useCallback(() => { setSearchQuery(''); setSearchResults([]); setShowSearchResults(false); }, []);
 
+    const handleAddNodeAt = useCallback((lat: number, lng: number) => {
+        const currentNodes = nodesRef.current;
+        const nextIdLocal = currentNodes.length === 0 ? 0 : currentNodes.reduce((m, n) => Math.max(m, n.id), 0) + 1;
+        const isDepot = nextIdLocal === 0;
+        const type = isDepot ? 'depot' : 'none';
+        const demand = isDepot ? 0 : 1;
+        const serviceDuration = isDepot ? 0 : 5;
+
+        setNodes(prev => [...prev, { id: nextIdLocal, type, lat, lng, demand, earliestTime: 0, latestTime: routeTimeRef.current, serviceDuration }]);
+
+        setNextNodeId(nextIdLocal + 1);
+        setTimeMatrix([]);
+        if (showTableInput) {
+            setTableDirty(false);
+        }
+        showNotification('success', isDepot ? 'Đã thêm Depot (Kho)' : 'Đã thêm điểm mới');
+    }, [showTableInput, showNotification]);
+
+    // Stable ref for handleAddNodeAt to use in persistent listeners
+    const handleAddNodeAtRef = useRef(handleAddNodeAt);
+    useEffect(() => { handleAddNodeAtRef.current = handleAddNodeAt; }, [handleAddNodeAt]);
+
     const applyTableData = useCallback(() => {
         const newNodes: NodeRow[] = tableData.map(r => ({
             id: Number(r.id),
-            type: r.type || 'regular',
+            type: r.type || 'none',
             lat: Number(r.lat),
             lng: Number(r.lng),
             demand: Number(r.demand || 0),
@@ -601,8 +663,15 @@ const AddInstanceBuilder: React.FC<AddInstanceBuilderProps> = ({ onBack, onInsta
                 console.error("AddInstanceBuilder: Mapbox error", e);
             });
 
-            // Map click handler
             mapInstance.current.on('click', (e) => {
+                // Check if click was on a marker (prevent adding node when clicking existing marker)
+                if (e.originalEvent) {
+                    const target = e.originalEvent.target as HTMLElement;
+                    if (target.closest('.mapboxgl-marker') || target.closest('.node-marker')) {
+                        return;
+                    }
+                }
+
                 const { lng, lat } = e.lngLat;
 
                 if (isSelectingLocationRef.current && selectedRowIndexRef.current != null) {
@@ -660,14 +729,7 @@ const AddInstanceBuilder: React.FC<AddInstanceBuilderProps> = ({ onBack, onInsta
                     const root = createRoot(popupNode);
 
                     const handleAdd = () => {
-                        setNodes(prev => {
-                            const nextIdLocal = prev.length === 0 ? 0 : prev.reduce((m, n) => Math.max(m, n.id), 0) + 1;
-                            return [...prev, { id: nextIdLocal, type: 'regular', lat, lng, demand: 1, earliestTime: 0, latestTime: routeTimeRef.current, serviceDuration: 5 }];
-                        });
-                        setNextNodeId(id => id + 1);
-                        setTimeMatrix([]);
-                        if (showTableInput) setTableDirty(false);
-                        showNotification('success', 'Đã thêm điểm mới');
+                        handleAddNodeAt(lat, lng);
                         popup.remove();
                     };
 
@@ -731,16 +793,8 @@ const AddInstanceBuilder: React.FC<AddInstanceBuilderProps> = ({ onBack, onInsta
                         }
                     });
                 } else if (isAddingNodeRef.current) {
-                    setNodes(prev => {
-                        const nextIdLocal = prev.length === 0 ? 0 : prev.reduce((m, n) => Math.max(m, n.id), 0) + 1;
-                        return [...prev, { id: nextIdLocal, type: 'regular', lat, lng, demand: 1, earliestTime: 0, latestTime: routeTimeRef.current, serviceDuration: 5 }];
-                    });
-                    setNextNodeId(id => id + 1);
-                    setTimeMatrix([]);
-                    if (showTableInput) {
-                        // resync table from nodes on next render via effect; also consider table clean
-                        setTableDirty(false);
-                    }
+                    // Refactored to use handleAddNodeAt
+                    handleAddNodeAt(lat, lng);
                 }
             });
 
@@ -850,123 +904,141 @@ const AddInstanceBuilder: React.FC<AddInstanceBuilderProps> = ({ onBack, onInsta
     useEffect(() => {
         if (!mapInstance.current || !mapReady) return;
 
-        // cleanup old markers
-        markersRef.current.forEach(m => m.remove());
-        markersRef.current.clear();
+        const currentIds = new Set(nodes.map(n => n.id));
 
-        // cleanup old popup roots
-        popupRootsRef.current.forEach(root => root.unmount());
-        popupRootsRef.current.clear();
+        // 1. Remove markers no longer in nodes
+        markersRef.current.forEach((marker, id) => {
+            if (!currentIds.has(id)) {
+                marker.remove();
+                markersRef.current.delete(id);
+                const root = popupRootsRef.current.get(id);
+                if (root) {
+                    setTimeout(() => root.unmount(), 0);
+                    popupRootsRef.current.delete(id);
+                }
+            }
+        });
 
+        // 2. Add or Update markers
         nodes.forEach(n => {
+            let marker = markersRef.current.get(n.id);
             const selected = editingNode && editingNode.id === n.id;
             const color = n.type === 'depot' ? '#000000' : n.type === 'pickup' ? '#2563eb' : n.type === 'delivery' ? '#dc2626' : '#6b7280';
+            const innerHtml = `<div class="node-marker-inner ${selected ? 'selected' : ''}" style="background:${color};border:2px solid #ffffff;color:#fff;width:24px;height:24px;display:flex;align-items:center;justify-content:center;border-radius:50%;font-size:11px;font-weight:600;box-shadow:0 0 0 2px ${color}33;cursor:pointer;">${n.id}</div>`;
 
-            // Create DOM element for marker
-            const el = document.createElement('div');
-            el.className = 'node-marker';
-            el.innerHTML = `<div class="node-marker-inner ${selected ? 'selected' : ''}" style="background:${color};border:2px solid #ffffff;color:#fff;width:24px;height:24px;display:flex;align-items:center;justify-content:center;border-radius:50%;font-size:11px;font-weight:600;box-shadow:0 0 0 2px ${color}33;cursor:pointer;">${n.id}</div>`;
+            if (!marker) {
+                // Create DOM element for marker
+                const el = document.createElement('div');
+                el.className = 'node-marker';
+                el.innerHTML = innerHtml;
 
-            // Create Marker
-            const marker = new mapboxgl.Marker({ element: el, anchor: 'center' })
-                .setLngLat([n.lng, n.lat])
-                .addTo(mapInstance.current!);
+                // Create Marker
+                marker = new mapboxgl.Marker({ element: el, anchor: 'center' })
+                    .setLngLat([n.lng, n.lat])
+                    .addTo(mapInstance.current!);
 
-            markersRef.current.set(n.id, marker);
+                markersRef.current.set(n.id, marker);
 
-            // Popup Logic
-            const popupNode = document.createElement('div');
-            const popup = new mapboxgl.Popup({
-                closeButton: true,
-                closeOnClick: true,
-                maxWidth: '300px',
-                className: 'node-popup',
-                offset: 15
-            }).setDOMContent(popupNode);
+                // Popup Logic
+                const popupNode = document.createElement('div');
+                const popup = new mapboxgl.Popup({
+                    closeButton: true,
+                    closeOnClick: true,
+                    maxWidth: '300px',
+                    className: 'node-popup',
+                    offset: 15
+                }).setDOMContent(popupNode);
 
-            marker.setPopup(popup);
+                marker.setPopup(popup);
 
-            // Render Popup Content on Open
-            popup.on('open', () => {
-                const root = createRoot(popupNode);
-                popupRootsRef.current.set(n.id, root);
+                // Check for 'open' event listener existence to avoid dupes? 
+                // Mapbox markers seem to reuse the popup instance.
 
-                // We need to pass fresh callbacks and data
-                root.render(
-                    <NodeDetailsPanel
-                        variant="popover"
-                        node={n}
-                        nodes={nodesRef.current} // Use ref to avoid stale closure if possible, or trigger re-render
-                        onUpdate={handleNodeUpdate}
-                        onDelete={handleNodeDelete}
-                        showNotification={showNotification}
-                        onClose={() => popup.remove()}
-                        onStartPickCoordinates={startPickForEditingNode}
-                    />
-                );
-                setEditingNode(prev => (prev?.id === n.id ? prev : n)); // Set editing node when popup opens
-            });
+                popup.on('open', () => {
+                    const root = createRoot(popupNode);
+                    popupRootsRef.current.set(n.id, root);
 
-            popup.on('close', () => {
-                const root = popupRootsRef.current.get(n.id);
-                if (root) {
-                    root.unmount();
-                    popupRootsRef.current.delete(n.id);
+                    const freshNode = nodesRef.current.find(node => node.id === n.id) || n;
+
+                    root.render(
+                        <NodeDetailsPanel
+                            variant="popover"
+                            node={freshNode}
+                            nodes={nodesRef.current}
+                            onUpdate={handleNodeUpdate}
+                            onDelete={handleNodeDelete}
+                            showNotification={showNotification}
+                            onClose={() => popup.remove()}
+                            onStartPickCoordinates={startPickForEditingNode}
+                        />
+                    );
+                    setEditingNode(prev => (prev?.id === freshNode.id ? prev : freshNode));
+                });
+
+                popup.on('close', () => {
+                    const root = popupRootsRef.current.get(n.id);
+                    if (root) {
+                        setTimeout(() => root.unmount(), 0);
+                        popupRootsRef.current.delete(n.id);
+                    }
+                    setEditingNode(prev => (prev?.id === n.id ? null : prev));
+                });
+
+                // Interaction listeners
+                el.addEventListener('mousedown', (e) => {
+
+                    if (!isLinkingModeRef.current) return;
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const freshNode = nodesRef.current.find(node => node.id === n.id);
+                    if (!freshNode) return;
+
+                    if (freshNode.type !== 'pickup' && freshNode.type !== 'none') {
+                        showNotification('error', 'Điểm bắt đầu phải là pickup hoặc none');
+                        return;
+                    }
+                    popup.remove();
+                    linkingDragRef.current = { active: true, fromId: freshNode.id, tempLine: null };
+                    if (mapInstance.current) {
+                        mapDraggingPrevRef.current = mapInstance.current.dragPan.isEnabled();
+                        mapInstance.current.dragPan.disable();
+                    }
+                });
+
+                el.addEventListener('mouseenter', () => {
+                    if (!isLinkingModeRef.current || !linkingDragRef.current.active) return;
+                    hoveredMarkerIdRef.current = n.id;
+                });
+
+                el.addEventListener('mouseleave', () => {
+                    if (hoveredMarkerIdRef.current === n.id) hoveredMarkerIdRef.current = null;
+                });
+
+                el.addEventListener('mouseup', (e) => {
+                    if (!isLinkingModeRef.current || !linkingDragRef.current.active) return;
+                    e.stopPropagation();
+                    const st = linkingDragRef.current;
+                    if (!st.fromId || st.fromId === n.id) {
+                        cancelLinkingDrag();
+                        return;
+                    }
+                    const targetNode = nodesRef.current.find(node => node.id === n.id);
+                    if (!targetNode || (targetNode.type !== 'delivery' && targetNode.type !== 'none')) {
+                        showNotification('error', 'Điểm kết thúc phải là delivery hoặc none');
+                        cancelLinkingDrag(true);
+                        return;
+                    }
+                    finishLinking(st.fromId, n.id);
+                });
+
+            } else {
+                // Update existing marker
+                marker.setLngLat([n.lng, n.lat]);
+                const el = marker.getElement();
+                if (el.innerHTML !== innerHtml) {
+                    el.innerHTML = innerHtml;
                 }
-                setEditingNode(prev => (prev?.id === n.id ? null : prev)); // Clear editing node when popup closes
-            });
-
-            // Event Listeners for Linking (Drag & Drop)
-            el.addEventListener('mousedown', (e) => {
-                if (!isLinkingModeRef.current) return;
-                e.preventDefault();
-                e.stopPropagation();
-
-                if (n.type !== 'pickup' && n.type !== 'regular') {
-                    showNotification('error', 'Điểm bắt đầu phải là pickup hoặc regular');
-                    return;
-                }
-
-                // Close popup if open
-                popup.remove();
-
-                // Start Drag
-                linkingDragRef.current = { active: true, fromId: n.id, tempLine: null }; // tempLine managed by source now
-
-                // Disable map drag
-                if (mapInstance.current) {
-                    mapDraggingPrevRef.current = mapInstance.current.dragPan.isEnabled();
-                    mapInstance.current.dragPan.disable();
-                }
-            });
-
-            el.addEventListener('mouseenter', () => {
-                if (!isLinkingModeRef.current || !linkingDragRef.current.active) return;
-                hoveredMarkerIdRef.current = n.id;
-            });
-
-            el.addEventListener('mouseleave', () => {
-                if (hoveredMarkerIdRef.current === n.id) hoveredMarkerIdRef.current = null;
-            });
-
-            el.addEventListener('mouseup', (e) => {
-                if (!isLinkingModeRef.current || !linkingDragRef.current.active) return;
-                e.stopPropagation(); // Prevent map mouseup
-
-                const st = linkingDragRef.current;
-                if (!st.fromId || st.fromId === n.id) {
-                    cancelLinkingDrag();
-                    return;
-                }
-
-                // Check target node type
-                const targetNode = nodesRef.current.find(node => node.id === n.id);
-                if (!targetNode || (targetNode.type !== 'delivery' && targetNode.type !== 'regular')) {
-                    showNotification('error', 'Điểm kết thúc phải là delivery hoặc regular');
-                    cancelLinkingDrag(true);
-                    return;
-                }
-            });
+            }
         });
 
     }, [nodes, mapReady, editingNode, showNotification, startPickForEditingNode, finishLinking, cancelLinkingDrag]);
@@ -1002,7 +1074,7 @@ const AddInstanceBuilder: React.FC<AddInstanceBuilderProps> = ({ onBack, onInsta
             const nextIdLocal = prev.length === 0 ? 0 : prev.reduce((m, n) => Math.max(m, n.id), 0) + 1;
             const baseLat = prev[0]?.lat ?? 21.0278;
             const baseLng = prev[0]?.lng ?? 105.8342;
-            return [...prev, { id: nextIdLocal, type: 'regular', lat: baseLat + 0.001 * (nextIdLocal), lng: baseLng + 0.001 * (nextIdLocal), demand: 1, earliestTime: 0, latestTime: 480, serviceDuration: 5 }];
+            return [...prev, { id: nextIdLocal, type: 'none', lat: baseLat + 0.001 * (nextIdLocal), lng: baseLng + 0.001 * (nextIdLocal), demand: 1, earliestTime: 0, latestTime: 480, serviceDuration: 5 }];
         });
         setNextNodeId(id => id + 1);
         setTimeMatrix([]);
@@ -1086,7 +1158,24 @@ const AddInstanceBuilder: React.FC<AddInstanceBuilderProps> = ({ onBack, onInsta
                         <div className="flex items-center space-x-2">
                             {/* Add node */}
                             <button
-                                onClick={() => setIsAddingNode(v => !v)}
+                                onClick={() => {
+                                    setIsAddingNode(v => {
+                                        const next = !v;
+                                        if (next) {
+                                            setIsLinkingMode(false);
+                                            setIsInspecting(false);
+                                            // Close inspector popup if open
+                                            if (inspectPopupRef.current) {
+                                                inspectPopupRef.current.remove();
+                                                inspectPopupRef.current = null;
+                                                setInspectHover(null);
+                                                setInspectPoint(null);
+                                            }
+                                            if (isSelectingLocationRef.current) stopLocationSelection();
+                                        }
+                                        return next;
+                                    });
+                                }}
                                 title={isAddingNode ? 'Hủy thêm node (click để hủy)' : 'Click để thêm node trên bản đồ'}
                                 className={`w-18 h-16 flex flex-col items-center justify-end pb-1 rounded-md transition-colors border ${isAddingNode ? 'bg-red-500 border-red-600 text-white' : 'bg-blue-50 border-blue-500 border-2 text-blue-600 hover:bg-blue-100'}`}
                             >
@@ -1097,11 +1186,22 @@ const AddInstanceBuilder: React.FC<AddInstanceBuilderProps> = ({ onBack, onInsta
                             {/* Link pickup -> delivery */}
                             <button
                                 onClick={() => {
-                                    setIsLinkingMode(prev => !prev);
-                                    // Turn off other transient modes for clarity
-                                    setIsAddingNode(false);
-                                    if (isSelectingLocationRef.current) stopLocationSelection();
-                                    setIsInspecting(false);
+                                    setIsLinkingMode(prev => {
+                                        const next = !prev;
+                                        if (next) {
+                                            setIsAddingNode(false);
+                                            setIsInspecting(false);
+                                            // Close inspector popup if open
+                                            if (inspectPopupRef.current) {
+                                                inspectPopupRef.current.remove();
+                                                inspectPopupRef.current = null;
+                                                setInspectHover(null);
+                                                setInspectPoint(null);
+                                            }
+                                            if (isSelectingLocationRef.current) stopLocationSelection();
+                                        }
+                                        return next;
+                                    });
                                 }}
                                 title="Kéo từ điểm pickup đến điểm delivery để ghép cặp"
                                 className={`w-18 h-16 flex flex-col items-center justify-end pb-1 rounded-md transition-colors border ${isLinkingMode ? 'bg-green-600 text-white' : 'bg-green-50 text-green-700 border-green-500 hover:bg-green-100'}`}
@@ -1247,7 +1347,7 @@ const AddInstanceBuilder: React.FC<AddInstanceBuilderProps> = ({ onBack, onInsta
                                         ? 'Click vào bản đồ để thêm node'
                                         : isSelectingLocation && selectedTableRowIndex != null
                                             ? `Chọn vị trí cho dòng ${selectedTableRowIndex + 1}`
-                                            : 'Kéo từ pickup/regular đến delivery/regular để ghép cặp'}
+                                            : 'Kéo từ pickup/none đến delivery/none để ghép cặp'}
                                 </span>
                             </div>
                         </div>
@@ -1297,7 +1397,7 @@ const AddInstanceBuilder: React.FC<AddInstanceBuilderProps> = ({ onBack, onInsta
                             {inspectHover.lat.toFixed(6)}, {inspectHover.lng.toFixed(6)}
                         </div>
                     )}
-                    <div ref={mapRef} className="absolute inset-0 min-h-[500px]" style={{ cursor: (isSelectingLocation || isAddingNode || isInspecting || isLinkingMode) ? 'crosshair' : 'default' }} />
+                    <div ref={mapRef} className="absolute inset-0 min-h-[800px]" style={{ cursor: (isSelectingLocation || isAddingNode || isInspecting || isLinkingMode) ? 'crosshair' : 'default' }} />
                 </div>
                 {/* Right node editor panel removed (using popovers on markers instead) */}
             </div>
