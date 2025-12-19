@@ -94,6 +94,7 @@ const AddInstanceBuilder: React.FC<AddInstanceBuilderProps> = ({ onBack, onInsta
     const [inspectHover, setInspectHover] = useState<{ lat: number; lng: number } | null>(null);
     const [inspectPoint, setInspectPoint] = useState<{ x: number; y: number } | null>(null);
     const inspectPopupRef = useRef<mapboxgl.Popup | null>(null);
+    const inspectMarkerRef = useRef<mapboxgl.Marker | null>(null);
     const [selectedTableRowIndex, setSelectedTableRowIndex] = useState<number | null>(null);
     const selectedRowIndexRef = useRef<number | null>(null);
     const routeTimeRef = useRef<number>(480);
@@ -623,6 +624,112 @@ const AddInstanceBuilder: React.FC<AddInstanceBuilderProps> = ({ onBack, onInsta
 
                     // Restore cursor
                     if (mapInstance.current) mapInstance.current.getCanvas().style.cursor = '';
+                } else if (isInspectingRef.current) {
+                    // Remove previous inspect popup/marker
+                    if (inspectPopupRef.current) {
+                        inspectPopupRef.current.remove();
+                        inspectPopupRef.current = null;
+                    }
+                    if (inspectMarkerRef.current) {
+                        inspectMarkerRef.current.remove();
+                        inspectMarkerRef.current = null;
+                    }
+
+                    // Create temporary marker
+                    const el = document.createElement('div');
+                    el.className = 'w-4 h-4 bg-blue-500 rounded-full border-2 border-white shadow-sm ring-2 ring-blue-500/30';
+                    const marker = new mapboxgl.Marker({ element: el, anchor: 'center' })
+                        .setLngLat([lng, lat])
+                        .addTo(mapInstance.current!);
+                    inspectMarkerRef.current = marker;
+
+                    const popupNode = document.createElement('div');
+                    const popup = new mapboxgl.Popup({
+                        closeButton: true,
+                        closeOnClick: true,
+                        maxWidth: '300px',
+                        className: 'inspect-popup',
+                        offset: 12
+                    })
+                        .setLngLat([lng, lat])
+                        .setDOMContent(popupNode)
+                        .addTo(mapInstance.current!);
+
+                    inspectPopupRef.current = popup;
+
+                    const root = createRoot(popupNode);
+
+                    const handleAdd = () => {
+                        setNodes(prev => {
+                            const nextIdLocal = prev.length === 0 ? 0 : prev.reduce((m, n) => Math.max(m, n.id), 0) + 1;
+                            return [...prev, { id: nextIdLocal, type: 'regular', lat, lng, demand: 1, earliestTime: 0, latestTime: routeTimeRef.current, serviceDuration: 5 }];
+                        });
+                        setNextNodeId(id => id + 1);
+                        setTimeMatrix([]);
+                        if (showTableInput) setTableDirty(false);
+                        showNotification('success', 'Đã thêm điểm mới');
+                        popup.remove();
+                    };
+
+                    const PopupContent = ({ address, loading }: { address?: string | null, loading?: boolean }) => (
+                        <div className="px-1 py-1 font-sans" style={{ minWidth: '220px' }}>
+                            <div className="flex items-start justify-between gap-3 mb-3">
+                                <div className="flex items-center gap-2.5">
+                                    <div className="bg-blue-50 text-blue-600 p-1.5 rounded-md">
+                                        <MapPinPlus size={16} />
+                                    </div>
+                                    <div>
+                                        <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider leading-none mb-0.5">Tọa độ</div>
+                                        <div className="font-mono text-xs font-bold text-gray-700 select-all">{lat.toFixed(5)}, {lng.toFixed(5)}</div>
+                                    </div>
+                                </div>
+                                <a
+                                    href={`https://www.google.com/maps?q=${lat},${lng}`}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="text-gray-400 hover:text-blue-600 hover:bg-blue-50 p-1.5 rounded-md transition-colors"
+                                    title="Mở Google Maps"
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="3 11 22 2 13 21 11 13 3 11" /></svg>
+                                </a>
+                            </div>
+
+                            <div className="mb-3 pl-0.5">
+                                <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider leading-none mb-1">Địa chỉ</div>
+                                <div className="text-[11px] text-gray-600 leading-snug break-words">
+                                    {loading ? (
+                                        <div className="flex items-center gap-1.5 text-blue-500 italic">
+                                            <LoaderCircle className="animate-spin w-3 h-3" />
+                                            <span>Đang tìm...</span>
+                                        </div>
+                                    ) : (address || <span className="italic text-gray-400">Không tìm thấy địa chỉ</span>)}
+                                </div>
+                            </div>
+
+                            <button
+                                onClick={handleAdd}
+                                className="w-full bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold py-2 px-3 rounded-lg shadow-sm transition-all active:scale-95 flex items-center justify-center gap-2"
+                            >
+                                <MapPinPlus size={14} />
+                                Thêm điểm này
+                            </button>
+                        </div>
+                    );
+
+                    root.render(<PopupContent loading={true} />);
+
+                    reverseGeocode(lat, lng).then(address => {
+                        if (inspectPopupRef.current !== popup) return;
+                        root.render(<PopupContent address={address} loading={false} />);
+                    });
+
+                    popup.on('close', () => {
+                        setTimeout(() => root.unmount(), 0);
+                        if (inspectMarkerRef.current === marker) {
+                            marker.remove();
+                            inspectMarkerRef.current = null;
+                        }
+                    });
                 } else if (isAddingNodeRef.current) {
                     setNodes(prev => {
                         const nextIdLocal = prev.length === 0 ? 0 : prev.reduce((m, n) => Math.max(m, n.id), 0) + 1;
@@ -905,23 +1012,24 @@ const AddInstanceBuilder: React.FC<AddInstanceBuilderProps> = ({ onBack, onInsta
         }
     }, []);
 
-    // Time matrix generation using OSRM public API
+    // Time matrix generation using Mapbox Matrix API
     const generateTimeMatrix = useCallback(async () => {
         if (nodes.length === 0) return;
         setIsGeneratingMatrix(true);
         setMatrixGenerationProgress(0);
         try {
             const coords = nodes.map(n => `${n.lng.toFixed(6)},${n.lat.toFixed(6)}`).join(';');
-            const url = `https://router.project-osrm.org/table/v1/driving/${coords}?annotations=duration`;
+            const accessToken = config.mapbox?.accessToken || process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN || '';
+            const url = `https://api.mapbox.com/directions-matrix/v1/mapbox/driving/${coords}?annotations=duration&access_token=${accessToken}`;
             const res = await fetch(url);
-            if (!res.ok) throw new Error('OSRM request failed');
+            if (!res.ok) throw new Error('Mapbox Matrix request failed');
             const data = await res.json();
             if (data.durations && Array.isArray(data.durations)) {
                 const matrix: number[][] = data.durations.map((row: number[]) => row.map((v: number) => Math.max(0, Math.round(v / 60))));
                 setTimeMatrix(matrix);
-                showNotification('success', 'Đã tạo time matrix (OSRM)');
+                showNotification('success', 'Đã tạo time matrix (Mapbox)');
             } else {
-                showNotification('error', 'OSRM không trả về durations');
+                showNotification('error', 'Mapbox Matrix không trả về durations');
             }
         } catch (e) {
             console.error(e);

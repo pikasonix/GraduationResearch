@@ -3,7 +3,9 @@ package com.pikasonix.wayo.data.remote
 import com.pikasonix.wayo.BuildConfig
 import com.pikasonix.wayo.data.model.LocationPoint
 import com.pikasonix.wayo.data.model.PlaceResult
+import com.pikasonix.wayo.data.model.RouteAnnotation
 import com.pikasonix.wayo.data.model.RouteInfo
+import com.pikasonix.wayo.data.model.RouteLeg
 import com.pikasonix.wayo.data.model.RouteStep
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -47,6 +49,7 @@ class MapboxService @Inject constructor() {
                     "&language=vi" +
                     "&overview=full" +
                     "&steps=true" +
+                    "&annotations=congestion,speed,duration" +
                     "&access_token=${MapboxConfig.ACCESS_TOKEN}"
             
             val request = Request.Builder()
@@ -93,27 +96,74 @@ class MapboxService @Inject constructor() {
                 )
             }
             
-            // Parse steps
-            val legs = route.getJSONArray("legs")
-            val steps = mutableListOf<RouteStep>()
+            // Parse legs with steps and annotations
+            val legsJson = route.getJSONArray("legs")
+            val legs = mutableListOf<RouteLeg>()
+            val allSteps = mutableListOf<RouteStep>()
             
-            for (i in 0 until legs.length()) {
-                val leg = legs.getJSONObject(i)
-                val legSteps = leg.getJSONArray("steps")
+            for (i in 0 until legsJson.length()) {
+                val leg = legsJson.getJSONObject(i)
+                val legSteps = mutableListOf<RouteStep>()
+                val legStepsJson = leg.getJSONArray("steps")
                 
-                for (j in 0 until legSteps.length()) {
-                    val step = legSteps.getJSONObject(j)
+                for (j in 0 until legStepsJson.length()) {
+                    val step = legStepsJson.getJSONObject(j)
                     val maneuver = step.getJSONObject("maneuver")
                     
-                    steps.add(
-                        RouteStep(
-                            instruction = maneuver.optString("instruction", ""),
-                            distance = step.getDouble("distance"),
-                            duration = step.getDouble("duration"),
-                            maneuver = maneuver.optString("type", "")
-                        )
+                    val routeStep = RouteStep(
+                        instruction = maneuver.optString("instruction", ""),
+                        distance = step.getDouble("distance"),
+                        duration = step.getDouble("duration"),
+                        maneuver = maneuver.optString("type", "")
                     )
+                    legSteps.add(routeStep)
+                    allSteps.add(routeStep)
                 }
+                
+                // Parse annotation if available
+                val annotation = if (leg.has("annotation")) {
+                    val annotationJson = leg.getJSONObject("annotation")
+                    
+                    val congestion = mutableListOf<String>()
+                    if (annotationJson.has("congestion")) {
+                        val congestionArray = annotationJson.getJSONArray("congestion")
+                        for (j in 0 until congestionArray.length()) {
+                            congestion.add(congestionArray.optString(j, "unknown"))
+                        }
+                    }
+                    
+                    val speed = mutableListOf<Double>()
+                    if (annotationJson.has("speed")) {
+                        val speedArray = annotationJson.getJSONArray("speed")
+                        for (j in 0 until speedArray.length()) {
+                            speed.add(speedArray.optDouble(j, 0.0))
+                        }
+                    }
+                    
+                    val durationList = mutableListOf<Double>()
+                    if (annotationJson.has("duration")) {
+                        val durationArray = annotationJson.getJSONArray("duration")
+                        for (j in 0 until durationArray.length()) {
+                            durationList.add(durationArray.optDouble(j, 0.0))
+                        }
+                    }
+                    
+                    RouteAnnotation(
+                        congestion = congestion,
+                        speed = speed,
+                        duration = durationList
+                    )
+                } else null
+                
+                legs.add(
+                    RouteLeg(
+                        distance = leg.getDouble("distance"),
+                        duration = leg.getDouble("duration"),
+                        steps = legSteps,
+                        annotation = annotation,
+                        summary = leg.optString("summary", null)
+                    )
+                )
             }
             
             RouteInfo(
@@ -122,7 +172,8 @@ class MapboxService @Inject constructor() {
                 distance = distance,
                 duration = duration,
                 geometry = geometryPoints,
-                steps = steps
+                steps = allSteps,
+                legs = legs
             )
         } catch (e: Exception) {
             e.printStackTrace()

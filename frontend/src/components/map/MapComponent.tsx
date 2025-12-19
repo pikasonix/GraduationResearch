@@ -110,7 +110,9 @@ const MapComponent: React.FC<MapComponentProps> = ({
     if (useRealRouting) {
       try {
         profile = localStorage.getItem('routingProfile') || 'walking';
-        const url = `https://router.project-osrm.org/route/v1/${profile}/${fromNode.coords[1]},${fromNode.coords[0]};${toNode.coords[1]},${toNode.coords[0]}?overview=full&geometries=geojson`;
+        const mapboxProfile = profile === 'driving' ? 'driving' : profile === 'cycling' ? 'cycling' : 'walking';
+        const accessToken = config.mapbox?.accessToken || process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN || '';
+        const url = `https://api.mapbox.com/directions/v5/mapbox/${mapboxProfile}/${fromNode.coords[1]},${fromNode.coords[0]};${toNode.coords[1]},${toNode.coords[0]}?overview=full&geometries=geojson&access_token=${accessToken}`;
         const resp = await fetch(url);
         const data = await resp.json();
         if (data.routes && data.routes[0]) {
@@ -356,7 +358,9 @@ const MapComponent: React.FC<MapComponentProps> = ({
     try {
       // Get routing profile from localStorage, default to 'walking' for shortest path
       const routingProfile = localStorage.getItem('routingProfile') || 'walking';
-      const url = `https://router.project-osrm.org/route/v1/${routingProfile}/${startCoord[1]},${startCoord[0]};${endCoord[1]},${endCoord[0]}?overview=full&geometries=geojson`;
+      const mapboxProfile = routingProfile === 'driving' ? 'driving' : routingProfile === 'cycling' ? 'cycling' : 'walking';
+      const accessToken = config.mapbox?.accessToken || process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN || '';
+      const url = `https://api.mapbox.com/directions/v5/mapbox/${mapboxProfile}/${startCoord[1]},${startCoord[0]};${endCoord[1]},${endCoord[0]}?overview=full&geometries=geojson&access_token=${accessToken}`;
       const response = await fetch(url);
       const data = await response.json();
 
@@ -404,7 +408,9 @@ const MapComponent: React.FC<MapComponentProps> = ({
       try {
         // Get routing profile from localStorage, default to 'walking' for shortest path
         const routingProfile = localStorage.getItem('routingProfile') || 'walking';
-        const url = `https://router.project-osrm.org/route/v1/${routingProfile}/${coordPairs}?overview=full&geometries=geojson`;
+        const mapboxProfile = routingProfile === 'driving' ? 'driving' : routingProfile === 'cycling' ? 'cycling' : 'walking';
+        const accessToken = config.mapbox?.accessToken || process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN || '';
+        const url = `https://api.mapbox.com/directions/v5/mapbox/${mapboxProfile}/${coordPairs}?overview=full&geometries=geojson&access_token=${accessToken}`;
         const response = await fetch(url);
         const data = await response.json();
         let routeCoords: [number, number][];

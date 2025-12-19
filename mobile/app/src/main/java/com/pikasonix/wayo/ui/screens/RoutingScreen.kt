@@ -50,6 +50,7 @@ import com.mapbox.maps.extension.style.layers.generated.circleLayer
 import com.mapbox.maps.extension.style.layers.generated.lineLayer
 import com.mapbox.maps.extension.style.layers.generated.symbolLayer
 import com.mapbox.maps.extension.style.layers.getLayer
+import com.mapbox.maps.extension.style.layers.properties.generated.Visibility
 import com.mapbox.maps.extension.style.sources.addSource
 import com.mapbox.maps.extension.style.sources.generated.geoJsonSource
 import com.mapbox.maps.extension.style.sources.getSource
@@ -61,17 +62,33 @@ import com.pikasonix.wayo.data.model.LocationPoint
 import com.pikasonix.wayo.data.model.PlaceResult
 import com.pikasonix.wayo.data.model.RouteInfo
 import com.pikasonix.wayo.data.model.RouteStep
+import com.pikasonix.wayo.ui.components.GuidanceHUD
+import com.pikasonix.wayo.ui.components.MapSettingsPanel
+import com.pikasonix.wayo.ui.components.QuickMapControls
+import com.pikasonix.wayo.ui.components.SimulationPanel
+import com.pikasonix.wayo.ui.viewmodel.MapStyle
 import com.pikasonix.wayo.ui.viewmodel.RoutingViewModel
 
 // Constants for map layers and sources
 private const val ROUTE_SOURCE_ID = "route-source"
 private const val ROUTE_LAYER_ID = "route-layer"
+private const val ROUTE_CONGESTION_SOURCE_ID = "route-congestion-source"
+private const val ROUTE_CONGESTION_LAYER_ID = "route-congestion-layer"
 private const val ORIGIN_SOURCE_ID = "origin-source"
 private const val ORIGIN_LAYER_ID = "origin-layer"
 private const val ORIGIN_OUTER_LAYER_ID = "origin-outer-layer"
 private const val DESTINATION_SOURCE_ID = "destination-source"
 private const val DESTINATION_LAYER_ID = "destination-layer"
 private const val DESTINATION_OUTER_LAYER_ID = "destination-outer-layer"
+private const val VEHICLE_SOURCE_ID = "vehicle-source"
+private const val VEHICLE_LAYER_ID = "vehicle-layer"
+
+// Congestion colors
+private val CONGESTION_LOW = Color(0xFF22C55E)      // Green - low traffic
+private val CONGESTION_MODERATE = Color(0xFFFBBF24) // Yellow - moderate traffic
+private val CONGESTION_HEAVY = Color(0xFFF97316)    // Orange - heavy traffic
+private val CONGESTION_SEVERE = Color(0xFFEF4444)   // Red - severe traffic
+private val CONGESTION_UNKNOWN = Color(0xFF3B82F6)  // Blue - unknown
 
 /**
  * Routing Screen composable with map and navigation features
@@ -86,6 +103,7 @@ fun RoutingScreen(
     val uiState by viewModel.uiState.collectAsState()
     var mapView by remember { mutableStateOf<MapView?>(null) }
     var showInstructions by remember { mutableStateOf(false) }
+    var showSearchPanel by remember { mutableStateOf(false) }
     val focusManager = LocalFocusManager.current
     
     // Default center: Hanoi, Vietnam
@@ -126,16 +144,31 @@ fun RoutingScreen(
     // Whether we're in map selection mode
     val isSelectingOnMap = uiState.isSelectingOriginOnMap || uiState.isSelectingDestinationOnMap
     
+    // Auto-zoom to current location when available (only if no route)
+    LaunchedEffect(uiState.userLocation, uiState.currentRoute) {
+        if (uiState.currentRoute == null) {
+            uiState.userLocation?.let { location ->
+                mapView?.mapboxMap?.setCamera(
+                    CameraOptions.Builder()
+                        .center(Point.fromLngLat(location.longitude, location.latitude))
+                        .zoom(15.0)
+                        .build()
+                )
+            }
+        }
+    }
+    
     // Draw route on map when route changes
-    LaunchedEffect(uiState.currentRoute, uiState.origin, uiState.destination) {
+    LaunchedEffect(uiState.currentRoute, uiState.origin, uiState.destination, uiState.showCongestionColors) {
         mapView?.let { mv ->
             mv.mapboxMap.getStyle { style ->
                 // Draw route polyline
                 uiState.currentRoute?.let { route ->
-                    drawRouteOnMap(style, route)
-                    
-                    // Fit camera to route bounds
-                    fitCameraToRoute(mv, route, uiState.origin, uiState.destination)
+                    if (uiState.showCongestionColors) {
+                        drawRouteWithCongestion(style, route)
+                    } else {
+                        drawRouteOnMap(style, route)
+                    }
                 } ?: run {
                     // Clear route if no route
                     clearRouteFromMap(style)
@@ -144,6 +177,96 @@ fun RoutingScreen(
                 // Draw markers for origin and destination
                 drawMarkers(style, uiState.origin, uiState.destination)
             }
+            
+            // Fit camera to route bounds (outside getStyle callback)
+            uiState.currentRoute?.let { route ->
+                if (!uiState.isNavigating) {
+                    fitCameraToRoute(mv, route, uiState.origin, uiState.destination)
+                }
+            }
+        }
+    }
+    
+    // Handle map style changes (traffic layer)
+    LaunchedEffect(uiState.mapStyle, uiState.showTrafficLayer) {
+        mapView?.let { mv ->
+            val styleUri = when (uiState.mapStyle) {
+                MapStyle.SATELLITE -> if (uiState.showTrafficLayer) Style.SATELLITE_STREETS else Style.SATELLITE
+                MapStyle.DARK -> if (uiState.showTrafficLayer) Style.TRAFFIC_NIGHT else Style.DARK
+                MapStyle.LIGHT -> if (uiState.showTrafficLayer) Style.TRAFFIC_DAY else Style.LIGHT
+                else -> if (uiState.showTrafficLayer) Style.TRAFFIC_DAY else Style.MAPBOX_STREETS
+            }
+            
+            mv.mapboxMap.loadStyle(styleUri) { style ->
+                // Re-initialize route layers after style change
+                initializeRouteLayers(style)
+                
+                // Re-draw route and markers
+                uiState.currentRoute?.let { route ->
+                    if (uiState.showCongestionColors) {
+                        drawRouteWithCongestion(style, route)
+                    } else {
+                        drawRouteOnMap(style, route)
+                    }
+                }
+                drawMarkers(style, uiState.origin, uiState.destination)
+            }
+        }
+    }
+    
+    // Handle 3D mode changes
+    LaunchedEffect(uiState.is3DMode) {
+        mapView?.let { mv ->
+            if (uiState.is3DMode) {
+                mv.mapboxMap.setCamera(
+                    CameraOptions.Builder()
+                        .pitch(60.0)
+                        .build()
+                )
+            } else {
+                mv.mapboxMap.setCamera(
+                    CameraOptions.Builder()
+                        .pitch(0.0)
+                        .build()
+                )
+            }
+        }
+    }
+    
+    // Handle simulation - update vehicle position on map
+    val simulation = uiState.simulation
+    LaunchedEffect(simulation.currentPosition, simulation.followVehicle, uiState.isNavigating) {
+        mapView?.let { mv ->
+            mv.mapboxMap.getStyle { style ->
+                simulation.currentPosition?.let { position ->
+                    updateVehiclePosition(style, position)
+                    
+                    // Follow vehicle when navigating
+                    if (uiState.isNavigating && simulation.followVehicle) {
+                        mv.mapboxMap.setCamera(
+                            CameraOptions.Builder()
+                                .center(Point.fromLngLat(position.longitude, position.latitude))
+                                .zoom(17.0) // Zoom in more for navigation
+                                .bearing(simulation.currentBearing.toDouble()) // Rotate map to direction
+                                .pitch(45.0) // Slight tilt for 3D effect
+                                .build()
+                        )
+                    }
+                }
+            }
+        }
+    }
+    
+    // Initial zoom when starting navigation
+    LaunchedEffect(uiState.isNavigating) {
+        if (uiState.isNavigating && uiState.origin != null) {
+            mapView?.mapboxMap?.setCamera(
+                CameraOptions.Builder()
+                    .center(Point.fromLngLat(uiState.origin!!.longitude, uiState.origin!!.latitude))
+                    .zoom(17.0)
+                    .pitch(45.0)
+                    .build()
+            )
         }
     }
     
@@ -196,40 +319,163 @@ fun RoutingScreen(
         // Top Bar Overlay (only when not selecting on map)
         if (!isSelectingOnMap) {
             TopBarOverlay(
-                onNavigateBack = onNavigateBack,
+                onNavigateBack = {
+                    if (showSearchPanel) {
+                        showSearchPanel = false
+                    } else if (uiState.currentRoute != null) {
+                        viewModel.clearRoute()
+                    } else {
+                        onNavigateBack()
+                    }
+                },
+                onMenuClick = { /* TODO: Open menu drawer */ },
+                hasRoute = uiState.currentRoute != null || showSearchPanel,
+                originText = uiState.originText,
+                destinationText = uiState.destinationText,
                 modifier = Modifier.align(Alignment.TopCenter)
             )
         }
         
-        // Map Controls (right side)
-        MapControlsColumn(
-            onMyLocation = { 
-                if (viewModel.hasLocationPermission()) {
-                    viewModel.useCurrentLocationAsOrigin()
-                } else {
-                    locationPermissionLauncher.launch(
-                        arrayOf(
-                            Manifest.permission.ACCESS_FINE_LOCATION,
-                            Manifest.permission.ACCESS_COARSE_LOCATION
+        // Guidance HUD (shown when navigating/simulating)
+        uiState.currentRoute?.let { route ->
+            val steps = route.legs.firstOrNull()?.steps ?: route.steps
+            val currentStep = steps.getOrNull(uiState.currentStepIndex)
+            GuidanceHUD(
+                visible = uiState.isNavigating,
+                currentStep = currentStep,
+                stepIndex = uiState.currentStepIndex,
+                totalSteps = steps.size,
+                distanceToStep = simulation.distanceToNextStep,
+                onPrevious = viewModel::previousStep,
+                onNext = viewModel::nextStep,
+                onStop = viewModel::stopNavigation,
+                formatDistance = viewModel::formatDistance,
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = 32.dp)
+            )
+        }
+        
+        // Map Settings Panel state
+        var showMapSettings by remember { mutableStateOf(false) }
+        
+        // My Location button (left side, shown on home screen)
+        AnimatedVisibility(
+            visible = uiState.currentRoute == null && !showSearchPanel && !isSelectingOnMap,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .padding(start = 16.dp, bottom = 180.dp)
+        ) {
+            FilledIconButton(
+                onClick = {
+                    if (viewModel.hasLocationPermission()) {
+                        viewModel.useCurrentLocationAsOrigin()
+                    } else {
+                        locationPermissionLauncher.launch(
+                            arrayOf(
+                                Manifest.permission.ACCESS_FINE_LOCATION,
+                                Manifest.permission.ACCESS_COARSE_LOCATION
+                            )
                         )
-                    )
-                }
-            },
-            onZoomIn = { /* TODO: Zoom in */ },
-            onZoomOut = { /* TODO: Zoom out */ },
+                    }
+                },
+                colors = IconButtonDefaults.filledIconButtonColors(
+                    containerColor = Color(0xFF1F2937)
+                ),
+                modifier = Modifier
+                    .size(48.dp)
+                    .shadow(6.dp, CircleShape)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.MyLocation,
+                    contentDescription = "Vị trí của tôi",
+                    tint = Color.White,
+                    modifier = Modifier.size(22.dp)
+                )
+            }
+        }
+        
+        // Map Controls (right side - hidden on home screen)
+        AnimatedVisibility(
+            visible = uiState.currentRoute != null || showSearchPanel,
+            enter = fadeIn(),
+            exit = fadeOut(),
             modifier = Modifier
                 .align(Alignment.CenterEnd)
                 .padding(end = 16.dp)
-        )
+        ) {
+            MapControlsColumn(
+                onMyLocation = { 
+                    if (viewModel.hasLocationPermission()) {
+                        viewModel.useCurrentLocationAsOrigin()
+                    } else {
+                        locationPermissionLauncher.launch(
+                            arrayOf(
+                                Manifest.permission.ACCESS_FINE_LOCATION,
+                                Manifest.permission.ACCESS_COARSE_LOCATION
+                            )
+                        )
+                    }
+                },
+                onZoomIn = { /* TODO: Zoom in */ },
+                onZoomOut = { /* TODO: Zoom out */ },
+                onMapSettings = { showMapSettings = !showMapSettings }
+            )
+        }
         
-        // Bottom Sheet Content (only when not selecting on map)
-        if (!isSelectingOnMap) {
+        // Simulation Panel (shown when navigating - at bottom)
+        AnimatedVisibility(
+            visible = uiState.isNavigating && uiState.currentRoute != null,
+            enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
+            exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
+            modifier = Modifier.align(Alignment.BottomCenter)
+        ) {
+            val steps = uiState.currentRoute?.legs?.firstOrNull()?.steps ?: uiState.currentRoute?.steps ?: emptyList()
+            SimulationPanel(
+                simulation = simulation,
+                canSimulate = uiState.currentRoute != null,
+                onTogglePlay = viewModel::toggleSimulation,
+                onReset = viewModel::resetSimulation,
+                onToggleFollow = viewModel::toggleSimulationFollow,
+                onSpeedChange = viewModel::setSimulationSpeed,
+                formatDistance = viewModel::formatDistance,
+                formatDuration = viewModel::formatDuration,
+                routeSteps = steps,
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+        
+        // Map Settings Panel (left side)
+        AnimatedVisibility(
+            visible = showMapSettings,
+            enter = slideInHorizontally(initialOffsetX = { -it }) + fadeIn(),
+            exit = slideOutHorizontally(targetOffsetX = { -it }) + fadeOut(),
+            modifier = Modifier.align(Alignment.CenterStart)
+        ) {
+            MapSettingsPanel(
+                currentStyle = uiState.mapStyle,
+                showTrafficLayer = uiState.showTrafficLayer,
+                showCongestionColors = uiState.showCongestionColors,
+                is3DMode = uiState.is3DMode,
+                onStyleChange = viewModel::setMapStyle,
+                onToggleTraffic = viewModel::toggleTrafficLayer,
+                onToggleCongestion = viewModel::toggleCongestionColors,
+                onToggle3D = viewModel::toggle3DMode,
+                onDismiss = { showMapSettings = false },
+                modifier = Modifier.padding(start = 16.dp)
+            )
+        }
+        
+        // Bottom Sheet Content (only when not selecting on map and not navigating)
+        if (!isSelectingOnMap && !uiState.isNavigating) {
             Column(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
             ) {
-                // Route Info Card (shown when route is available)
+                // Route Info Card (shown when route is available but not navigating)
                 AnimatedVisibility(
                     visible = uiState.currentRoute != null && !showInstructions,
                     enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
@@ -243,7 +489,9 @@ fun RoutingScreen(
                             onShowInstructions = { showInstructions = true },
                             onStartNavigation = viewModel::startNavigation,
                             onClearRoute = viewModel::clearRoute,
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                            originName = uiState.originText.take(15).ifEmpty { "Vị trí của bạn" },
+                            destinationName = uiState.destinationText,
+                            modifier = Modifier.fillMaxWidth()
                         )
                     }
                 }
@@ -264,11 +512,25 @@ fun RoutingScreen(
                     }
                 }
                 
-                // Search Panel (always at bottom)
+                // Home Bottom Bar (shown when no route and not searching)
                 AnimatedVisibility(
-                    visible = !showInstructions,
-                    enter = fadeIn(),
-                    exit = fadeOut()
+                    visible = uiState.currentRoute == null && !showSearchPanel && !showInstructions,
+                    enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
+                    exit = slideOutVertically(targetOffsetY = { it }) + fadeOut()
+                ) {
+                    HomeBottomBar(
+                        selectedProfile = uiState.selectedProfile,
+                        onProfileChange = viewModel::updateProfile,
+                        onSearchClick = { showSearchPanel = true },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+                
+                // Search Panel (shown when searching)
+                AnimatedVisibility(
+                    visible = showSearchPanel && uiState.currentRoute == null,
+                    enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
+                    exit = slideOutVertically(targetOffsetY = { it }) + fadeOut()
                 ) {
                     SearchPanel(
                         originText = uiState.originText,
@@ -290,6 +552,7 @@ fun RoutingScreen(
                         onFindRoute = {
                             focusManager.clearFocus()
                             viewModel.findRoute()
+                            showSearchPanel = false
                         },
                         onSelectOriginFromSearch = viewModel::selectOriginFromSearch,
                         onSelectDestinationFromSearch = viewModel::selectDestinationFromSearch,
@@ -361,64 +624,101 @@ fun MapSelectionOverlay(
 }
 
 /**
- * Top bar overlay with back button
+ * Top bar overlay - shows menu button on home screen, route header when has route
  */
 @Composable
 fun TopBarOverlay(
     onNavigateBack: () -> Unit,
+    onMenuClick: () -> Unit = {},
+    hasRoute: Boolean = false,
+    originText: String = "",
+    destinationText: String = "",
     modifier: Modifier = Modifier
 ) {
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .padding(top = 48.dp, start = 16.dp, end = 16.dp),
+            .background(if (hasRoute) Color(0xFF1F2937) else Color.Transparent)
+            .padding(top = 48.dp, start = 16.dp, end = 16.dp, bottom = if (hasRoute) 12.dp else 0.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        FilledIconButton(
-            onClick = onNavigateBack,
-            colors = IconButtonDefaults.filledIconButtonColors(
-                containerColor = Color.White
-            ),
-            modifier = Modifier.shadow(4.dp, CircleShape)
-        ) {
-            Icon(
-                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                contentDescription = "Quay lại",
-                tint = Color(0xFF374151)
-            )
+        if (hasRoute) {
+            // Back button
+            IconButton(
+                onClick = onNavigateBack,
+                modifier = Modifier.size(40.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = "Quay lại",
+                    tint = Color.White
+                )
+            }
+            
+            Spacer(modifier = Modifier.width(8.dp))
+            
+            // Origin → Destination
+            Row(
+                modifier = Modifier.weight(1f),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = originText.take(12).ifEmpty { "Vị trí của..." },
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = Color.White,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false)
+                )
+                
+                Text(
+                    text = "  →  ",
+                    fontSize = 14.sp,
+                    color = Color(0xFF9CA3AF)
+                )
+                
+                Text(
+                    text = destinationText.take(25).ifEmpty { "Điểm đến" },
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = Color.White,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false)
+                )
+            }
+        } else {
+            // Menu button on home screen
+            FilledIconButton(
+                onClick = onMenuClick,
+                colors = IconButtonDefaults.filledIconButtonColors(
+                    containerColor = Color(0xFF1F2937)
+                ),
+                modifier = Modifier
+                    .size(52.dp)
+                    .shadow(8.dp, RoundedCornerShape(14.dp))
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Menu,
+                    contentDescription = "Menu",
+                    tint = Color.White,
+                    modifier = Modifier.size(26.dp)
+                )
+            }
         }
-        
-        Spacer(modifier = Modifier.weight(1f))
-        
-        // Title
-        Card(
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(containerColor = Color.White),
-            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
-        ) {
-            Text(
-                text = "Chỉ đường",
-                fontWeight = FontWeight.SemiBold,
-                fontSize = 16.sp,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-            )
-        }
-        
-        Spacer(modifier = Modifier.weight(1f))
-        
-        // Placeholder for symmetry
-        Spacer(modifier = Modifier.size(48.dp))
     }
 }
 
 /**
- * Map controls column (zoom, location, etc.)
+ * Map controls column (location, settings, etc.)
  */
 @Composable
 fun MapControlsColumn(
     onMyLocation: () -> Unit,
-    onZoomIn: () -> Unit,
-    onZoomOut: () -> Unit,
+    onZoomIn: () -> Unit = {},
+    onZoomOut: () -> Unit = {},
+    onMapSettings: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -440,28 +740,20 @@ fun MapControlsColumn(
             )
         }
         
-        // Zoom controls
-        Card(
-            shape = RoundedCornerShape(8.dp),
-            colors = CardDefaults.cardColors(containerColor = Color.White),
-            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
-        ) {
-            Column {
-                IconButton(onClick = onZoomIn) {
-                    Icon(
-                        imageVector = Icons.Default.Add,
-                        contentDescription = "Phóng to",
-                        tint = Color(0xFF374151)
-                    )
-                }
-                HorizontalDivider(color = Color(0xFFE5E7EB))
-                IconButton(onClick = onZoomOut) {
-                    Icon(
-                        imageVector = Icons.Default.Remove,
-                        contentDescription = "Thu nhỏ",
-                        tint = Color(0xFF374151)
-                    )
-                }
+        // Map Settings button
+        if (onMapSettings != null) {
+            FilledIconButton(
+                onClick = onMapSettings,
+                colors = IconButtonDefaults.filledIconButtonColors(
+                    containerColor = Color.White
+                ),
+                modifier = Modifier.shadow(4.dp, CircleShape)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Layers,
+                    contentDescription = "Cài đặt bản đồ",
+                    tint = Color(0xFF6B7280)
+                )
             }
         }
     }
@@ -807,7 +1099,7 @@ fun ProfileChip(
 }
 
 /**
- * Route info card showing distance, duration, and actions
+ * Route info card showing distance, duration, and actions - Dark theme
  */
 @Composable
 fun RouteInfoCard(
@@ -817,82 +1109,94 @@ fun RouteInfoCard(
     onShowInstructions: () -> Unit,
     onStartNavigation: () -> Unit,
     onClearRoute: () -> Unit,
+    originName: String = "Vị trí của bạn",
+    destinationName: String = "",
     modifier: Modifier = Modifier
 ) {
+    // Get route description from first step
+    val routeDescription = route.steps.firstOrNull()?.instruction?.take(50) ?: "Lộ trình tốt nhất"
+    
     Card(
-        modifier = modifier.shadow(8.dp, RoundedCornerShape(20.dp)),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White)
+        modifier = modifier.shadow(12.dp, RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)),
+        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF1F2937))
     ) {
         Column(
             modifier = Modifier.padding(20.dp)
         ) {
-            // Duration and distance
+            // Handle bar
+            Box(
+                modifier = Modifier
+                    .align(Alignment.CenterHorizontally)
+                    .width(40.dp)
+                    .height(4.dp)
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(Color(0xFF4B5563))
+            )
+            
+            Spacer(modifier = Modifier.height(16.dp))
+            
+            // Duration and distance row
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Top
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Column {
-                    Text(
-                        text = formatDuration(route.duration),
-                        fontSize = 28.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFF2563EB)
-                    )
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Route,
-                            contentDescription = null,
-                            tint = Color(0xFF6B7280),
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = formatDistance(route.distance),
-                            fontSize = 14.sp,
-                            color = Color(0xFF6B7280)
-                        )
-                    }
-                }
-                
-                // Close button
-                IconButton(onClick = onClearRoute) {
-                    Icon(
-                        imageVector = Icons.Default.Close,
-                        contentDescription = "Đóng",
-                        tint = Color(0xFF9CA3AF)
-                    )
-                }
+                Text(
+                    text = formatDuration(route.duration),
+                    fontSize = 32.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+                Text(
+                    text = formatDistance(route.distance),
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = Color(0xFF9CA3AF)
+                )
             }
             
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(8.dp))
+            
+            // Route description
+            Text(
+                text = routeDescription,
+                fontSize = 15.sp,
+                color = Color(0xFFD1D5DB),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            
+            // Traffic info
+            Text(
+                text = "Lộ trình tốt nhất, Giao thông bình thường",
+                fontSize = 13.sp,
+                color = Color(0xFF9CA3AF)
+            )
+            
+            Spacer(modifier = Modifier.height(20.dp))
             
             // Action buttons
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // Details button
+                // Schedule button (Lên lịch trình)
                 OutlinedButton(
                     onClick = onShowInstructions,
                     modifier = Modifier
                         .weight(1f)
-                        .height(48.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFD1D5DB))
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.List,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp)
+                        .height(52.dp),
+                    shape = RoundedCornerShape(26.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.5.dp, Color(0xFF3B82F6)),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        contentColor = Color(0xFF3B82F6)
                     )
-                    Spacer(modifier = Modifier.width(6.dp))
+                ) {
                     Text(
-                        text = "Chi tiết",
-                        fontWeight = FontWeight.Medium
+                        text = "Lên lịch trình",
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.SemiBold
                     )
                 }
                 
@@ -901,20 +1205,15 @@ fun RouteInfoCard(
                     onClick = onStartNavigation,
                     modifier = Modifier
                         .weight(1f)
-                        .height(48.dp),
-                    shape = RoundedCornerShape(12.dp),
+                        .height(52.dp),
+                    shape = RoundedCornerShape(26.dp),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFF22C55E)
+                        containerColor = Color(0xFF3B82F6)
                     )
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Navigation,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
                     Text(
                         text = "Bắt đầu",
+                        fontSize = 15.sp,
                         fontWeight = FontWeight.SemiBold
                     )
                 }
@@ -1284,6 +1583,146 @@ private fun clearRouteFromMap(style: Style) {
     try {
         val source = style.getSource(ROUTE_SOURCE_ID) as? GeoJsonSource
         source?.featureCollection(FeatureCollection.fromFeatures(emptyList()))
+        
+        // Also clear congestion layer
+        val congestionSource = style.getSource(ROUTE_CONGESTION_SOURCE_ID) as? GeoJsonSource
+        congestionSource?.featureCollection(FeatureCollection.fromFeatures(emptyList()))
+        
+        // Clear vehicle position
+        val vehicleSource = style.getSource(VEHICLE_SOURCE_ID) as? GeoJsonSource
+        vehicleSource?.featureCollection(FeatureCollection.fromFeatures(emptyList()))
+    } catch (e: Exception) {
+        e.printStackTrace()
+    }
+}
+
+/**
+ * Draw route with congestion colors based on traffic data
+ * Uses simple approach: color each segment individually
+ */
+private fun drawRouteWithCongestion(style: Style, route: RouteInfo) {
+    try {
+        // Get congestion data from the route legs
+        val congestionData = route.legs.firstOrNull()?.annotation?.congestion ?: emptyList()
+        val points = route.geometry.map { point ->
+            Point.fromLngLat(point.longitude, point.latitude)
+        }
+        
+        if (points.size < 2) return
+        
+        // If no congestion data, just draw normal route
+        if (congestionData.isEmpty()) {
+            drawRouteOnMap(style, route)
+            return
+        }
+        
+        // Group segments by congestion level
+        val lowFeatures = mutableListOf<Feature>()
+        val moderateFeatures = mutableListOf<Feature>()
+        val heavyFeatures = mutableListOf<Feature>()
+        val severeFeatures = mutableListOf<Feature>()
+        val unknownFeatures = mutableListOf<Feature>()
+        
+        for (i in 0 until minOf(points.size - 1, congestionData.size)) {
+            val startPoint = points[i]
+            val endPoint = points[i + 1]
+            val congestionLevel = congestionData.getOrNull(i) ?: "unknown"
+            
+            val lineString = LineString.fromLngLats(listOf(startPoint, endPoint))
+            val feature = Feature.fromGeometry(lineString)
+            
+            when (congestionLevel.lowercase()) {
+                "low" -> lowFeatures.add(feature)
+                "moderate" -> moderateFeatures.add(feature)
+                "heavy" -> heavyFeatures.add(feature)
+                "severe" -> severeFeatures.add(feature)
+                else -> unknownFeatures.add(feature)
+            }
+        }
+        
+        // Add remaining points as unknown
+        if (points.size > congestionData.size + 1) {
+            for (i in congestionData.size until points.size - 1) {
+                val lineString = LineString.fromLngLats(listOf(points[i], points[i + 1]))
+                val feature = Feature.fromGeometry(lineString)
+                unknownFeatures.add(feature)
+            }
+        }
+        
+        // Helper function to add or update congestion layer
+        fun addCongestionLayer(
+            sourceId: String,
+            layerId: String,
+            features: List<Feature>,
+            color: Color
+        ) {
+            if (features.isEmpty()) return
+            
+            var source = style.getSource(sourceId) as? GeoJsonSource
+            if (source == null) {
+                style.addSource(geoJsonSource(sourceId) {
+                    featureCollection(FeatureCollection.fromFeatures(features))
+                })
+                style.addLayer(lineLayer(layerId, sourceId) {
+                    lineWidth(8.0)
+                    lineColor(color.toArgb())
+                })
+            } else {
+                source.featureCollection(FeatureCollection.fromFeatures(features))
+            }
+        }
+        
+        // Add layers for each congestion level
+        addCongestionLayer("${ROUTE_CONGESTION_SOURCE_ID}-low", "${ROUTE_CONGESTION_LAYER_ID}-low", lowFeatures, CONGESTION_LOW)
+        addCongestionLayer("${ROUTE_CONGESTION_SOURCE_ID}-moderate", "${ROUTE_CONGESTION_LAYER_ID}-moderate", moderateFeatures, CONGESTION_MODERATE)
+        addCongestionLayer("${ROUTE_CONGESTION_SOURCE_ID}-heavy", "${ROUTE_CONGESTION_LAYER_ID}-heavy", heavyFeatures, CONGESTION_HEAVY)
+        addCongestionLayer("${ROUTE_CONGESTION_SOURCE_ID}-severe", "${ROUTE_CONGESTION_LAYER_ID}-severe", severeFeatures, CONGESTION_SEVERE)
+        addCongestionLayer("${ROUTE_CONGESTION_SOURCE_ID}-unknown", "${ROUTE_CONGESTION_LAYER_ID}-unknown", unknownFeatures, CONGESTION_UNKNOWN)
+        
+        // Hide the normal route layer
+        style.getLayer(ROUTE_LAYER_ID)?.visibility(Visibility.NONE)
+        
+    } catch (e: Exception) {
+        e.printStackTrace()
+        // Fallback to normal route
+        drawRouteOnMap(style, route)
+    }
+}
+
+/**
+ * Update vehicle position on the map (for simulation)
+ */
+private fun updateVehiclePosition(style: Style, position: com.pikasonix.wayo.data.model.LocationPoint) {
+    try {
+        val point = Point.fromLngLat(position.longitude, position.latitude)
+        
+        // Check if vehicle source exists
+        var vehicleSource = style.getSource(VEHICLE_SOURCE_ID) as? GeoJsonSource
+        if (vehicleSource == null) {
+            // Create vehicle source and layer
+            style.addSource(geoJsonSource(VEHICLE_SOURCE_ID) {
+                featureCollection(FeatureCollection.fromFeature(Feature.fromGeometry(point)))
+            })
+            
+            // Add vehicle layer (outer circle)
+            style.addLayer(circleLayer("${VEHICLE_LAYER_ID}-outer", VEHICLE_SOURCE_ID) {
+                circleRadius(16.0)
+                circleColor(Color(0xFF3B82F6).toArgb())
+                circleOpacity(0.3)
+            })
+            
+            // Add vehicle layer (inner circle)
+            style.addLayer(circleLayer(VEHICLE_LAYER_ID, VEHICLE_SOURCE_ID) {
+                circleRadius(10.0)
+                circleColor(Color(0xFF3B82F6).toArgb())
+                circleStrokeColor(Color.White.toArgb())
+                circleStrokeWidth(3.0)
+            })
+        } else {
+            vehicleSource.featureCollection(
+                FeatureCollection.fromFeature(Feature.fromGeometry(point))
+            )
+        }
     } catch (e: Exception) {
         e.printStackTrace()
     }
@@ -1388,3 +1827,167 @@ private fun fitCameraToRoute(
         e.printStackTrace()
     }
 }
+
+/**
+ * Home screen bottom bar with vehicle selector and search bar
+ */
+@Composable
+fun HomeBottomBar(
+    selectedProfile: String,
+    onProfileChange: (String) -> Unit,
+    onSearchClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(bottom = 16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        // Vehicle type selector
+        VehicleTypeSelector(
+            selectedProfile = selectedProfile,
+            onProfileChange = onProfileChange
+        )
+        
+        // Simple search bar
+        SimpleSearchBar(
+            onClick = onSearchClick,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)
+        )
+    }
+}
+
+/**
+ * Vehicle type selector dropdown
+ */
+@Composable
+fun VehicleTypeSelector(
+    selectedProfile: String,
+    onProfileChange: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var expanded by remember { mutableStateOf(false) }
+    
+    val vehicleTypes = listOf(
+        "driving-traffic" to "Xe taxi",
+        "driving" to "Xe máy",
+        "walking" to "Đi bộ",
+        "cycling" to "Xe đạp"
+    )
+    
+    val selectedLabel = vehicleTypes.find { it.first == selectedProfile }?.second ?: "Xe taxi"
+    
+    Box(modifier = modifier) {
+        // Selector button
+        Button(
+            onClick = { expanded = true },
+            shape = RoundedCornerShape(24.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = Color(0xFFF59E0B)
+            ),
+            contentPadding = PaddingValues(horizontal = 20.dp, vertical = 10.dp),
+            elevation = ButtonDefaults.buttonElevation(defaultElevation = 4.dp)
+        ) {
+            Text(
+                text = selectedLabel,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = Color.White
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+            Icon(
+                imageVector = Icons.Default.ArrowDropDown,
+                contentDescription = null,
+                tint = Color.White,
+                modifier = Modifier.size(20.dp)
+            )
+        }
+        
+        // Dropdown menu
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false }
+        ) {
+            vehicleTypes.forEach { (profile, label) ->
+                DropdownMenuItem(
+                    text = { 
+                        Text(
+                            text = label,
+                            fontWeight = if (profile == selectedProfile) FontWeight.SemiBold else FontWeight.Normal
+                        )
+                    },
+                    onClick = {
+                        onProfileChange(profile)
+                        expanded = false
+                    },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = when (profile) {
+                                "driving-traffic" -> Icons.Default.LocalTaxi
+                                "driving" -> Icons.Default.TwoWheeler
+                                "walking" -> Icons.AutoMirrored.Filled.DirectionsWalk
+                                "cycling" -> Icons.Default.DirectionsBike
+                                else -> Icons.Default.DirectionsCar
+                            },
+                            contentDescription = null,
+                            tint = if (profile == selectedProfile) Color(0xFFF59E0B) else Color(0xFF6B7280)
+                        )
+                    }
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Simple search bar for home screen
+ */
+@Composable
+fun SimpleSearchBar(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier
+            .height(56.dp)
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(28.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF1F2937)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 20.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.Default.Search,
+                contentDescription = null,
+                tint = Color(0xFF9CA3AF),
+                modifier = Modifier.size(24.dp)
+            )
+            
+            Spacer(modifier = Modifier.width(12.dp))
+            
+            Text(
+                text = "Địa điểm tiếp theo?",
+                fontSize = 16.sp,
+                color = Color(0xFF9CA3AF),
+                modifier = Modifier.weight(1f)
+            )
+            
+            Icon(
+                imageVector = Icons.Default.Mic,
+                contentDescription = "Tìm kiếm bằng giọng nói",
+                tint = Color(0xFF9CA3AF),
+                modifier = Modifier.size(24.dp)
+            )
+        }
+    }
+}
+

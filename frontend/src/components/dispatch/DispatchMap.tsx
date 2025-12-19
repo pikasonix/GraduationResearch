@@ -134,7 +134,9 @@ export default function DispatchMap({ drivers, selectedDriverId, onSelectDriver,
 
         try {
             const routingProfile = localStorage.getItem('routingProfile') || 'driving'; // Default to driving for dispatch
-            const url = `https://router.project-osrm.org/route/v1/${routingProfile}/${coordPairs}?overview=full&geometries=geojson`;
+            const mapboxProfile = routingProfile === 'driving' ? 'driving' : routingProfile === 'cycling' ? 'cycling' : 'walking';
+            const accessToken = config.mapbox?.accessToken || process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN || '';
+            const url = `https://api.mapbox.com/directions/v5/mapbox/${mapboxProfile}/${coordPairs}?overview=full&geometries=geojson&access_token=${accessToken}`;
             const response = await fetch(url);
             const data = await response.json();
             let routeCoords: [number, number][];

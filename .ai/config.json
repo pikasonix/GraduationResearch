@@ -1,0 +1,323 @@
+{
+  "project": {
+    "name": "WAYO",
+    "description": "Logistics route optimization platform solving PDPTW (Pickup and Delivery Problem with Time Windows)",
+    "type": "fullstack-monorepo",
+    "languages": ["TypeScript", "C++", "Kotlin"],
+    "deployment": {
+      "backend": "Render (https://render.com)",
+      "frontend": "Vercel (https://vercel.com)",
+      "database": "Supabase (PostgreSQL)",
+      "mobile": "Google Play Store"
+    }
+  },
+  
+  "structure": {
+    "backend": "backend/",
+    "frontend": "frontend/",
+    "mobile": "mobile/",
+    "solver": "backend/pdptw_solver_module/",
+    "database": "supabase/",
+    "docs": "docs/"
+  },
+  
+  "entry_points": {
+    "backend": "backend/src/server.ts",
+    "frontend": "frontend/src/app/layout.tsx",
+    "mobile": "mobile/app/src/main/java/com/pikasonix/wayo/MainActivity.kt",
+    "solver": "backend/pdptw_solver_module/apps/main.cpp"
+  },
+  
+  "conventions": {
+    "naming": {
+      "files": "camelCase for TypeScript/JavaScript, PascalCase for React components, snake_case for C++",
+      "components": "PascalCase (e.g., DispatchClient.tsx)",
+      "functions": "camelCase (e.g., createJob, parseSolution)",
+      "constants": "UPPER_SNAKE_CASE (e.g., MAX_QUEUE_SIZE)",
+      "types_interfaces": "PascalCase (e.g., SolverParams, Job)"
+    },
+    
+    "file_organization": {
+      "backend": "Layer-based (routes/, queue/, workers/, types/)",
+      "frontend": "Feature-based (components/dispatch/, components/route-details/)",
+      "tests": "Co-located with source files or in tests/ directory"
+    },
+    
+    "imports": {
+      "order": [
+        "1. External libraries (react, express, etc.)",
+        "2. Internal modules (relative imports)",
+        "3. Type imports (import type {...})"
+      ],
+      "aliases": {
+        "@": "frontend/src/",
+        "@/components": "frontend/src/components/",
+        "@/services": "frontend/src/services/",
+        "@/utils": "frontend/src/utils/"
+      }
+    },
+    
+    "code_style": {
+      "typescript": {
+        "quotes": "single",
+        "semicolons": true,
+        "indent": "2 spaces",
+        "max_line_length": 100
+      },
+      "cpp": {
+        "style": "Google C++ Style Guide",
+        "indent": "4 spaces",
+        "brace_style": "K&R"
+      }
+    }
+  },
+  
+  "tech_stack": {
+    "backend": {
+      "runtime": "Node.js 20",
+      "framework": "Express.js 4",
+      "language": "TypeScript 5",
+      "key_libraries": [
+        "cors (CORS handling)",
+        "dotenv (env vars)",
+        "uuid (ID generation)"
+      ]
+    },
+    
+    "solver": {
+      "language": "C++17",
+      "build_system": "CMake 3.15+",
+      "compiler": "MSVC (Windows), GCC (Linux)",
+      "libraries": [
+        "spdlog (logging)",
+        "CLI11 (command-line parsing)",
+        "nlohmann/json (JSON parsing)"
+      ]
+    },
+    
+    "frontend": {
+      "framework": "Next.js 15 (App Router)",
+      "ui_library": "React 19",
+      "language": "TypeScript 5",
+      "styling": "Tailwind CSS",
+      "ui_components": "shadcn/ui (Radix UI)",
+      "maps": "Mapbox GL JS / Leaflet",
+      "key_libraries": [
+        "react-hook-form (forms)",
+        "lucide-react (icons)",
+        "date-fns (date utilities)"
+      ]
+    },
+    
+    "mobile": {
+      "language": "Kotlin",
+      "framework": "Jetpack Compose",
+      "architecture": "MVVM",
+      "di": "Hilt (Dagger)",
+      "maps": "Mapbox Maps SDK"
+    },
+    
+    "database": {
+      "provider": "Supabase",
+      "db": "PostgreSQL 15",
+      "auth": "Supabase Auth (JWT)",
+      "storage": "Supabase Storage",
+      "realtime": "Supabase Realtime (WebSockets)"
+    }
+  },
+  
+  "architecture_patterns": {
+    "backend": {
+      "pattern": "Layered Architecture",
+      "layers": [
+        "API Layer (routes/, Express handlers)",
+        "Business Logic (queue/, workers/)",
+        "External Services (C++ solver via child_process)"
+      ],
+      "job_queue": "Event-driven in-memory queue (consider BullMQ for production)"
+    },
+    
+    "frontend": {
+      "pattern": "Component-based with hooks",
+      "state_management": "React hooks + localStorage (considering Redux/Zustand)",
+      "data_fetching": "Fetch API (considering React Query)",
+      "routing": "Next.js App Router"
+    },
+    
+    "mobile": {
+      "pattern": "MVVM",
+      "layers": [
+        "UI Layer (Compose screens)",
+        "ViewModel Layer (state + business logic)",
+        "Repository Layer (data access)",
+        "Data Sources (Supabase client, local DB)"
+      ]
+    }
+  },
+  
+  "testing": {
+    "backend": {
+      "framework": "Jest (planned)",
+      "types": ["Unit tests", "Integration tests", "API tests"]
+    },
+    "frontend": {
+      "framework": "Vitest (planned)",
+      "types": ["Component tests", "E2E tests (Playwright)"]
+    },
+    "solver": {
+      "framework": "GoogleTest",
+      "types": ["Unit tests", "Algorithm validation tests"]
+    }
+  },
+  
+  "environment_variables": {
+    "backend": {
+      "required": [
+        "PORT (default: 3001)",
+        "PDPTW_SOLVER_PATH (path to solver executable)",
+        "CORS_ORIGIN (allowed frontend URLs)"
+      ],
+      "optional": [
+        "MAX_QUEUE_SIZE (default: 100)",
+        "JOB_TIMEOUT (default: 3600000ms)",
+        "NODE_ENV (development|production)"
+      ]
+    },
+    "frontend": {
+      "required": [
+        "NEXT_PUBLIC_API_URL (backend API base URL)",
+        "NEXT_PUBLIC_SUPABASE_URL",
+        "NEXT_PUBLIC_SUPABASE_ANON_KEY",
+        "NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN"
+      ],
+      "optional": [
+        "NEXT_PUBLIC_DEFAULT_CENTER_LAT",
+        "NEXT_PUBLIC_DEFAULT_CENTER_LNG"
+      ]
+    }
+  },
+  
+  "ai_hints": {
+    "read_first": [
+      "docs/ai-context/codebase-overview.md - Complete system overview",
+      "docs/ai-context/common-tasks.md - Step-by-step task guides",
+      "docs/architecture/overview.md - Architecture decisions",
+      "docs/guides/deployment.md - Deployment instructions"
+    ],
+    
+    "entry_points_for_features": {
+      "add_api_endpoint": "backend/src/routes/jobRoutes.ts",
+      "modify_solver_params": "backend/pdptw_solver_module/apps/main.cpp + backend/src/types/index.ts",
+      "add_frontend_page": "frontend/src/app/",
+      "add_ui_component": "frontend/src/components/",
+      "modify_database": "supabase/supabase/migrations/"
+    },
+    
+    "common_files": {
+      "backend_types": "backend/src/types/index.ts",
+      "frontend_types": "frontend/src/utils/dataModels.ts",
+      "api_client": "frontend/src/services/backendClient.js",
+      "config": "frontend/src/config/config.ts",
+      "solver_main": "backend/pdptw_solver_module/apps/main.cpp"
+    },
+    
+    "debugging": {
+      "backend_logs": "Check console output or implement Winston logger",
+      "frontend_console": "Browser DevTools → Console",
+      "solver_logs": "Check backend/storage/temp/ for solver output files",
+      "api_testing": "Use curl, Postman, or Thunder Client",
+      "database": "Supabase Dashboard → Table Editor / SQL Editor"
+    },
+    
+    "common_issues": {
+      "job_stuck": "Check solver process in Task Manager, verify PDPTW_SOLVER_PATH",
+      "cors_error": "Verify CORS_ORIGIN env var matches frontend URL",
+      "build_failed": "Check Node.js version (20+), npm install, TypeScript compilation",
+      "solver_crash": "Validate instance format, check solver logs in storage/temp/",
+      "map_not_showing": "Verify MAPBOX_ACCESS_TOKEN, check browser console for errors"
+    }
+  },
+  
+  "workflow_recommendations": {
+    "for_new_developers": [
+      "1. Read docs/ai-context/codebase-overview.md",
+      "2. Setup local environment (Node.js, C++ compiler)",
+      "3. Build C++ solver: cd backend/pdptw_solver_module && build_and_test.bat",
+      "4. Start backend: cd backend && npm install && npm run dev",
+      "5. Start frontend: cd frontend && npm install && npm run dev",
+      "6. Open http://localhost:3000"
+    ],
+    
+    "for_ai_assistants": [
+      "1. Always read docs/ai-context/ files first",
+      "2. Check type definitions before making changes",
+      "3. Follow existing code patterns (see codebase-overview.md)",
+      "4. Add comments for complex logic",
+      "5. Update documentation when changing APIs"
+    ],
+    
+    "for_bug_fixes": [
+      "1. Identify the layer (frontend/backend/solver/database)",
+      "2. Check logs and error messages",
+      "3. Read relevant code in entry_points_for_features",
+      "4. Review common_issues in ai_hints",
+      "5. Test fix locally before committing"
+    ],
+    
+    "for_new_features": [
+      "1. Design API contract (types in backend/src/types/)",
+      "2. Implement backend route (routes/)",
+      "3. Add business logic (queue/, workers/)",
+      "4. Create frontend component (components/)",
+      "5. Update documentation (docs/api/)",
+      "6. Write tests (if framework available)"
+    ]
+  },
+  
+  "deployment_notes": {
+    "backend_render": {
+      "root_directory": "backend",
+      "build_command": "npm install && npm run build",
+      "start_command": "npm start",
+      "important": "Commit pdptw_solver.exe to Git before deploying (in backend/bin/)"
+    },
+    
+    "frontend_vercel": {
+      "root_directory": "frontend",
+      "framework": "Next.js (auto-detected)",
+      "build_command": "npm run build",
+      "important": "Set all NEXT_PUBLIC_* env vars in Vercel dashboard"
+    },
+    
+    "database_supabase": {
+      "migrations": "supabase/supabase/migrations/",
+      "apply_command": "supabase db push",
+      "important": "Run supabase db pull locally to sync schema"
+    }
+  },
+  
+  "future_improvements": {
+    "high_priority": [
+      "Add automated testing (Jest, Vitest)",
+      "Implement proper logging (Winston/Pino)",
+      "Use Redis + BullMQ for job queue",
+      "Add error tracking (Sentry)",
+      "Implement CI/CD (GitHub Actions)"
+    ],
+    
+    "medium_priority": [
+      "Add state management (Zustand/Redux)",
+      "Use React Query for data fetching",
+      "Create shared-types package",
+      "Add API rate limiting",
+      "Implement real-time updates (WebSockets)"
+    ],
+    
+    "low_priority": [
+      "Migrate to monorepo (Turborepo/Nx)",
+      "Add Storybook for components",
+      "Implement A/B testing",
+      "Add analytics (Mixpanel/Amplitude)"
+    ]
+  }
+}

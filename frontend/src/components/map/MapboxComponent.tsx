@@ -61,16 +61,16 @@ const MapboxComponent: React.FC<MapComponentProps> = ({
   const nodeMarkersRef = useRef<Map<number, mapboxgl.Marker>>(new Map());
   const segmentMarkerRef = useRef<mapboxgl.Marker | null>(null);
   const segmentPopupRef = useRef<mapboxgl.Popup | null>(null);
-  
+
   // Track last loaded instance/solution to avoid unnecessary fitBounds
   const lastInstanceRef = useRef<Instance | null>(null);
   const lastSolutionRef = useRef<Solution | null>(null);
-  
+
   // Track drawn route IDs to ensure proper cleanup
   const drawnRouteIdsRef = useRef<Set<number>>(new Set());
-  
+
   // Ref to access latest clearRouteSelection in event listeners without triggering re-init
-  const clearRouteSelectionRef = useRef<() => void>(() => {});
+  const clearRouteSelectionRef = useRef<() => void>(() => { });
 
   // Get cache-related functions from hook
   const { routingCacheRef, generateCacheKey, loadCacheFromStorage, saveCacheToStorage } = useMapControls();
@@ -92,7 +92,7 @@ const MapboxComponent: React.FC<MapComponentProps> = ({
     el.style.width = `${iconSize}px`;
     el.style.height = `${iconSize}px`;
     el.style.cursor = 'pointer';
-    
+
     let className;
     if (node.is_pickup) {
       className = isOpaque ? 'pickup-marker-opaque' : 'pickup-marker';
@@ -101,7 +101,7 @@ const MapboxComponent: React.FC<MapComponentProps> = ({
     } else {
       className = isOpaque ? 'depot-marker-opaque' : 'depot-marker';
     }
-    
+
     el.className = className;
     return el;
   }, []);
@@ -147,7 +147,7 @@ const MapboxComponent: React.FC<MapComponentProps> = ({
     // Dim other markers
     for (const other of instance.nodes as NodeWithMarker[]) {
       if (other.id === node.id || other.id === node.pair) continue;
-      
+
       const otherMarker = nodeMarkersRef.current.get(other.id);
       if (otherMarker) {
         const otherEl = otherMarker.getElement();
@@ -191,12 +191,12 @@ const MapboxComponent: React.FC<MapComponentProps> = ({
     if (!mapRef.current) return;
 
     const el = createNodeMarkerElement(node, 10, false);
-    
+
     // Create popup content
     let strType = "Depot";
     if (node.is_pickup) strType = "Pickup";
     else if (node.is_delivery) strType = "Delivery";
-    
+
     const popup = new mapboxgl.Popup({ offset: 15 })
       .setHTML(`<b>${strType}: ${node.id}</b><br>&ensp;Demand: ${node.demand}<br>&ensp;Time window: [ ${node.time_window[0]} , ${node.time_window[1]} ]`);
 
@@ -228,7 +228,9 @@ const MapboxComponent: React.FC<MapComponentProps> = ({
 
     try {
       const routingProfile = localStorage.getItem('routingProfile') || 'walking';
-      const url = `https://router.project-osrm.org/route/v1/${routingProfile}/${startCoord[1]},${startCoord[0]};${endCoord[1]},${endCoord[0]}?overview=full&geometries=geojson`;
+      const mapboxProfile = routingProfile === 'driving' ? 'driving' : routingProfile === 'cycling' ? 'cycling' : 'walking';
+      const accessToken = mapboxgl.accessToken;
+      const url = `https://api.mapbox.com/directions/v5/mapbox/${mapboxProfile}/${startCoord[1]},${startCoord[0]};${endCoord[1]},${endCoord[0]}?overview=full&geometries=geojson&access_token=${accessToken}`;
       const response = await fetch(url);
       const data = await response.json();
 
@@ -280,7 +282,9 @@ const MapboxComponent: React.FC<MapComponentProps> = ({
 
       try {
         const routingProfile = localStorage.getItem('routingProfile') || 'walking';
-        const url = `https://router.project-osrm.org/route/v1/${routingProfile}/${coordPairs}?overview=full&geometries=geojson`;
+        const mapboxProfile = routingProfile === 'driving' ? 'driving' : routingProfile === 'cycling' ? 'cycling' : 'walking';
+        const accessToken = mapboxgl.accessToken;
+        const url = `https://api.mapbox.com/directions/v5/mapbox/${mapboxProfile}/${coordPairs}?overview=full&geometries=geojson&access_token=${accessToken}`;
         const response = await fetch(url);
         const data = await response.json();
         let routeCoords: [number, number][];
@@ -402,12 +406,12 @@ const MapboxComponent: React.FC<MapComponentProps> = ({
       hasSolution: !!currentSolution,
       routeCount: currentSolution?.routes?.length || 0
     });
-    
+
     if (!mapRef.current || !currentSolution || !currentSolution.routes) {
       console.warn('⚠️ drawSolution early return - missing requirements');
       return;
     }
-    
+
     const map = mapRef.current;
 
     // Simple check - if style not loaded, skip this call (will be called again when ready)
@@ -415,7 +419,7 @@ const MapboxComponent: React.FC<MapComponentProps> = ({
       console.warn('⚠️ Style not loaded yet, skipping this drawSolution call');
       return;
     }
-    
+
     console.log('🗺️ Starting to draw routes...');
 
     // Remove ALL previously drawn routes
@@ -424,7 +428,7 @@ const MapboxComponent: React.FC<MapComponentProps> = ({
       const routeLayerId = `route-${routeId}`;
       const routeSourceId = `route-source-${routeId}`;
       const routeFillId = `route-fill-${routeId}`;
-      
+
       if (map.getLayer(routeFillId)) {
         map.removeLayer(routeFillId);
       }
@@ -442,13 +446,13 @@ const MapboxComponent: React.FC<MapComponentProps> = ({
     for (const route of currentSolution.routes) {
       console.log(`  Drawing route ${route.id} with ${route.sequence.length} nodes`);
       const routeCoords = await buildRealRoute(route);
-      
+
       // Check if map still exists after await
       if (!mapRef.current) return;
 
       // Convert coords to GeoJSON (LngLat format)
       const coordinates: [number, number][] = routeCoords.map(c => [c[1], c[0]]);
-      
+
       const geojson: FeatureCollection<LineString> = {
         type: 'FeatureCollection',
         features: [{
@@ -544,20 +548,20 @@ const MapboxComponent: React.FC<MapComponentProps> = ({
         setSelectedRoute(null);
       }
     }
-    
+
     console.log('✅ drawSolution completed successfully');
   }, [useRealRouting, buildRealRoute, onClickRoute, highlightRoute, selectedRoute]);
 
   // Highlight segment between two nodes
   const highlightSegment = useCallback(async (fromId: number, toId: number, routeOverride?: Route) => {
     if (!mapRef.current || !instance) return;
-    
+
     // Simple check - skip if style not loaded
     if (!mapRef.current.isStyleLoaded()) {
       console.warn('⚠️ Style not loaded in highlightSegment, skipping');
       return;
     }
-    
+
     const r = routeOverride || selectedRoute;
     if (!r) return;
 
@@ -591,7 +595,9 @@ const MapboxComponent: React.FC<MapComponentProps> = ({
     if (useRealRouting) {
       try {
         profile = localStorage.getItem('routingProfile') || 'walking';
-        const url = `https://router.project-osrm.org/route/v1/${profile}/${fromNode.coords[1]},${fromNode.coords[0]};${toNode.coords[1]},${toNode.coords[0]}?overview=full&geometries=geojson`;
+        const mapboxProfile = profile === 'driving' ? 'driving' : profile === 'cycling' ? 'cycling' : 'walking';
+        const accessToken = mapboxgl.accessToken;
+        const url = `https://api.mapbox.com/directions/v5/mapbox/${mapboxProfile}/${fromNode.coords[1]},${fromNode.coords[0]};${toNode.coords[1]},${toNode.coords[0]}?overview=full&geometries=geojson&access_token=${accessToken}`;
         const resp = await fetch(url);
         const data = await resp.json();
         if (data.routes && data.routes[0]) {
@@ -808,7 +814,7 @@ const MapboxComponent: React.FC<MapComponentProps> = ({
         zoom: mapRef.current.getZoom(),
         center: mapRef.current.getCenter()
       });
-      
+
       // Set map ready AFTER load completes
       setMapReady(true);
       loadCacheFromStorage();
@@ -844,7 +850,7 @@ const MapboxComponent: React.FC<MapComponentProps> = ({
       nodeCount: instance?.nodes?.length || 0,
       isStyleLoaded: mapRef.current?.isStyleLoaded()
     });
-    
+
     if (!mapReady || !mapRef.current || !instance) {
       console.log('⚠️ Instance effect skipped - requirements not met');
       return;
@@ -853,10 +859,10 @@ const MapboxComponent: React.FC<MapComponentProps> = ({
     // Retry mechanism similar to solution effect
     const attemptAddNodes = (attempt = 1, maxAttempts = 10) => {
       if (!mapRef.current) return;
-      
+
       if (mapRef.current.isStyleLoaded()) {
         console.log(`📍 Adding nodes (attempt ${attempt})`);
-        
+
         // Clear existing markers
         console.log(`🗑️ Clearing ${nodeMarkersRef.current.size} existing markers`);
         nodeMarkersRef.current.forEach(marker => marker.remove());
@@ -889,10 +895,10 @@ const MapboxComponent: React.FC<MapComponentProps> = ({
         }
       }
     };
-    
+
     // Start with a small delay
     const timer = setTimeout(() => attemptAddNodes(), 100);
-    
+
     return () => clearTimeout(timer);
   }, [mapReady, instance, solution, addNodeToMap]); // Added solution to trigger redraw when solution changes
 
@@ -905,16 +911,16 @@ const MapboxComponent: React.FC<MapComponentProps> = ({
       routeCount: solution?.routes?.length || 0,
       isStyleLoaded: mapRef.current?.isStyleLoaded()
     });
-    
+
     if (!mapReady || !mapRef.current || !solution) {
       console.log('⚠️ Solution effect skipped - requirements not met');
       return;
     }
-    
+
     // Retry mechanism: try to draw, if style not loaded, retry after delay
     const attemptDraw = (attempt = 1, maxAttempts = 10) => {
       if (!mapRef.current) return;
-      
+
       if (mapRef.current.isStyleLoaded()) {
         console.log(`🚀 Calling drawSolution (attempt ${attempt})`);
         drawSolution(solution);
@@ -927,10 +933,10 @@ const MapboxComponent: React.FC<MapComponentProps> = ({
         }
       }
     };
-    
+
     // Start with a small delay to ensure map is settled
     const timer = setTimeout(() => attemptDraw(), 100);
-    
+
     return () => clearTimeout(timer);
   }, [mapReady, solution, drawSolution]);
 

@@ -1,17 +1,19 @@
 import React, { useState } from 'react';
 import { DispatchDriver, DispatchRoute } from '@/app/dispatch/DispatchClient';
-import { Search, Filter, Truck, UserCircle2, MapPin, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { Search, Filter, Truck, UserCircle2, MapPin, AlertTriangle, CheckCircle2, Loader2 } from 'lucide-react';
 
 interface DispatchSidebarRightProps {
     drivers: DispatchDriver[];
     selectedDriverId: string | null;
     onSelectDriver: (id: string) => void;
     selectedRoute: DispatchRoute | null;
+    onAssignRoute?: (driverId: string) => Promise<void>;
 }
 
-export default function DispatchSidebarRight({ drivers, selectedDriverId, onSelectDriver, selectedRoute }: DispatchSidebarRightProps) {
+export default function DispatchSidebarRight({ drivers, selectedDriverId, onSelectDriver, selectedRoute, onAssignRoute }: DispatchSidebarRightProps) {
     const [filterStatus, setFilterStatus] = useState<'all' | 'available' | 'busy'>('all');
     const [searchTerm, setSearchTerm] = useState('');
+    const [isAssigning, setIsAssigning] = useState(false);
 
     const filteredDrivers = drivers.filter(driver => {
         const matchesStatus = filterStatus === 'all' || driver.status === filterStatus;
@@ -162,9 +164,31 @@ export default function DispatchSidebarRight({ drivers, selectedDriverId, onSele
                                                 <span>Cảnh báo quá tải! Chọn xe lớn hơn.</span>
                                             </div>
                                         ) : (
-                                            <button className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-md text-xs font-semibold shadow-sm transition-colors flex items-center justify-center gap-2">
-                                                <CheckCircle2 size={14} />
-                                                Điều phối tuyến
+                                            <button
+                                                className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white py-2 rounded-md text-xs font-semibold shadow-sm transition-colors flex items-center justify-center gap-2"
+                                                disabled={isAssigning || !onAssignRoute}
+                                                onClick={async () => {
+                                                    if (onAssignRoute && selectedDriverId) {
+                                                        setIsAssigning(true);
+                                                        try {
+                                                            await onAssignRoute(selectedDriverId);
+                                                        } finally {
+                                                            setIsAssigning(false);
+                                                        }
+                                                    }
+                                                }}
+                                            >
+                                                {isAssigning ? (
+                                                    <>
+                                                        <Loader2 size={14} className="animate-spin" />
+                                                        Đang xử lý...
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <CheckCircle2 size={14} />
+                                                        Điều phối tuyến
+                                                    </>
+                                                )}
                                             </button>
                                         )}
                                     </div>

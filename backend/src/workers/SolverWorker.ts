@@ -1,7 +1,6 @@
 import { execFile } from 'child_process';
 import * as path from 'path';
 import * as fs from 'fs';
-import * as os from 'os';
 import { Job, SolverParams, SolverWorkerOptions, JobCallbacks } from '../types';
 
 /**
@@ -15,9 +14,10 @@ export class SolverWorker {
 
     constructor(solverPath: string, options: SolverWorkerOptions = {}) {
         this.solverPath = solverPath;
-        this.baseWorkDir = options.baseWorkDir || path.join(os.tmpdir(), 'wayo');
+        // Use backend/storage folder for temp files
+        this.baseWorkDir = options.baseWorkDir || path.resolve(__dirname, '../../storage/temp');
         this.maxBuffer = options.maxBuffer || 10 * 1024 * 1024; // 10MB
-        
+
         try {
             fs.mkdirSync(this.baseWorkDir, { recursive: true });
         } catch (err) {
@@ -33,7 +33,7 @@ export class SolverWorker {
         const { instance, params } = job;
 
         let workDir = '';
-        
+
         try {
             workDir = fs.mkdtempSync(path.join(this.baseWorkDir, `job-${job.id}-`));
             console.log(`[SolverWorker] Job ${job.id}: Work dir created at ${workDir}`);
@@ -73,7 +73,7 @@ export class SolverWorker {
 
         } catch (error) {
             console.error(`[SolverWorker] Job ${job.id}: Error:`, error instanceof Error ? error.message : String(error));
-            
+
             if (workDir) {
                 this.cleanup(workDir);
             }
@@ -180,7 +180,7 @@ export class SolverWorker {
      */
     private readSolution(solutionsDir: string): { content: string; filename: string } {
         const files = fs.readdirSync(solutionsDir);
-        
+
         if (files.length === 0) {
             throw new Error('No solution file generated');
         }

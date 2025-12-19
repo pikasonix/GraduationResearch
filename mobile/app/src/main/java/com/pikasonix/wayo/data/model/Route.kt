@@ -23,6 +23,26 @@ data class RouteStep(
 )
 
 /**
+ * Route leg annotation containing traffic/congestion data
+ */
+data class RouteAnnotation(
+    val congestion: List<String> = emptyList(), // low, moderate, heavy, severe, unknown
+    val speed: List<Double> = emptyList(), // speeds in m/s for each segment
+    val duration: List<Double> = emptyList() // duration in seconds for each segment
+)
+
+/**
+ * Route leg from one waypoint to another
+ */
+data class RouteLeg(
+    val distance: Double,
+    val duration: Double,
+    val steps: List<RouteStep> = emptyList(),
+    val annotation: RouteAnnotation? = null,
+    val summary: String? = null
+)
+
+/**
  * Route information from origin to destination
  */
 data class RouteInfo(
@@ -33,6 +53,7 @@ data class RouteInfo(
     val duration: Double, // seconds
     val geometry: List<LocationPoint> = emptyList(),
     val steps: List<RouteStep> = emptyList(),
+    val legs: List<RouteLeg> = emptyList(),
     val summary: String? = null
 )
 

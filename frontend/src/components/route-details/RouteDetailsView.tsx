@@ -32,7 +32,9 @@ async function buildRealRoute(route: any, instance: any, useRealRouting: boolean
             return `${coords[1]},${coords[0]}`;
         }).join(';');
         const routingProfile = (typeof window !== 'undefined' && localStorage.getItem('routingProfile')) || 'walking';
-        const url = `https://router.project-osrm.org/route/v1/${routingProfile}/${coordPairs}?overview=full&geometries=geojson`;
+        const mapboxProfile = routingProfile === 'driving' ? 'driving' : routingProfile === 'cycling' ? 'cycling' : 'walking';
+        const accessToken = process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN || '';
+        const url = `https://api.mapbox.com/directions/v5/mapbox/${mapboxProfile}/${coordPairs}?overview=full&geometries=geojson&access_token=${accessToken}`;
         const response = await fetch(url); const data = await response.json();
         if (data.routes && data.routes.length > 0) {
             return data.routes[0].geometry.coordinates.map((coord: [number, number]) => [coord[1], coord[0]]);
@@ -63,11 +65,12 @@ export const RouteDetailsView: React.FC<RouteDetailsViewProps> = ({ route, insta
     }, [route]);
 
     // Build a minimal solution object for MapComponent consumption
+    // Include useRealRouting in deps to force re-render when routing mode changes
     const solution: Solution | null = useMemo(() => {
         if (!route) return null;
         const ensuredRoute: Route = { ...route, color: route.color || '#1d4ed8' };
         return createSolution(instance?.name || 'instance', 'ref', new Date().toISOString(), 'system', [ensuredRoute]);
-    }, [route, instance?.name]);
+    }, [route, instance?.name, useRealRouting]);
 
     const filteredInstance: Instance | null = useMemo(() => {
         if (!instance || !route || !Array.isArray(route.sequence)) return instance;

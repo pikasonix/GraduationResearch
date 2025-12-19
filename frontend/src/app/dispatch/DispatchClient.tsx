@@ -2,13 +2,13 @@
 
 import React, { useState, useEffect } from 'react';
 import { Send, ListTodo, Package, Truck, Users, UserCircle2, MapPin, AlertTriangle, Clock } from 'lucide-react';
-import { Button } from '@/components/ui/button'; // Assuming shadcn/ui or similar exists, otherwise I'll use standard HTML button or check existing components
-// I'll use standard HTML/Tailwind for now if I'm not sure about the UI library, but the plan mentioned "Button type='primary'". 
-// I'll check if there is a Button component.
+import { Button } from '@/components/ui/button';
 import DispatchSidebarLeft from '@/components/dispatch/DispatchSidebarLeft';
 import DispatchSidebarRight from '@/components/dispatch/DispatchSidebarRight';
 import DispatchMap from '@/components/dispatch/DispatchMap';
 import { Route, Instance, Node } from '@/utils/dataModels';
+import { getDrivers, getVehicles, assignRouteToDriver, Driver, Vehicle } from '@/services/driverService';
+import { toast } from 'sonner';
 
 // --- Types ---
 export interface DispatchRoute {
@@ -18,7 +18,8 @@ export interface DispatchRoute {
     distance: number;
     duration: number;
     totalLoad: number;
-    originalRoute: Route; // Keep reference to original route for map
+    originalRoute: Route;
+    isAssigned?: boolean;
 }
 
 export interface DispatchDriver {
@@ -26,213 +27,168 @@ export interface DispatchDriver {
     name: string;
     status: 'available' | 'busy' | 'offline';
     vehicleType: string;
+    vehicleId: string | null;
     capacity: number;
     currentLat: number;
     currentLng: number;
     distanceToDepot: string;
 }
 
-// --- Mock Data (Drivers only) ---
-const mockDrivers: DispatchDriver[] = [
-    {
-        id: 'D01',
-        name: 'Nguyễn Văn A',
-        status: 'available',
-        vehicleType: 'Van 1T',
-        capacity: 1000,
-        currentLat: 21.0285,
-        currentLng: 105.8500,
-        distanceToDepot: '0.5km'
-    },
-    {
-        id: 'D02',
-        name: 'Trần Thị B',
-        status: 'busy',
-        vehicleType: 'Xe máy',
-        capacity: 150,
-        currentLat: 21.0300,
-        currentLng: 105.8400,
-        distanceToDepot: '2.1km'
-    },
-    {
-        id: 'D03',
-        name: 'Lê Văn C',
-        status: 'available',
-        vehicleType: 'Xe tải 2T',
-        capacity: 2000,
-        currentLat: 21.0250,
-        currentLng: 105.8300,
-        distanceToDepot: '0.8km'
-    },
-    {
-        id: 'D04',
-        name: 'Phạm Văn D',
-        status: 'available',
-        vehicleType: 'Van 500kg',
-        capacity: 500,
-        currentLat: 21.0350,
-        currentLng: 105.8450,
-        distanceToDepot: '1.2km'
-    },
-    {
-        id: 'D05',
-        name: 'Hoàng Thị E',
-        status: 'offline',
-        vehicleType: 'Xe máy',
-        capacity: 150,
-        currentLat: 21.0200,
-        currentLng: 105.8600,
-        distanceToDepot: '3.5km'
-    },
-    {
-        id: 'D06',
-        name: 'Vũ Văn F',
-        status: 'available',
-        vehicleType: 'Xe tải 5T',
-        capacity: 5000,
-        currentLat: 21.0400,
-        currentLng: 105.8350,
-        distanceToDepot: '4.0km'
-    },
-    {
-        id: 'D07',
-        name: 'Đặng Thị G',
-        status: 'busy',
-        vehicleType: 'Van 1T',
-        capacity: 1000,
-        currentLat: 21.0150,
-        currentLng: 105.8550,
-        distanceToDepot: '2.8km'
-    },
-    {
-        id: 'D08',
-        name: 'Bùi Văn H',
-        status: 'available',
-        vehicleType: 'Xe máy',
-        capacity: 150,
-        currentLat: 21.0320,
-        currentLng: 105.8420,
-        distanceToDepot: '1.5km'
-    },
-    {
-        id: 'D09',
-        name: 'Nguyễn Văn I',
-        status: 'available',
-        vehicleType: 'Xe tải 2T',
-        capacity: 2000,
-        currentLat: 41.37624639563665,
-        currentLng: 2.1783269789290287,
-        distanceToDepot: '5.0km'
-    },
-    {
-        id: 'D10',
-        name: 'Trần Thị K',
-        status: 'busy',
-        vehicleType: 'Van 1T',
-        capacity: 1000,
-        currentLat: 41.37881008220417,
-        currentLng: 2.1098762741585,
-        distanceToDepot: '6.2km'
-    },
-    {
-        id: 'D11',
-        name: 'Lê Văn L',
-        status: 'available',
-        vehicleType: 'Xe máy',
-        capacity: 150,
-        currentLat: 41.42517713096385,
-        currentLng: 2.1731868529321035,
-        distanceToDepot: '4.5km'
-    },
-    {
-        id: 'D12',
-        name: 'Phạm Thị M',
-        status: 'available',
-        vehicleType: 'Van 500kg',
-        capacity: 500,
-        currentLat: 41.41560352531321,
-        currentLng: 2.159941364642967,
-        distanceToDepot: '3.8km'
-    }
-];
+// Vehicle type labels
+const vehicleTypeLabels: Record<string, string> = {
+    'motorcycle': 'Xe máy',
+    'van': 'Van',
+    'truck_small': 'Xe tải nhỏ',
+    'truck_medium': 'Xe tải vừa',
+    'truck_large': 'Xe tải lớn'
+};
 
 export default function DispatchClient() {
     const [selectedRouteId, setSelectedRouteId] = useState<number | null>(null);
     const [selectedDriverId, setSelectedDriverId] = useState<string | null>(null);
     const [routes, setRoutes] = useState<DispatchRoute[]>([]);
+    const [drivers, setDrivers] = useState<DispatchDriver[]>([]);
     const [instance, setInstance] = useState<Instance | null>(null);
     const [loading, setLoading] = useState(true);
+    const [assignedCount, setAssignedCount] = useState(0);
 
     useEffect(() => {
-        try {
-            const lsRoutes = localStorage.getItem('allRoutes');
-            const lsInstance = localStorage.getItem('currentInstance');
+        async function loadData() {
+            try {
+                // Load routes from localStorage
+                const lsRoutes = localStorage.getItem('allRoutes');
+                const lsInstance = localStorage.getItem('currentInstance');
 
-            if (lsRoutes && lsInstance) {
-                const parsedRoutes: Route[] = JSON.parse(lsRoutes);
-                const parsedInstance: Instance = JSON.parse(lsInstance);
+                if (lsRoutes && lsInstance) {
+                    const parsedRoutes: Route[] = JSON.parse(lsRoutes);
+                    const parsedInstance: Instance = JSON.parse(lsInstance);
 
-                setInstance(parsedInstance);
+                    setInstance(parsedInstance);
 
-                const mappedRoutes: DispatchRoute[] = parsedRoutes.map((r, index) => {
-                    // Calculate total load and duration
-                    let totalLoad = 0;
-                    let stops = 0;
-                    let duration = 0;
+                    const mappedRoutes: DispatchRoute[] = parsedRoutes.map((r, index) => {
+                        let totalLoad = 0;
+                        let stops = 0;
+                        let duration = 0;
 
-                    if (r.sequence && parsedInstance.nodes) {
-                        // Create a map for faster lookup if needed, or just use find
-                        // For consistency with RouteAnalysis, we'll track maxLoad
-                        let currentLoad = 0;
-                        let maxLoad = 0;
+                        if (r.sequence && parsedInstance.nodes) {
+                            let currentLoad = 0;
+                            let maxLoad = 0;
 
-                        for (let i = 0; i < r.sequence.length; i++) {
-                            const nodeId = r.sequence[i];
-                            const node = parsedInstance.nodes.find(n => n.id === nodeId);
-                            if (node) {
-                                currentLoad += node.demand || 0;
-                                maxLoad = Math.max(maxLoad, currentLoad);
+                            for (let i = 0; i < r.sequence.length; i++) {
+                                const nodeId = r.sequence[i];
+                                const node = parsedInstance.nodes.find(n => n.id === nodeId);
+                                if (node) {
+                                    currentLoad += node.demand || 0;
+                                    maxLoad = Math.max(maxLoad, currentLoad);
+                                    duration += node.duration || 0;
+                                    if (!node.is_depot) stops++;
+                                }
 
-                                duration += node.duration || 0;
-                                if (!node.is_depot) stops++;
-                            }
-
-                            // Add travel time to next node
-                            if (i < r.sequence.length - 1 && parsedInstance.times) {
-                                const nextNodeId = r.sequence[i + 1];
-                                if (parsedInstance.times[nodeId] && parsedInstance.times[nodeId][nextNodeId] !== undefined) {
-                                    duration += parsedInstance.times[nodeId][nextNodeId];
+                                if (i < r.sequence.length - 1 && parsedInstance.times) {
+                                    const nextNodeId = r.sequence[i + 1];
+                                    if (parsedInstance.times[nodeId] && parsedInstance.times[nodeId][nextNodeId] !== undefined) {
+                                        duration += parsedInstance.times[nodeId][nextNodeId];
+                                    }
                                 }
                             }
+                            totalLoad = maxLoad;
                         }
-                        totalLoad = maxLoad;
-                    }
 
+                        return {
+                            id: r.id,
+                            name: `Route #${r.id}`,
+                            stops: stops,
+                            distance: r.cost || 0,
+                            duration: parseFloat(duration.toFixed(2)),
+                            totalLoad: totalLoad,
+                            originalRoute: r,
+                            isAssigned: false
+                        };
+                    });
+
+                    setRoutes(mappedRoutes);
+                    if (mappedRoutes.length > 0) {
+                        setSelectedRouteId(mappedRoutes[0].id);
+                    }
+                }
+
+                // Fetch drivers and vehicles from Supabase
+                const [driversData, vehiclesData] = await Promise.all([
+                    getDrivers(),
+                    getVehicles()
+                ]);
+
+                // Map drivers with their vehicles
+                const mappedDrivers: DispatchDriver[] = driversData.map(driver => {
+                    // Find a vehicle for this driver (simple assignment for now)
+                    const vehicle = vehiclesData.find(v => v.is_active);
                     return {
-                        id: r.id,
-                        name: `Route #${r.id}`,
-                        stops: stops,
-                        distance: r.cost || 0,
-                        duration: parseFloat(duration.toFixed(2)),
-                        totalLoad: totalLoad,
-                        originalRoute: r
+                        id: driver.id,
+                        name: driver.full_name,
+                        status: driver.is_active ? 'available' : 'offline',
+                        vehicleType: vehicle ? (vehicleTypeLabels[vehicle.vehicle_type] || vehicle.vehicle_type) : 'Chưa có xe',
+                        vehicleId: vehicle?.id || null,
+                        capacity: vehicle?.capacity_weight || 1000,
+                        currentLat: vehicle?.current_latitude || 0,
+                        currentLng: vehicle?.current_longitude || 0,
+                        distanceToDepot: 'N/A'
                     };
                 });
 
-                setRoutes(mappedRoutes);
-                if (mappedRoutes.length > 0) {
-                    setSelectedRouteId(mappedRoutes[0].id);
-                }
+                setDrivers(mappedDrivers);
+            } catch (e) {
+                console.error("Failed to load data:", e);
+                toast.error('Không thể tải dữ liệu');
+            } finally {
+                setLoading(false);
             }
-        } catch (e) {
-            console.error("Failed to load data from localStorage", e);
-        } finally {
-            setLoading(false);
         }
+        loadData();
     }, []);
 
+    // Handle route assignment
+    const handleAssignRoute = async (driverId: string) => {
+        const driver = drivers.find(d => d.id === driverId);
+        const route = routes.find(r => r.id === selectedRouteId);
+
+        if (!driver || !route || !driver.vehicleId) {
+            toast.error('Vui lòng chọn tài xế có xe');
+            return;
+        }
+
+        try {
+            await assignRouteToDriver({
+                organizationId: '00000000-0000-0000-0000-000000000000', // TODO: Get from auth context
+                driverId: driver.id,
+                vehicleId: driver.vehicleId,
+                solutionData: {
+                    route: route.originalRoute,
+                    instance: instance
+                },
+                totalDistanceKm: route.distance / 1000,
+                totalDurationHours: route.duration / 60
+            });
+
+            // Update UI
+            setRoutes(prev => prev.map(r =>
+                r.id === route.id ? { ...r, isAssigned: true } : r
+            ));
+            setDrivers(prev => prev.map(d =>
+                d.id === driverId ? { ...d, status: 'busy' } : d
+            ));
+            setAssignedCount(prev => prev + 1);
+            setSelectedRouteId(null);
+            setSelectedDriverId(null);
+
+            toast.success(`Đã gán ${route.name} cho ${driver.name}`);
+        } catch (error) {
+            console.error('Assignment failed:', error);
+            toast.error('Không thể gán tuyến đường');
+        }
+    };
+
     const selectedRoute = routes.find(r => r.id === selectedRouteId) || null;
-    const selectedDriver = mockDrivers.find(d => d.id === selectedDriverId) || null;
+    const selectedDriver = drivers.find(d => d.id === selectedDriverId) || null;
 
     if (loading) {
         return <div className="flex items-center justify-center h-screen">Loading data...</div>;
@@ -262,7 +218,7 @@ export default function DispatchClient() {
                         <div>
                             <div className="text-xs text-gray-500 font-medium uppercase tracking-wide">Xe sẵn sàng</div>
                             <div className="text-xl font-bold text-gray-800">
-                                {mockDrivers.filter(d => d.status === 'available').length} <span className="text-sm font-normal text-gray-400">/ {mockDrivers.length}</span>
+                                {drivers.filter(d => d.status === 'available').length} <span className="text-sm font-normal text-gray-400">/ {drivers.length}</span>
                             </div>
                         </div>
                     </div>
@@ -276,7 +232,7 @@ export default function DispatchClient() {
                         <div>
                             <div className="text-xs text-gray-500 font-medium uppercase tracking-wide">Đã ghép nối</div>
                             <div className="text-xl font-bold text-gray-800">
-                                0 <span className="text-sm font-normal text-gray-400">/ {routes.length}</span>
+                                {assignedCount} <span className="text-sm font-normal text-gray-400">/ {routes.length}</span>
                             </div>
                         </div>
                     </div>
@@ -302,7 +258,7 @@ export default function DispatchClient() {
                 {/* Center Map */}
                 <div className="flex-1 relative bg-gray-200">
                     <DispatchMap
-                        drivers={mockDrivers}
+                        drivers={drivers}
                         selectedDriverId={selectedDriverId}
                         onSelectDriver={setSelectedDriverId}
                         selectedRoute={selectedRoute}
@@ -312,10 +268,11 @@ export default function DispatchClient() {
 
                 {/* Right Sidebar */}
                 <DispatchSidebarRight
-                    drivers={mockDrivers}
+                    drivers={drivers}
                     selectedDriverId={selectedDriverId}
                     onSelectDriver={setSelectedDriverId}
                     selectedRoute={selectedRoute}
+                    onAssignRoute={handleAssignRoute}
                 />
             </div>
         </div>
