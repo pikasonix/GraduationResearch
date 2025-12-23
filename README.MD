@@ -1,513 +1,177 @@
-# 🚀 WAYO - Logistics Route Optimization Platform
+# Supabase CLI
 
-> **WAYO** giải quyết bài toán tối ưu hóa lộ trình giao hàng (PDPTW - Pickup and Delivery Problem with Time Windows), giúp doanh nghiệp giảm chi phí vận chuyển và tối ưu số lượng xe.
+[![Coverage Status](https://coveralls.io/repos/github/supabase/cli/badge.svg?branch=main)](https://coveralls.io/github/supabase/cli?branch=main) [![Bitbucket Pipelines](https://img.shields.io/bitbucket/pipelines/supabase-cli/setup-cli/master?style=flat-square&label=Bitbucket%20Canary)](https://bitbucket.org/supabase-cli/setup-cli/pipelines) [![Gitlab Pipeline Status](https://img.shields.io/gitlab/pipeline-status/sweatybridge%2Fsetup-cli?label=Gitlab%20Canary)
+](https://gitlab.com/sweatybridge/setup-cli/-/pipelines)
 
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.0-blue)](https://www.typescriptlang.org/)
-[![Next.js](https://img.shields.io/badge/Next.js-15-black)](https://nextjs.org/)
-[![Node.js](https://img.shields.io/badge/Node.js-20-green)](https://nodejs.org/)
-[![C++](https://img.shields.io/badge/C++-17-red)](https://isocpp.org/)
-[![Supabase](https://img.shields.io/badge/Supabase-PostgreSQL-green)](https://supabase.com/)
+[Supabase](https://supabase.io) is an open source Firebase alternative. We're building the features of Firebase using enterprise-grade open source tools.
 
----
+This repository contains all the functionality for Supabase CLI.
 
-## 📋 Mục lục
+- [x] Running Supabase locally
+- [x] Managing database migrations
+- [x] Creating and deploying Supabase Functions
+- [x] Generating types directly from your database schema
+- [x] Making authenticated HTTP requests to [Management API](https://supabase.com/docs/reference/api/introduction)
 
-- [Tổng quan](#-tổng-quan)
-- [Kiến trúc hệ thống](#-kiến-trúc-hệ-thống)
-- [Tech Stack](#-tech-stack)
-- [Cấu trúc dự án](#-cấu-trúc-dự-án)
-- [Bắt đầu nhanh](#-bắt-đầu-nhanh)
-- [Deployment](#-deployment)
-- [Documentation](#-documentation)
-- [Contributing](#-contributing)
+## Getting started
 
----
+### Install the CLI
 
-## 🎯 Tổng quan
-
-### Vấn đề giải quyết
-
-Một công ty vận chuyển có:
-- **100 đơn hàng** cần giao/nhận hôm nay
-- **10 xe** với tải trọng khác nhau
-- **Thời gian cửa sổ** (time windows) cho mỗi điểm giao/nhận
-
-**WAYO tối ưu**:
-- ✅ Số xe tối thiểu cần sử dụng
-- ✅ Tuyến đường ngắn nhất cho mỗi xe
-- ✅ Thứ tự pickup/delivery phù hợp
-- ✅ Tuân thủ time windows và tải trọng
-
-### Use Cases
-
-- 🚚 **Last-mile delivery** (giao hàng tận nơi)
-- 📦 **E-commerce logistics** (Shopee, Lazada, Tiki)
-- 🏥 **Healthcare logistics** (giao thuốc, mẫu xét nghiệm)
-- 🍕 **Food delivery** (quản lý tài xế, tuyến đường)
-- 🏭 **B2B distribution** (phân phối hàng hóa)
-
----
-
-## 🏗️ Kiến trúc hệ thống
-
-```
-┌─────────────────┐
-│   Mobile App    │  ← Tài xế xem route, cập nhật trạng thái
-│    (Kotlin)     │
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐     ┌──────────────────┐
-│   Frontend      │────▶│    Supabase      │  ← Lưu users, routes, drivers
-│   (Next.js)     │◀────│   (PostgreSQL)   │
-└────────┬────────┘     └──────────────────┘
-         │
-         │ REST API (/api/jobs/*)
-         ▼
-┌─────────────────┐
-│    Backend      │  ← API server, Job queue
-│  (Node.js + TS) │
-└────────┬────────┘
-         │
-         │ spawn process
-         ▼
-┌─────────────────┐
-│  PDPTW Solver   │  ← Thuật toán tối ưu (LNS + Fleet Minimization)
-│     (C++)       │
-└─────────────────┘
-```
-
-### Data Flow
-
-```
-User tạo instance → Frontend POST /api/jobs/submit
-                         ↓
-            Backend nhận request → JobQueue.createJob()
-                         ↓
-            Job vào hàng đợi (status: pending)
-                         ↓
-            Worker lấy job → SolverWorker.solve()
-                         ↓
-            Spawn C++ solver → pdptw_solver.exe
-                         ↓
-            Solver chạy LNS → tạo solution
-                         ↓
-            Worker parse kết quả → Job status: completed
-                         ↓
-            Frontend polling GET /api/jobs/:id
-                         ↓
-            Hiển thị routes trên bản đồ
-```
-
----
-
-## 🛠️ Tech Stack
-
-### Backend
-- **Runtime**: Node.js 20
-- **Framework**: Express.js 4
-- **Language**: TypeScript 5
-- **Queue**: In-memory EventEmitter (sẽ migrate sang BullMQ)
-- **Solver**: C++17 + CMake
-
-### Frontend
-- **Framework**: Next.js 15 (App Router)
-- **UI Library**: React 19
-- **Styling**: Tailwind CSS
-- **Components**: shadcn/ui (Radix UI)
-- **Maps**: Mapbox GL JS / Leaflet
-
-### Mobile
-- **Language**: Kotlin
-- **UI**: Jetpack Compose
-- **Architecture**: MVVM + Hilt
-- **Maps**: Mapbox Maps SDK
-
-### Database & Auth
-- **Database**: Supabase (PostgreSQL)
-- **Auth**: Supabase Auth (JWT)
-- **Storage**: Supabase Storage
-
----
-
-## 📁 Cấu trúc dự án
-
-```
-WAYO/
-├── 📂 backend/                  # Backend service (Node.js + Express)
-│   ├── src/
-│   │   ├── server.ts           # Entry point
-│   │   ├── routes/             # API endpoints
-│   │   ├── queue/              # Job queue management
-│   │   ├── workers/            # Solver executor
-│   │   └── types/              # TypeScript types
-│   ├── pdptw_solver_module/    # C++ solver
-│   │   ├── apps/main.cpp       # Solver entry point
-│   │   ├── src/                # Algorithm implementation
-│   │   └── build/              # Build output
-│   └── bin/
-│       └── pdptw_solver.exe    # Compiled solver
-│
-├── 📂 frontend/                 # Frontend (Next.js)
-│   ├── src/
-│   │   ├── app/                # Pages (App Router)
-│   │   │   ├── dispatch/       # Route assignment UI
-│   │   │   ├── route-details/  # Route visualization
-│   │   │   └── add-instance/   # Instance builder
-│   │   ├── components/         # React components
-│   │   ├── services/           # API clients
-│   │   └── config/             # Configuration
-│   └── public/                 # Static assets
-│
-├── 📂 mobile/                   # Mobile app (Android)
-│   └── app/src/main/java/com/pikasonix/wayo/
-│       ├── ui/screens/         # Compose screens
-│       ├── ui/viewmodel/       # ViewModels
-│       └── data/repository/    # Data layer
-│
-├── 📂 supabase/                 # Database & Auth
-│   └── supabase/
-│       └── migrations/         # SQL migrations
-│
-└── 📂 docs/                     # 📚 Documentation (NEW!)
-    ├── ai-context/             # AI-specific guides
-    │   ├── codebase-overview.md   # System overview for AI
-    │   └── common-tasks.md        # Task guides
-    ├── architecture/           # Architecture docs
-    ├── guides/                 # Development guides
-    │   └── deployment.md       # Deployment instructions
-    └── api/                    # API reference
-```
-
----
-
-## 🚀 Bắt đầu nhanh
-
-### Prerequisites
-
-- **Node.js** 20+ ([Download](https://nodejs.org/))
-- **npm** hoặc **yarn**
-- **C++ compiler** (MSVC trên Windows hoặc GCC trên Linux)
-- **CMake** 3.15+ ([Download](https://cmake.org/))
-- **Git** ([Download](https://git-scm.com/))
-
-### 1️⃣ Clone Repository
+Available via [NPM](https://www.npmjs.com) as dev dependency. To install:
 
 ```bash
-git clone https://github.com/yourusername/wayo.git
-cd wayo
+npm i supabase --save-dev
 ```
 
-### 2️⃣ Setup Backend
+When installing with yarn 4, you need to disable experimental fetch with the following nodejs config.
 
-#### Build C++ Solver
+```
+NODE_OPTIONS=--no-experimental-fetch yarn add supabase
+```
+
+> **Note**
+For Bun versions below v1.0.17, you must add `supabase` as a [trusted dependency](https://bun.sh/guides/install/trusted) before running `bun add -D supabase`.
+
+<details>
+  <summary><b>macOS</b></summary>
+
+  Available via [Homebrew](https://brew.sh). To install:
+
+  ```sh
+  brew install supabase/tap/supabase
+  ```
+
+  To install the beta release channel:
+  
+  ```sh
+  brew install supabase/tap/supabase-beta
+  brew link --overwrite supabase-beta
+  ```
+  
+  To upgrade:
+
+  ```sh
+  brew upgrade supabase
+  ```
+</details>
+
+<details>
+  <summary><b>Windows</b></summary>
+
+  Available via [Scoop](https://scoop.sh). To install:
+
+  ```powershell
+  scoop bucket add supabase https://github.com/supabase/scoop-bucket.git
+  scoop install supabase
+  ```
+
+  To upgrade:
+
+  ```powershell
+  scoop update supabase
+  ```
+</details>
+
+<details>
+  <summary><b>Linux</b></summary>
+
+  Available via [Homebrew](https://brew.sh) and Linux packages.
+
+  #### via Homebrew
+
+  To install:
+
+  ```sh
+  brew install supabase/tap/supabase
+  ```
+
+  To upgrade:
+
+  ```sh
+  brew upgrade supabase
+  ```
+
+  #### via Linux packages
+
+  Linux packages are provided in [Releases](https://github.com/supabase/cli/releases). To install, download the `.apk`/`.deb`/`.rpm`/`.pkg.tar.zst` file depending on your package manager and run the respective commands.
+
+  ```sh
+  sudo apk add --allow-untrusted <...>.apk
+  ```
+
+  ```sh
+  sudo dpkg -i <...>.deb
+  ```
+
+  ```sh
+  sudo rpm -i <...>.rpm
+  ```
+
+  ```sh
+  sudo pacman -U <...>.pkg.tar.zst
+  ```
+</details>
+
+<details>
+  <summary><b>Other Platforms</b></summary>
+
+  You can also install the CLI via [go modules](https://go.dev/ref/mod#go-install) without the help of package managers.
+
+  ```sh
+  go install github.com/supabase/cli@latest
+  ```
+
+  Add a symlink to the binary in `$PATH` for easier access:
+
+  ```sh
+  ln -s "$(go env GOPATH)/bin/cli" /usr/bin/supabase
+  ```
+
+  This works on other non-standard Linux distros.
+</details>
+
+<details>
+  <summary><b>Community Maintained Packages</b></summary>
+
+  Available via [pkgx](https://pkgx.sh/). Package script [here](https://github.com/pkgxdev/pantry/blob/main/projects/supabase.com/cli/package.yml).
+  To install in your working directory:
+
+  ```bash
+  pkgx install supabase
+  ```
+
+  Available via [Nixpkgs](https://nixos.org/). Package script [here](https://github.com/NixOS/nixpkgs/blob/master/pkgs/development/tools/supabase-cli/default.nix).
+</details>
+
+### Run the CLI
 
 ```bash
-cd backend/pdptw_solver_module
-
-# Windows
-build_and_test.bat
-
-# Linux/Mac
-mkdir build && cd build
-cmake .. -DCMAKE_BUILD_TYPE=Release
-make
+supabase bootstrap
 ```
 
-#### Install Dependencies & Run
+Or using npx:
 
 ```bash
-cd ../..  # Quay về backend/
-npm install
-cp .env.example .env  # Sửa file .env với config của bạn
-npm run dev
+npx supabase bootstrap
 ```
 
-Backend chạy tại: **http://localhost:3001**
+The bootstrap command will guide you through the process of setting up a Supabase project using one of the [starter](https://github.com/supabase-community/supabase-samples/blob/main/samples.json) templates.
 
-### 3️⃣ Setup Frontend
+## Docs
 
-```bash
-cd ../frontend
-npm install
-cp .env.local.example .env.local  # Sửa file .env.local
-npm run dev
+Command & config reference can be found [here](https://supabase.com/docs/reference/cli/about).
+
+## Breaking changes
+
+We follow semantic versioning for changes that directly impact CLI commands, flags, and configurations.
+
+However, due to dependencies on other service images, we cannot guarantee that schema migrations, seed.sql, and generated types will always work for the same CLI major version. If you need such guarantees, we encourage you to pin a specific version of CLI in package.json.
+
+## Developing
+
+To run from source:
+
+```sh
+# Go >= 1.22
+go run . help
 ```
-
-Frontend chạy tại: **http://localhost:3000**
-
-### 4️⃣ Setup Supabase (Optional)
-
-1. Tạo project tại [supabase.com](https://supabase.com)
-2. Copy URL và Anon Key
-3. Cập nhật `.env.local` (frontend) và `.env` (backend)
-4. Run migrations:
-
-```bash
-cd supabase
-npx supabase db push
-```
-
-### 5️⃣ Test hệ thống
-
-1. Mở **http://localhost:3000**
-2. Tạo instance mẫu (Add Instance)
-3. Submit job → Đợi solver chạy
-4. Xem kết quả trên map (Dispatch/Route Details)
-
----
-
-## 🌐 Deployment
-
-### Production Setup
-
-| Service | Platform | URL |
-|---------|----------|-----|
-| Backend | **Render** | https://wayo-backend.onrender.com |
-| Frontend | **Vercel** | https://wayo.vercel.app |
-| Database | **Supabase** | https://xxx.supabase.co |
-
-### Quick Deploy
-
-#### Backend → Render
-
-```bash
-# 1. Build solver locally
-cd backend/pdptw_solver_module
-./build_and_test.bat
-
-# 2. Copy solver to bin/
-mkdir -p ../bin
-cp build/apps/Release/pdptw_solver.exe ../bin/
-
-# 3. Commit & push
-git add backend/bin/pdptw_solver.exe
-git commit -m "Add compiled solver"
-git push
-
-# 4. Deploy on Render
-# - Root Directory: backend
-# - Build Command: npm install && npm run build
-# - Start Command: npm start
-```
-
-#### Frontend → Vercel
-
-```bash
-# 1. Push to GitHub
-git push
-
-# 2. Import on Vercel
-# - Root Directory: frontend
-# - Framework: Next.js (auto-detected)
-# - Set environment variables (NEXT_PUBLIC_*)
-```
-
-📖 **Chi tiết**: Xem [Deployment Guide](./docs/guides/deployment.md)
-
----
-
-## 📚 Documentation
-
-### For Developers
-
-- **[Codebase Overview](./docs/ai-context/codebase-overview.md)** - Hiểu hệ thống trong 15 phút
-- **[Common Tasks](./docs/ai-context/common-tasks.md)** - Hướng dẫn add API, debug, modify solver
-- **[Deployment Guide](./docs/guides/deployment.md)** - Deploy lên Render + Vercel
-
-### For AI Assistants
-
-- **[.ai/config.json](./.ai/config.json)** - Project configuration for AI
-- **[AI Context Docs](./docs/ai-context/)** - Tài liệu tối ưu cho AI đọc hiểu code
-
-### API Reference
-
-```bash
-# Submit job
-POST /api/jobs/submit
-Body: { instance: string, params: SolverParams }
-
-# Get job status
-GET /api/jobs/:jobId
-
-# List jobs
-GET /api/jobs?status=completed&limit=10
-
-# Queue stats
-GET /api/jobs/stats
-
-# Health check
-GET /health
-```
-
-📖 **Full API docs**: [backend/README.md](./backend/README.md)
-
----
-
-## 🧪 Testing
-
-### Run Tests
-
-```bash
-# Backend (coming soon)
-cd backend
-npm test
-
-# Frontend (coming soon)
-cd frontend
-npm test
-
-# C++ Solver
-cd backend/pdptw_solver_module/build
-ctest
-```
-
-> ⚠️ **Note**: Unit tests đang được phát triển. Xem [issue #TODO]
-
----
-
-## 🤝 Contributing
-
-### Development Workflow
-
-1. **Fork** repository
-2. **Clone** fork của bạn
-3. **Create branch**: `git checkout -b feature/amazing-feature`
-4. **Make changes** và test kỹ
-5. **Commit**: `git commit -m 'Add amazing feature'`
-6. **Push**: `git push origin feature/amazing-feature`
-7. **Create Pull Request**
-
-### Code Style
-
-- **TypeScript/JavaScript**: Prettier + ESLint (auto-format on save)
-- **C++**: Google C++ Style Guide
-- **Kotlin**: Kotlin Coding Conventions
-
-### Commit Messages
-
-```
-<type>(<scope>): <subject>
-
-Types: feat, fix, docs, style, refactor, test, chore
-Examples:
-  feat(backend): add PDF export endpoint
-  fix(frontend): resolve map rendering issue
-  docs(readme): update deployment instructions
-```
-
----
-
-## 🐛 Troubleshooting
-
-### Backend không khởi động
-
-```bash
-# Check Node.js version
-node --version  # Phải >= 20
-
-# Xác minh solver path
-ls backend/bin/pdptw_solver.exe
-
-# Check logs
-npm run dev
-```
-
-### Frontend build failed
-
-```bash
-# Clear cache
-rm -rf .next node_modules
-npm install
-npm run dev
-```
-
-### Solver không chạy
-
-```bash
-# Test solver trực tiếp
-cd backend/bin
-./pdptw_solver.exe --instance ../pdptw_solver_module/instances/lr107.txt
-```
-
-📖 **More**: [Troubleshooting Guide](./docs/guides/troubleshooting.md)
-
----
-
-## 📊 Performance
-
-### Solver Benchmarks
-
-| Instance Size | Nodes | Time (avg) | RAM |
-|---------------|-------|------------|-----|
-| Small | 100 | 5s | 256MB |
-| Medium | 400 | 45s | 512MB |
-| Large | 1000 | 5min | 2GB |
-
-> Tested on: Intel i7-12700K, 16GB RAM
-
----
-
-## 🗺️ Roadmap
-
-### ✅ Completed
-
-- [x] C++ PDPTW solver (LNS + Fleet Minimization)
-- [x] Backend API với job queue
-- [x] Frontend (dispatch, route visualization)
-- [x] Mobile app (Android)
-- [x] Supabase integration
-
-### 🚧 In Progress
-
-- [ ] Automated testing (Jest, Vitest)
-- [ ] CI/CD pipeline (GitHub Actions)
-- [ ] Shared types package
-- [ ] Better logging (Winston)
-
-### 📋 Planned
-
-- [ ] Real-time updates (WebSockets)
-- [ ] Route optimization suggestions
-- [ ] Multi-tenancy support
-- [ ] iOS mobile app
-- [ ] Analytics dashboard
-
----
-
-## 📄 License
-
-Dự án này được phân phối dưới giấy phép **MIT License**. Xem file [LICENSE](./LICENSE) để biết thêm chi tiết.
-
----
-
-## 👥 Team
-
-**WAYO Development Team**
-
-- **Backend & Solver**: [Your Name]
-- **Frontend**: [Your Name]
-- **Mobile**: [Your Name]
-
----
-
-## 🙏 Acknowledgments
-
-- [CLI11](https://github.com/CLIUtils/CLI11) - Command-line parsing
-- [spdlog](https://github.com/gabime/spdlog) - Fast C++ logging
-- [shadcn/ui](https://ui.shadcn.com/) - Beautiful UI components
-- [Supabase](https://supabase.com/) - Open-source Firebase alternative
-
----
-
-## 📞 Contact & Support
-
-- **Issues**: [GitHub Issues](https://github.com/yourusername/wayo/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/yourusername/wayo/discussions)
-- **Email**: support@wayo.com (if applicable)
-
----
-
-**⭐ Nếu project này hữu ích, hãy cho một star nhé!**
-
-[![GitHub stars](https://img.shields.io/github/stars/yourusername/wayo?style=social)](https://github.com/yourusername/wayo)

@@ -43,6 +43,9 @@ function LoginContent() {
   const handleOAuthLogin = async (provider: 'google' | 'facebook') => {
     const { error } = await supabase.auth.signInWithOAuth({
       provider,
+      options: {
+        redirectTo: `${window.location.origin}/profile`,
+      },
     });
 
     if (error) {

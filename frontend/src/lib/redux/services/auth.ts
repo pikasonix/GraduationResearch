@@ -29,6 +29,7 @@ interface SignupCredentials {
   email: string;
   password: string;
   phone: string;
+  role: "manager" | "driver";
 }
 
 /**
@@ -58,14 +59,14 @@ export const authApi = createApi({
           });
 
           if (error) {
-            return { error: error };
+            return { error: { message: error.message } };
           }
 
           return {
             data: { user: data.user, session: data.session, error: null },
           };
         } catch (error) {
-          return { error: error as Error };
+          return { error: { message: (error as any).message || String(error) } };
         }
       },
       invalidatesTags: ["Auth", "User"],
@@ -74,16 +75,29 @@ export const authApi = createApi({
     /**
      * Signup endpoint using Supabase auth
      */
-    signup: builder.mutation<AuthResponse, SignupCredentials>({
-      queryFn: async ({ email, password, phone }) => {
+    /**
+     * Signup endpoint using Supabase auth
+     */
+    signup: builder.mutation<AuthResponse, Omit<SignupCredentials, "role"> & { role?: string }>({
+      queryFn: async ({ email, password, phone, role = "user" }) => {
         try {
+          const name = email.split("@")[0];
           const { data, error } = await supabase.auth.signUp({
             email,
             password,
+            options: {
+              data: {
+                phone: phone,
+                name: name,
+                full_name: name,
+                avatar_url: "",
+                role: role,
+              },
+            },
           });
 
           if (error) {
-            return { error: error };
+            return { error: { message: error.message } };
           }
 
           if (data.user) {
@@ -95,7 +109,7 @@ export const authApi = createApi({
             data: { user: data.user, session: data.session, error: null },
           };
         } catch (error) {
-          return { error: error as Error };
+          return { error: { message: (error as any).message || String(error) } };
         }
       },
       invalidatesTags: ["Auth", "User"],
@@ -116,12 +130,12 @@ export const authApi = createApi({
           });
 
           if (error) {
-            return { error: error };
+            return { error: { message: error.message } as any };
           }
 
           return { data: { success: true, error: null } };
         } catch (error) {
-          return { error: error as Error };
+          return { error: { message: (error as any).message || String(error) } as any };
         }
       },
     }),
@@ -140,14 +154,14 @@ export const authApi = createApi({
             const errMsg = (error as any)?.message ?? String(error);
             if (errMsg.includes("Auth session missing")) {
               // If session is already missing, consider this a successful logout
-              return { data: undefined };
+              return { data: null } as any;
             }
-            return { error: error };
+            return { error: { message: error.message } as any };
           }
 
-          return { data: undefined };
+          return { data: null } as any;
         } catch (error) {
-          return { error: error as Error };
+          return { error: { message: (error as any).message || String(error) } as any };
         }
       },
       invalidatesTags: ["Auth", "User"],
@@ -164,7 +178,7 @@ export const authApi = createApi({
           const error = resp.error;
 
           if (error) {
-            return { error: error };
+            return { error: { message: error.message } as any };
           }
 
           return {
@@ -175,7 +189,7 @@ export const authApi = createApi({
             },
           };
         } catch (error) {
-          return { error: error as Error };
+          return { error: { message: (error as any).message || String(error) } as any };
         }
       },
       providesTags: ["Auth"],

@@ -2,12 +2,13 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import MAP_LINKS from '@/config/mapLinks';
+import { getLinksForContext, UserRole } from "@/config/mapLinks";
 import {
   useGetSessionQuery,
   useLogoutMutation,
 } from "@/lib/redux/services/auth";
-import { useRouter } from "next/navigation";
+import { useGetUserQuery } from "@/lib/redux/services/userApi";
+import { useRouter, usePathname } from "next/navigation";
 
 /**
  * Mobile menu component with hamburger toggle
@@ -17,6 +18,23 @@ export default function MobileMenu() {
   const { data } = useGetSessionQuery();
   const [logout] = useLogoutMutation();
   const router = useRouter();
+  const pathname = usePathname() || "/";
+
+  const userId = data?.user?.id;
+  
+  // Get user role from database
+  const { data: dbUser } = useGetUserQuery(userId ?? "", {
+    skip: !userId,
+  });
+
+  const userRole = dbUser?.role as UserRole | undefined;
+
+  // Determine context
+  const isMap = pathname.startsWith("/map") || pathname.startsWith("/dispatch") || pathname.startsWith("/route-details");
+  const context = isMap ? "map" : "default";
+
+  // Get links for current context
+  const links = getLinksForContext(context, userRole);
 
   /**
    * Toggle the mobile menu state
@@ -43,12 +61,12 @@ export default function MobileMenu() {
     <div>
       {/* Hamburger button */}
       <button
-        className="text-gray-700 p-2 focus:outline-none"
+        className="text-gray-700 p-2 focus:outline-none hover:bg-gray-100 rounded-lg transition-colors"
         onClick={toggleMenu}
         aria-label="Toggle menu"
       >
         <svg
-          className="w-6 h-6"
+          className="w-5 h-5 sm:w-6 sm:h-6"
           fill="none"
           stroke="currentColor"
           viewBox="0 0 24 24"
@@ -103,7 +121,7 @@ export default function MobileMenu() {
             <nav className="flex flex-col space-y-8">
 
               {/* Map-specific links (kept consistent with desktop navbar) */}
-              {MAP_LINKS.map((l) => (
+              {links.map((l) => (
                 <Link
                   key={l.href}
                   href={l.href}

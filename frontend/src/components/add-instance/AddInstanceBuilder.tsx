@@ -155,8 +155,13 @@ const AddInstanceBuilder: React.FC<AddInstanceBuilderProps> = ({ onBack, onInsta
         const headerLines: string[] = [];
         headerLines.push(`NAME : ${instanceData.name}`);
         headerLines.push(`LOCATION : ${instanceData.location}`);
+        headerLines.push(`COMMENT : PDPTW Instance`);
         headerLines.push(`TYPE : CVRPTW`);
         headerLines.push(`SIZE : ${nodes.length}`);
+        headerLines.push(`DISTRIBUTION : CLUSTER`);
+        headerLines.push(`DEPOT : ( ${nodes[0]?.lat.toFixed(6)} ${nodes[0]?.lng.toFixed(6)} )`);
+        headerLines.push(`ROUTE-TIME : ${instanceData.routeTime}`);
+        headerLines.push(`TIME-WINDOW : ${instanceData.timeWindow}`);
         headerLines.push(`CAPACITY : ${instanceData.capacity}`);
         headerLines.push(`NODES`);
 
@@ -1352,7 +1357,7 @@ const AddInstanceBuilder: React.FC<AddInstanceBuilderProps> = ({ onBack, onInsta
                             </div>
                         </div>
                     )}
-                    <div className="absolute top-4 right-4 w-80" style={{ zIndex: 9999 }}>
+                    <div className="absolute top-4 right-4 w-80" style={{ zIndex: 9 }}>
                         <div className="relative">
                             <div className="flex">
                                 <div className="relative flex-1">

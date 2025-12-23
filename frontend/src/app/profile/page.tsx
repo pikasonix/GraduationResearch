@@ -1,31 +1,58 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useGetSessionQuery } from "@/lib/redux/services/auth";
 import {
-  useGetProfileOverviewQuery,
-  useUpdateProfileMutation,
+  useGetUserProfileOverviewQuery,
+  useUpdateUserMutation,
   useUploadAvatarMutation,
-  type DbProfile,
-  type DbProject,
-} from "@/lib/redux/services/profileApi";
+  useLazyCheckUsernameQuery,
+  type DbUser,
+  type UserRole,
+} from "@/lib/redux/services/userApi";
 import type { FetchBaseQueryError } from "@reduxjs/toolkit/query";
-import ProfileHeader from "@/components/profile/ProfileHeader";
-import ProfileTabs from "@/components/profile/ProfileTabs";
-import CompleteProfileModal from "@/components/profile/SimpleProfileSection/CompleteProfileModal";
-import type { ProfileData } from "@/components/profile/SimpleProfileSection/CompleteProfileModal";
-import type {
-  CustomerDetail,
-  SupplierDetail,
-  TechDetail,
-} from "@/components/profile/DetailProfileSection";
-import type { UserRole } from "@/components/profile/types";
 import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
-import { useOptionLabels } from "@/lib/hooks/useOptionLabels";
-// import { PROFILE_TYPE_OPTIONS, PROFILE_ROLE_OPTIONS } from "@/lib/constants/options"; // Removed
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import FileUpload from "@/components/common/FileUpload";
+import { Avatar } from "@/components/common/Avatar";
+import { getAvatarUrl } from "@/lib/utils/avatar";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Badge } from "@/components/ui/badge";
+import { User, Building2, Phone, Mail, Shield, Pencil, Briefcase, Truck } from "lucide-react";
+
+const roleLabels: Record<UserRole, string> = {
+  super_admin: "Super Admin",
+  admin: "Quản trị viên",
+  manager: "Quản lý",
+  driver: "Tài xế",
+  user: "Người dùng",
+};
+
+const roleBadgeColors: Record<UserRole, string> = {
+  super_admin: "bg-red-100 text-red-800",
+  admin: "bg-purple-100 text-purple-800",
+  manager: "bg-blue-100 text-blue-800",
+  driver: "bg-yellow-100 text-yellow-800",
+  user: "bg-gray-100 text-gray-800",
+};
 
 const LoadingSpinner: React.FC = () => (
   <div className="flex justify-center items-center h-64">
@@ -40,82 +67,132 @@ const ErrorDisplay: React.FC<{ message: string }> = ({ message }) => (
   </div>
 );
 
-// Helper type for RTK Query errors (more specific than any)
 type RtkQueryError = FetchBaseQueryError & {
-  data?: string | { message?: string }; // Adjust based on actual error data structure
+  data?: string | { message?: string };
 };
 
-/**
- * User profile page showing auth state and account information
- */
+interface EditProfileForm {
+  full_name: string;
+  phone: string;
+  username: string;
+  avatarFile?: File | null;
+}
+
 const ProfilePage: React.FC = () => {
-  const { data: sessionData, isLoading: isLoadingSession } =
-    useGetSessionQuery();
+  const { data: sessionData, isLoading: isLoadingSession } = useGetSessionQuery();
   const router = useRouter();
   const userId = sessionData?.session?.user?.id;
 
-  const { getLabels, getLabel } = useOptionLabels();
-
-  const [isEditProfileModalOpen, setIsEditProfileModalOpen] = useState(false);
-  // Note: project sub-modals were removed to simplify the page and avoid
-  // referencing components/handlers that aren't present in this file.
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isRoleModalOpen, setIsRoleModalOpen] = useState(false);
+  const [editForm, setEditForm] = useState<EditProfileForm>({
+    full_name: "",
+    phone: "",
+    username: "",
+  });
+  const [usernameCheckStatus, setUsernameCheckStatus] = useState<{
+    checking: boolean;
+    available: boolean | null;
+    message: string;
+  }>({ checking: false, available: null, message: "" });
 
   const {
     data: overviewData,
     error: overviewError,
     isLoading: isLoadingOverview,
     isFetching: isFetchingOverview,
-  } = useGetProfileOverviewQuery(userId ?? "", {
+  } = useGetUserProfileOverviewQuery(userId ?? "", {
     skip: !userId,
   });
 
-  const [updateProfile] = useUpdateProfileMutation();
+  const [updateUser, { isLoading: isUpdating }] = useUpdateUserMutation();
   const [uploadAvatar] = useUploadAvatarMutation();
+  const [checkUsername] = useLazyCheckUsernameQuery();
 
-  const profileData = overviewData?.profile ?? null;
-  const projectData = overviewData?.project ?? null;
+  const user = overviewData?.user ?? null;
+  const organization = overviewData?.organization ?? null;
 
-  // --- Mutation Error Handling Helper ---
   const handleMutationError = useCallback((err: unknown, context: string) => {
     console.error(`Failed to ${context}:`, err);
     let message = `Could not ${context}.`;
-    // Type guard to check if it's an RTK Query error structure
-    if (
-      typeof err === "object" &&
-      err !== null &&
-      ("status" in err || "error" in err) // Check for common RTK error fields
-    ) {
+    if (typeof err === "object" && err !== null && ("status" in err || "error" in err)) {
       const rtkError = err as RtkQueryError;
-      // Extract message from data field (could be string or object)
       if (typeof rtkError.data === "string") {
         message = rtkError.data;
       } else if (typeof rtkError.data === "object" && rtkError.data?.message) {
         message = rtkError.data.message;
       } else if ("error" in rtkError && typeof rtkError.error === "string") {
-        // Fallback for CUSTOM_ERROR structure
         message = rtkError.error;
       }
     }
     toast.error(`Error: ${message}`);
   }, []);
 
-  const isLoading =
-    isLoadingSession ||
-    isLoadingOverview ||
-    isFetchingOverview;
+  const isLoading = isLoadingSession || isLoadingOverview || isFetchingOverview;
 
-  const queryError = overviewError;
+  // Debounced username check
+  useEffect(() => {
+    if (!userId || !editForm.username || editForm.username === user?.username) {
+      setUsernameCheckStatus({ checking: false, available: null, message: "" });
+      return;
+    }
 
-  const isProfileComplete = React.useMemo(() => {
-    if (!profileData) return false;
-    const name = (profileData.name || "").trim();
-    const type = Array.isArray(profileData.type)
-      ? profileData.type[0]
-      : profileData.type;
-    const phoneDigits = (profileData.phone || "").replace(/\D/g, "");
-    const validPhone = phoneDigits.length >= 9;
-    return Boolean(name && type && validPhone);
-  }, [profileData]);
+    setUsernameCheckStatus({ checking: true, available: null, message: "" });
+
+    const timeoutId = setTimeout(async () => {
+      try {
+        const result = await checkUsername({
+          username: editForm.username,
+          currentUserId: userId,
+        }).unwrap();
+
+        if (result.available) {
+          setUsernameCheckStatus({
+            checking: false,
+            available: true,
+            message: "Username khả dụng",
+          });
+        } else {
+          setUsernameCheckStatus({
+            checking: false,
+            available: false,
+            message: "Username đã tồn tại",
+          });
+        }
+      } catch (error) {
+        setUsernameCheckStatus({
+          checking: false,
+          available: null,
+          message: "Lỗi kiểm tra username",
+        });
+      }
+    }, 500);
+
+    return () => clearTimeout(timeoutId);
+  }, [editForm.username, userId, user?.username, checkUsername]);
+
+  // Check for missing role
+  useEffect(() => {
+    if (user && (!user.role || user.role === "user")) {
+      setIsRoleModalOpen(true);
+    } else {
+      setIsRoleModalOpen(false);
+    }
+  }, [user]);
+
+  const handleRoleSelect = async (role: UserRole) => {
+    if (!userId) return;
+    try {
+      await updateUser({
+        id: userId,
+        role: role
+      }).unwrap();
+      toast.success("Cập nhật vai trò thành công!");
+      setIsRoleModalOpen(false);
+    } catch (err) {
+      handleMutationError(err, "update role");
+    }
+  };
 
   useEffect(() => {
     if (!isLoadingSession && !userId) {
@@ -123,113 +200,19 @@ const ProfilePage: React.FC = () => {
     }
   }, [isLoadingSession, userId, router]);
 
+  // ...
+
+
+
   useEffect(() => {
-    if (!isLoading && userId) {
-      const nameMissing = !(profileData?.name && String(profileData.name).trim());
-      const typeMissing = !(
-        (Array.isArray(profileData?.type) && profileData!.type!.length > 0) ||
-        (typeof profileData?.type === "string" && String(profileData?.type).trim() !== "")
-      );
-      const phoneMissing = !(profileData?.phone && String(profileData?.phone).trim());
-      if (nameMissing || typeMissing || phoneMissing) {
-        setIsEditProfileModalOpen(true);
-      }
+    if (user) {
+      setEditForm({
+        full_name: user.full_name || "",
+        phone: user.phone || "",
+        username: user.username || "",
+      });
     }
-  }, [isLoading, userId, profileData]);
-
-  // Data processing (happens before early returns to maintain hook order)
-  const currentProfile: Partial<DbProfile> = profileData ?? {};
-  const currentProject: Partial<DbProject> = projectData ?? {};
-
-  const profileRoleArray = Array.isArray(currentProfile.role)
-    ? currentProfile.role
-    : currentProfile.role
-      ? [currentProfile.role]
-      : [];
-
-  const projectTagArray = Array.isArray(currentProject.tags)
-    ? currentProject.tags
-    : currentProject.tags
-      ? [currentProject.tags]
-      : [];
-
-  const projectCofounderArray = Array.isArray(currentProject.cofounders)
-    ? currentProject.cofounders
-    : currentProject.cofounders
-      ? [currentProject.cofounders]
-      : [];
-
-  const projectPartnerArray = Array.isArray(currentProject.partners)
-    ? currentProject.partners
-    : currentProject.partners
-      ? [currentProject.partners]
-      : [];
-
-  const roleLabels = getLabels("profileRole", profileRoleArray, "");
-  const currentProfileType =
-    Array.isArray(currentProfile.type) && currentProfile.type.length > 0
-      ? currentProfile.type[0]
-      : typeof currentProfile.type === "string"
-        ? currentProfile.type
-        : undefined;
-  const typeLabel = currentProfileType
-    ? getLabel("profileType", currentProfileType, "")
-    : "";
-
-  const projectCategoryLabels = getLabels(
-    "projectCategory",
-    projectTagArray,
-    ""
-  );
-
-  const userTypeBadges = typeLabel ? [typeLabel] : [];
-  const projectTagsForDisplay = projectCategoryLabels
-    ? projectCategoryLabels.split(", ")
-    : [];
-
-  const resolvedRole: UserRole = React.useMemo(() => {
-    const validRoles: UserRole[] = ["CUSTOMER", "SUPPLIER", "TECH"];
-    const match = profileRoleArray.find((role): role is UserRole =>
-      validRoles.includes(role as UserRole)
-    );
-    return match ?? "CUSTOMER";
-  }, [profileRoleArray]);
-
-  const profileInfoForModal: ProfileData = {
-    name: currentProfile.name ?? "",
-    avatarUrl: currentProfile.avatar_url,
-    type:
-      Array.isArray(currentProfile.type) && currentProfile.type.length > 0
-        ? currentProfile.type[0]
-        : typeof currentProfile.type === "string"
-          ? currentProfile.type
-          : "",
-    role: profileRoleArray,
-    phone: currentProfile.phone ?? "",
-    avatarFile: undefined,
-  };
-
-  const detailInfoForTabs = React.useMemo<{
-    customer?: CustomerDetail;
-    supplier?: SupplierDetail;
-    tech?: TechDetail;
-  }>(() => {
-    const result: {
-      customer?: CustomerDetail;
-      supplier?: SupplierDetail;
-      tech?: TechDetail;
-    } = {};
-
-    if (resolvedRole === "CUSTOMER") {
-      result.customer = {
-        fullName: profileInfoForModal.name || "Khách hàng WAYO",
-        phone: profileInfoForModal.phone || "",
-        password: "********",
-      };
-    }
-
-    return result;
-  }, [profileInfoForModal.name, profileInfoForModal.phone, resolvedRole]);
+  }, [user]);
 
   if (isLoading) {
     return (
@@ -243,18 +226,15 @@ const ProfilePage: React.FC = () => {
     return (
       <div className="pt-16 sm:pt-20 md:pt-24 max-w-4xl mx-auto px-4 text-center">
         Authenticating... If this persists, please{" "}
-        <a href="/login" className="underline">
-          log in
-        </a>
-        .
+        <a href="/login" className="underline">log in</a>.
       </div>
     );
   }
 
-  if (queryError) {
+  if (overviewError) {
     const errorMessage =
-      typeof queryError === "object" && queryError && "data" in queryError
-        ? String(queryError.data)
+      typeof overviewError === "object" && overviewError && "data" in overviewError
+        ? String(overviewError.data)
         : "An unknown error occurred";
     return (
       <div className="pt-16 sm:pt-20 md:pt-24 max-w-4xl mx-auto px-4">
@@ -263,91 +243,50 @@ const ProfilePage: React.FC = () => {
     );
   }
 
-  const handleEditProfile = () => setIsEditProfileModalOpen(true);
-  // For now, other edit actions prompt the user to complete profile first
-  // and otherwise open the main profile modal. This avoids depending on
-  // additional modal components that are not imported here.
-  const handleEditProject = () => {
-    if (!isProfileComplete) {
-      toast("Vui lòng hoàn thành hồ sơ trước khi chỉnh sửa các thông tin khác.");
-      setIsEditProfileModalOpen(true);
-      return;
+  const handleEditProfile = () => {
+    if (user) {
+      setEditForm({
+        full_name: user.full_name || "",
+        phone: user.phone || "",
+        username: user.username || "",
+      });
     }
-    toast("Chỉnh sửa dự án hiện chưa khả dụng trong bản này.");
+    setIsEditModalOpen(true);
   };
 
-  const handleEditContact = () => {
-    if (!isProfileComplete) {
-      toast("Vui lòng hoàn thành hồ sơ trước khi chỉnh sửa các thông tin khác.");
-      setIsEditProfileModalOpen(true);
-      return;
-    }
-    toast("Chỉnh sửa thông tin liên hệ hiện chưa khả dụng trong bản này.");
-  };
-
-  const handleEditAbout = () => {
-    if (!isProfileComplete) {
-      toast("Vui lòng hoàn thành hồ sơ trước khi chỉnh sửa các thông tin khác.");
-      setIsEditProfileModalOpen(true);
-      return;
-    }
-    toast("Chỉnh sửa mô tả dự án hiện chưa khả dụng trong bản này.");
-  };
-
-  const handleEditFunding = () => {
-    if (!isProfileComplete) {
-      toast("Vui lòng hoàn thành hồ sơ trước khi chỉnh sửa các thông tin khác.");
-      setIsEditProfileModalOpen(true);
-      return;
-    }
-    toast("Chỉnh sửa thông tin gọi vốn hiện chưa khả dụng trong bản này.");
-  };
-
-  const handleSaveProfileInfo = async (updatedData: ProfileData) => {
+  const handleSaveProfile = async () => {
     if (!userId) return;
-    const { avatarFile, ...profileDetails } = updatedData;
-    let newAvatarUrl = profileData?.avatar_url;
 
-    if (avatarFile) {
-      try {
-        const uploadResult = await uploadAvatar({
-          userId,
-          file: avatarFile,
-        }).unwrap();
-        newAvatarUrl = uploadResult.publicUrl;
-        toast.success("Avatar uploaded!");
-      } catch (err) {
-        handleMutationError(err, "upload avatar");
-      }
+    // Kiểm tra username trước khi lưu
+    if (usernameCheckStatus.available === false) {
+      toast.error("Vui lòng chọn username khác");
+      return;
     }
 
-    // 2. Update profile details (including potentially new avatar URL)
-    console.log("Attempting to update profile with payload:", {
-      id: userId,
-      name: profileDetails.name,
-      type: profileDetails.type,
-      role: profileDetails.role,
-      phone: profileDetails.phone,
-      avatar_url: newAvatarUrl,
-    });
     try {
-      const profileUpdatePayload = {
+      let avatarUrl = user?.avatar_url;
+
+      // Upload avatar if a file was selected
+      if (editForm.avatarFile) {
+        const uploadResult = await uploadAvatar({
+          file: editForm.avatarFile,
+          userId,
+        }).unwrap();
+        avatarUrl = uploadResult.publicUrl;
+      }
+
+      // Update user profile
+      await updateUser({
         id: userId,
-        name: profileDetails.name,
-        type: [profileDetails.type],
-        phone: profileDetails.phone,
-        role: profileDetails.role,
-        avatar_url: newAvatarUrl,
-      };
-      await updateProfile(profileUpdatePayload).unwrap();
-      toast.success("Profile updated!");
-      console.log("Profile update successful, closing modal.");
-      setIsEditProfileModalOpen(false); // Close modal on successful profile update
+        full_name: editForm.full_name,
+        phone: editForm.phone,
+        username: editForm.username,
+        avatar_url: avatarUrl,
+      }).unwrap();
+
+      toast.success("Cập nhật thông tin thành công!");
+      setIsEditModalOpen(false);
     } catch (err) {
-      console.error(
-        "Profile update failed after potential avatar upload:",
-        err
-      );
       handleMutationError(err, "update profile");
     }
   };
@@ -357,54 +296,253 @@ const ProfilePage: React.FC = () => {
       <Toaster />
       {isFetchingOverview && (
         <div className="fixed top-4 right-4 z-50 bg-blue-100 text-blue-700 px-3 py-1 rounded text-sm">
-          Updating...
+          Đang cập nhật...
         </div>
       )}
-      <main className="flex-grow container max-w-6xl mx-auto px-4 py-12 md:px-8">
-        <ProfileHeader
-          user={{
-            name: currentProfile.name ?? "Unnamed User",
-            avatarUrl: currentProfile.avatar_url || "",
-            isVerified: false,
-            typeBadges: userTypeBadges, // Use the processed type labels for badges
-            roleDisplayText: roleLabels, // Use the processed role labels for display text
-          }}
-          onEdit={handleEditProfile}
-        />
 
-        <ProfileTabs
-          role={resolvedRole}
-          project={{
-            title: currentProject.title ?? "Untitled Project",
-            tags: projectTagsForDisplay, // Changed to use labels for display
-            description:
-              currentProject.description ?? "No description available.",
-            contactInfo: {
-              location: currentProject.location ?? null,
-              website: currentProject.website ?? null,
-              portfolio: currentProject.portfolio ?? null,
-              email: currentProject.email ?? null,
-            },
-            fundingInfo: {
-              investment: currentProject.investment ?? null,
-              currency: currentProject.currency ?? null,
-              cofounders: projectCofounderArray,
-              partners: projectPartnerArray,
-            },
-          }}
-          detailInfo={detailInfoForTabs}
-          onEditProject={handleEditProject}
-          onEditContact={handleEditContact}
-          onEditAbout={handleEditAbout}
-          onEditFunding={handleEditFunding}
-        />
+      <main className="flex-grow container max-w-4xl mx-auto px-4 py-8">
+        <h1 className="text-2xl font-bold mb-6">Thông tin tài khoản</h1>
+
+        {/* User Info Card */}
+        <Card className="mb-6">
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle className="flex items-center gap-2">
+              <User className="h-5 w-5" />
+              Thông tin cá nhân
+            </CardTitle>
+            <Button variant="outline" size="sm" onClick={handleEditProfile}>
+              <Pencil className="h-4 w-4 mr-2" />
+              Chỉnh sửa
+            </Button>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center gap-4 mb-4">
+              <Avatar
+                src={getAvatarUrl(user?.avatar_url, sessionData?.session?.user?.user_metadata?.avatar_url)}
+                name={user?.full_name}
+                size={80}
+                className="border-2 border-gray-200"
+              />
+              <div>
+                <p className="font-semibold text-lg">{user?.full_name || "Chưa cập nhật"}</p>
+                <p className="text-sm text-muted-foreground">@{user?.username || "Chưa cập nhật"}</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <Label className="text-muted-foreground text-sm flex items-center gap-1">
+                  <Mail className="h-3 w-3" /> Email
+                </Label>
+                <p className="font-medium">{user?.email || "Chưa cập nhật"}</p>
+              </div>
+              <div>
+                <Label className="text-muted-foreground text-sm flex items-center gap-1">
+                  <Phone className="h-3 w-3" /> Số điện thoại
+                </Label>
+                <p className="font-medium">{user?.phone || "Chưa cập nhật"}</p>
+              </div>
+              <div>
+                <Label className="text-muted-foreground text-sm flex items-center gap-1">
+                  <Shield className="h-3 w-3" /> Vai trò
+                </Label>
+                <div className="mt-1">
+                  {user?.role && (
+                    <Badge className={roleBadgeColors[user.role]}>
+                      {roleLabels[user.role]}
+                    </Badge>
+                  )}
+                </div>
+              </div>
+              <div>
+                <Label className="text-muted-foreground text-sm">Trạng thái</Label>
+                <div className="mt-1">
+                  <Badge variant={user?.is_active ? "default" : "secondary"}>
+                    {user?.is_active ? "Đang hoạt động" : "Không hoạt động"}
+                  </Badge>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Organization Info Card */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Building2 className="h-5 w-5" />
+              Thông tin tổ chức
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <Label className="text-muted-foreground text-sm">Tên tổ chức</Label>
+                <p className="font-medium">{organization?.name || "Chưa cập nhật"}</p>
+              </div>
+              <div>
+                <Label className="text-muted-foreground text-sm">Loại tài khoản</Label>
+                <div className="mt-1">
+                  <Badge variant="outline">
+                    {organization?.account_type === "enterprise" ? "Doanh nghiệp" : "Cá nhân"}
+                  </Badge>
+                </div>
+              </div>
+              <div>
+                <Label className="text-muted-foreground text-sm">Email liên hệ</Label>
+                <p className="font-medium">{organization?.contact_email || "Chưa cập nhật"}</p>
+              </div>
+              <div>
+                <Label className="text-muted-foreground text-sm">SĐT liên hệ</Label>
+                <p className="font-medium">{organization?.contact_phone || "Chưa cập nhật"}</p>
+              </div>
+              {organization?.address && (
+                <div className="md:col-span-2">
+                  <Label className="text-muted-foreground text-sm">Địa chỉ</Label>
+                  <p className="font-medium">{organization.address}</p>
+                </div>
+              )}
+              {organization?.tax_code && (
+                <div>
+                  <Label className="text-muted-foreground text-sm">Mã số thuế</Label>
+                  <p className="font-medium">{organization.tax_code}</p>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
       </main>
-      <CompleteProfileModal
-        isOpen={isEditProfileModalOpen}
-        onClose={() => setIsEditProfileModalOpen(false)}
-        initialData={profileInfoForModal}
-        onSave={handleSaveProfileInfo}
-      />
+
+      {/* Edit Profile Modal */}
+      {/* Edit Profile Modal */}
+      <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
+        <DialogContent className="max-h-[90vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle>Chỉnh sửa thông tin cá nhân</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4 flex-1 overflow-y-auto px-1">
+            <FileUpload
+              label="Ảnh đại diện"
+              onFileSelect={(file) => setEditForm({ ...editForm, avatarFile: file })}
+              currentImageUrl={getAvatarUrl(user?.avatar_url, sessionData?.session?.user?.user_metadata?.avatar_url)}
+              accept="image/png, image/jpeg, image/jpg"
+            />
+            
+            <div className="space-y-1.5">
+              <Label htmlFor="full_name">Họ và tên</Label>
+              <Input
+                id="full_name"
+                value={editForm.full_name}
+                onChange={(e) => setEditForm({ ...editForm, full_name: e.target.value })}
+                placeholder="Nhập họ và tên"
+              />
+            </div>
+            
+            <div className="space-y-1.5">
+              <Label htmlFor="username">Username</Label>
+              <div className="relative">
+                <Input
+                  id="username"
+                  value={editForm.username}
+                  onChange={(e) => setEditForm({ ...editForm, username: e.target.value })}
+                  placeholder="Nhập username"
+                  className={
+                    usernameCheckStatus.available === false
+                      ? "border-red-500 focus-visible:ring-red-500"
+                      : usernameCheckStatus.available === true
+                      ? "border-green-500 focus-visible:ring-green-500"
+                      : ""
+                  }
+                />
+                {usernameCheckStatus.checking && (
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                    <div className="h-4 w-4 border-2 border-gray-300 border-t-blue-600 rounded-full animate-spin" />
+                  </div>
+                )}
+              </div>
+              {usernameCheckStatus.message && (
+                <p
+                  className={`text-xs mt-1 ${
+                    usernameCheckStatus.available === false
+                      ? "text-red-600"
+                      : usernameCheckStatus.available === true
+                      ? "text-green-600"
+                      : "text-gray-500"
+                  }`}
+                >
+                  {usernameCheckStatus.message}
+                </p>
+              )}
+            </div>
+            
+            <div className="space-y-1.5">
+              <Label htmlFor="phone">Số điện thoại</Label>
+              <Input
+                id="phone"
+                value={editForm.phone}
+                onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
+                placeholder="Nhập số điện thoại"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsEditModalOpen(false)}>
+              Hủy
+            </Button>
+            <Button
+              onClick={handleSaveProfile}
+              disabled={isUpdating || usernameCheckStatus.available === false || usernameCheckStatus.checking}
+              className="bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isUpdating ? "Đang lưu..." : "Lưu thay đổi"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Role Selection Modal */}
+      <Dialog open={isRoleModalOpen} onOpenChange={(open) => {
+        // Prevent closing if user has no role or is 'user'
+        if ((!user?.role || user?.role === "user") && !open) return;
+        setIsRoleModalOpen(open);
+      }}>
+        <DialogContent className="sm:max-w-md [&>button]:hidden text-center justify-center items-center flex flex-col" onInteractOutside={(e) => e.preventDefault()} onEscapeKeyDown={(e) => e.preventDefault()}>
+          <DialogHeader className="items-center">
+            <DialogTitle className="text-xl">Chọn vai trò của bạn</DialogTitle>
+            <div className="text-sm text-muted-foreground">
+              Vui lòng chọn vai trò để tiếp tục sử dụng hệ thống
+            </div>
+          </DialogHeader>
+          <div className="grid grid-cols-2 gap-4 py-4 w-full">
+            <button
+              onClick={() => handleRoleSelect("manager")}
+              className="flex flex-col items-center justify-center p-4 border-2 rounded-xl hover:border-blue-500 hover:bg-blue-50 transition-all gap-3 group"
+              disabled={isUpdating}
+            >
+              <div className="p-3 rounded-full bg-blue-100 text-blue-600 group-hover:bg-blue-500 group-hover:text-white transition-colors">
+                <Briefcase size={24} />
+              </div>
+              <div className="text-center">
+                <div className="font-semibold text-gray-900">Quản lý</div>
+                <div className="text-xs text-gray-500 mt-1">Quản lý đội xe và đơn hàng</div>
+              </div>
+            </button>
+
+            <button
+              onClick={() => handleRoleSelect("driver")}
+              className="flex flex-col items-center justify-center p-4 border-2 rounded-xl hover:border-green-500 hover:bg-green-50 transition-all gap-3 group"
+              disabled={isUpdating}
+            >
+              <div className="p-3 rounded-full bg-green-100 text-green-600 group-hover:bg-green-500 group-hover:text-white transition-colors">
+                <Truck size={24} />
+              </div>
+              <div className="text-center">
+                <div className="font-semibold text-gray-900">Tài xế</div>
+                <div className="text-xs text-gray-500 mt-1">Nhận và giao đơn hàng</div>
+              </div>
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

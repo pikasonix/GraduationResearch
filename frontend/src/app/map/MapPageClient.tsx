@@ -13,7 +13,6 @@ import { solverService, type Job } from '@/services/solverService';
 // Dynamically import components to avoid SSR issues with Mapbox
 const MapComponent = dynamic(() => import('@/components/map/MapboxComponent'), { ssr: false });
 const Sidebar = dynamic(() => import('@/components/map/Sidebar'), { ssr: false });
-const GuidePage = dynamic(() => import('@/components/map/GuidePage'), { ssr: false });
 const AddInstancePage = dynamic(() => import('@/components/add-instance/AddInstanceBuilder'), { ssr: false });
 
 type ViewKey = 'map' | 'guide' | 'addInstance' | 'trafficMonitoring';
@@ -316,8 +315,6 @@ function MapPageClient() {
 
     const renderCurrentView = () => {
         switch (currentView) {
-            case 'guide':
-                return <GuidePage onBack={showMap} />;
             case 'addInstance':
                 return (
                     <AddInstancePage

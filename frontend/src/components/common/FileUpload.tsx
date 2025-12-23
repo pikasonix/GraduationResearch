@@ -105,13 +105,14 @@ const FileUpload: React.FC<FileUploadProps> = ({
       <div className="flex items-center gap-4">
         {/* Avatar Preview */}
         {displayUrl ? (
-          <Image
-            src={displayUrl}
-            alt="Avatar Preview"
-            width={64}
-            height={64}
-            className="rounded-full object-cover border border-gray-200"
-          />
+          <div className="relative w-16 h-16 shrink-0 rounded-full overflow-hidden border border-gray-200">
+            <Image
+              src={displayUrl}
+              alt="Avatar Preview"
+              fill
+              className="object-cover"
+            />
+          </div>
         ) : (
           <div className="w-16 h-16 rounded-full bg-gray-100 border border-gray-200 flex items-center justify-center text-gray-400">
             {/* Placeholder Icon or Initials */}
@@ -133,13 +134,12 @@ const FileUpload: React.FC<FileUploadProps> = ({
         )}
         {/* Upload Area */}
         <div
-          className={`flex-grow border-2 border-dashed rounded-lg p-4 text-center cursor-pointer hover:border-gray-400 ${
-            dragActive
+          className={`flex-grow border-2 border-dashed rounded-lg p-4 text-center cursor-pointer hover:border-gray-400 ${dragActive
               ? "border-indigo-500 bg-indigo-50"
               : error
-              ? "border-red-500"
-              : "border-gray-300"
-          }`}
+                ? "border-red-500"
+                : "border-gray-300"
+            }`}
           onDragEnter={handleDrag}
           onDragLeave={handleDrag}
           onDragOver={handleDrag}
@@ -158,9 +158,8 @@ const FileUpload: React.FC<FileUploadProps> = ({
           <div className="flex flex-col items-center justify-center">
             <UploadCloud
               size={24}
-              className={`mb-2 ${
-                dragActive ? "text-indigo-600" : "text-gray-400"
-              }`}
+              className={`mb-2 ${dragActive ? "text-indigo-600" : "text-gray-400"
+                }`}
             />
             <p className="text-sm text-gray-600">
               <span className="font-semibold text-indigo-600">

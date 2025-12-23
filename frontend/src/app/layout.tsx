@@ -4,7 +4,6 @@ import Image from "next/image";
 import "./globals.css";
 import "@/components/common/legacy/styles/shapes-tailwind.css";
 import "@/components/common/legacy/styles/shapes.css";
-import "react-notion-x/src/styles.css";
 import { ReduxProvider } from "@/lib/redux/provider";
 import { DesktopLoginsSignups } from "./_DesktopLoginsSignups";
 import Link from "next/link";
@@ -14,7 +13,6 @@ import NavbarShadow from "./_NavbarShadow";
 import ProfileUpdater from "@/components/profile/ProfileUpdater";
 import { Toaster } from "@/components/ui/sonner";
 import MapHeader from "@/components/MapHeader";
-import MAP_LINKS from '@/config/mapLinks';
 import Script from 'next/script';
 import ScrollHeader from "@/components/ScrollHeader";
 
@@ -42,11 +40,6 @@ export default function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const navLinks = [
-    { href: "/map", label: "Dashboard", icon: "LayoutDashboard" },
-    { href: "/add-instance", label: "Tạo Instance", icon: "PlusCircle" },
-    { href: "/map?view=guide", label: "Hướng dẫn", icon: "BookOpen" },
-  ];
   return (
     <html lang="en" suppressHydrationWarning={true}>
       <body
@@ -64,38 +57,40 @@ export default function RootLayout({
           {/* Navigation Header */}
           <ScrollHeader className="fixed w-full z-50" hideOnScrollDown={false}>
             <nav
-              className="w-full backdrop-blur-[20px] border-b-1 border-gray-200 transition-shadow duration-500"
+              className="w-full backdrop-blur-[20px] border-b border-gray-200 transition-shadow duration-500"
               id="navbar"
             >
-              <div className="container mx-auto px-4 max-w-7xl">
-                <div className="flex justify-between h-16 items-center">
+              <div className="container mx-auto px-3 sm:px-4 lg:px-6 max-w-7xl">
+                <div className="flex justify-between h-14 sm:h-16 items-center">
                   {/* Left side: Logo and navigation links */}
-                  <div className="flex items-center">
+                  <div className="flex items-center min-w-0 flex-1">
                     {/* Logo */}
-                    <Link href="/" className="flex items-center gap-3">
+                    <Link href="/" className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
                       <Image
                         src={process.env.NEXT_PUBLIC_LOGO_WAYO || "/favicon.png"}
                         alt="WAYO Logo"
-                        width={32}
-                        height={32}
-                        className="rounded-md"
+                        width={28}
+                        height={28}
+                        className="sm:w-8 sm:h-8 rounded-md"
                       />
-                      <span className="font-semibold text-xl">WAYO</span>
+                      <span className="font-semibold text-lg sm:text-xl">WAYO</span>
                     </Link>
 
                     {/* Desktop Navigation Links (map-aware) */}
-                    <MapHeader defaultLinks={navLinks} mapLinks={MAP_LINKS} />
+                    <div className="ml-3 lg:ml-6">
+                      <MapHeader />
+                    </div>
                   </div>
 
                   {/* User navigation and mobile menu */}
-                  <div className="flex items-center">
+                  <div className="flex items-center flex-shrink-0 ml-2">
                     {/* Desktop Auth Navigation */}
-                    <div className="hidden md:block">
+                    <div className="hidden lg:block">
                       <DesktopLoginsSignups />
                     </div>
 
                     {/* Mobile Menu Button */}
-                    <div className="md:hidden">
+                    <div className="lg:hidden">
                       <MobileMenu />
                     </div>
                   </div>
