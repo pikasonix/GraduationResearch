@@ -34,11 +34,11 @@ import { LocationIcon, MarkerIcon, SunnyIcon } from '@/components/icon';
 
 ## Tính năng
 
-- ✅ Tự động scan tất cả file `.svg` trong `raw-svgs/`
-- ✅ Generate React components với TypeScript
-- ✅ Giữ nguyên gradient và styling
-- ✅ Tự động cập nhật file `index.ts`
-- ✅ Component name tự động từ filename (ví dụ: `home-pin.svg` → `HomePinIcon`)
+- Tự động scan tất cả file `.svg` trong `raw-svgs/`
+- Generate React components với TypeScript
+- Giữ nguyên gradient và styling
+- Tự động cập nhật file `index.ts`
+- Component name tự động từ filename (ví dụ: `home-pin.svg` → `HomePinIcon`)
 
 ## Component Props
 

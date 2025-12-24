@@ -239,7 +239,11 @@ export default function OrdersPage() {
                 </div>
 
                 <div className="lg:col-span-1 h-[400px] sm:h-[500px] lg:h-auto bg-white rounded-lg shadow-sm border p-1 lg:sticky lg:top-6">
-                    <OrdersMap orders={finalFilteredOrders} selectedOrderIds={selectedOrderIds} />
+                    <OrdersMap 
+                        orders={finalFilteredOrders} 
+                        selectedOrderIds={selectedOrderIds}
+                        onOrderSelect={(orderId) => setSelectedOrderIds([orderId])}
+                    />
                 </div>
             </div>
 
