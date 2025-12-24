@@ -284,6 +284,8 @@ export const UniversalMap: React.FC<UniversalMapProps> = ({
     useEffect(() => {
         if (!mapInstance.current || !mapReady || !showOrderLines || orders.length === 0) return;
 
+        const hasSelection = selectedOrderIds.length > 0;
+
         const features = orders
             .filter(order =>
                 order.pickup_latitude &&
@@ -294,14 +296,15 @@ export const UniversalMap: React.FC<UniversalMapProps> = ({
             .map(order => {
                 const isSelected = selectedOrderIds.includes(order.id);
                 const statusInfo = getStatusInfo(order.status);
+                const isDimmed = hasSelection && !isSelected;
 
                 return {
                     type: 'Feature',
                     properties: {
                         orderId: order.id,
                         color: isSelected ? '#f59e0b' : statusInfo.color,
-                        width: isSelected ? 4 : 2,
-                        opacity: isSelected ? 0.9 : 0.5,
+                        width: isSelected ? 4 : isDimmed ? 1 : 2,
+                        opacity: isSelected ? 0.95 : isDimmed ? 0.12 : 0.5,
                         dasharray: [1, 0],
                     },
                     geometry: {
@@ -353,7 +356,9 @@ export const UniversalMap: React.FC<UniversalMapProps> = ({
     const applyOrderSelectionStyles = useCallback(
         (orderId: string | undefined, kind: "pickup" | "delivery" | undefined, innerEl: HTMLDivElement) => {
             if (!orderId || !kind) return;
+            const hasSelection = selectedOrderIds.length > 0;
             const isSelected = selectedOrderIds.includes(orderId);
+            const isDimmed = hasSelection && !isSelected;
 
             // IMPORTANT: Do not apply any CSS transform on the Mapbox marker root element.
             // Mapbox uses transform for positioning; overriding it causes visual offset.
@@ -361,13 +366,16 @@ export const UniversalMap: React.FC<UniversalMapProps> = ({
             innerEl.style.transition = "box-shadow 120ms ease, background-color 120ms ease";
             innerEl.style.border = "2px solid #ffffff";
             innerEl.style.borderRadius = "9999px";
-            innerEl.style.width = "20px";
-            innerEl.style.height = "20px";
+            innerEl.style.width = isDimmed ? "14px" : "20px";
+            innerEl.style.height = isDimmed ? "14px" : "20px";
+            innerEl.style.opacity = isDimmed ? "0.35" : "1";
             innerEl.style.boxShadow = isSelected
                 ? kind === "pickup"
                     ? "0 0 0 4px rgba(96, 165, 250, 0.9), 0 8px 18px rgba(0,0,0,0.18)"
                     : "0 0 0 4px rgba(74, 222, 128, 0.9), 0 8px 18px rgba(0,0,0,0.18)"
-                : "0 8px 18px rgba(0,0,0,0.18)";
+                : isDimmed
+                    ? "0 3px 10px rgba(0,0,0,0.12)"
+                    : "0 8px 18px rgba(0,0,0,0.18)";
         },
         [selectedOrderIds]
     );
@@ -419,6 +427,9 @@ export const UniversalMap: React.FC<UniversalMapProps> = ({
                 const wrapper = document.createElement("div");
                 wrapper.style.width = "20px";
                 wrapper.style.height = "20px";
+                wrapper.style.display = "flex";
+                wrapper.style.alignItems = "center";
+                wrapper.style.justifyContent = "center";
                 wrapper.style.cursor = "pointer";
                 wrapper.style.pointerEvents = "auto";
                 wrapper.style.zIndex = "1";
@@ -498,6 +509,9 @@ export const UniversalMap: React.FC<UniversalMapProps> = ({
                 const wrapper = document.createElement("div");
                 wrapper.style.width = "20px";
                 wrapper.style.height = "20px";
+                wrapper.style.display = "flex";
+                wrapper.style.alignItems = "center";
+                wrapper.style.justifyContent = "center";
                 wrapper.style.cursor = "pointer";
                 wrapper.style.pointerEvents = "auto";
                 wrapper.style.zIndex = "1";
