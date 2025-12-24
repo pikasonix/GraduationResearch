@@ -110,7 +110,10 @@ export const OrdersStats: React.FC<OrdersStatsProps> = ({
                 const label = chart.data.labels?.[index] as string;
                 const backgroundColor = dataset.backgroundColor as string[];
                 const color = backgroundColor[index];
-                setHoverStatus({ label, value, color });
+                setHoverStatus((prev) => {
+                    if (prev?.label === label && prev?.value === value && prev?.color === color) return prev;
+                    return { label, value, color };
+                });
             } else {
                 setHoverStatus(null);
             }
@@ -141,7 +144,10 @@ export const OrdersStats: React.FC<OrdersStatsProps> = ({
                 const label = chart.data.labels?.[index] as string;
                 const backgroundColor = dataset.backgroundColor as string[];
                 const color = backgroundColor[index];
-                setHoverPriority({ label, value, color });
+                setHoverPriority((prev) => {
+                    if (prev?.label === label && prev?.value === value && prev?.color === color) return prev;
+                    return { label, value, color };
+                });
             } else {
                 setHoverPriority(null);
             }
