@@ -13,7 +13,7 @@ export type OrderStatus =
     | "failed"
     | "cancelled";
 
-export type PriorityLevel = "low" | "normal" | "high" | "urgent";
+export type PriorityLevel = "normal" | "urgent";
 
 export interface Order {
     id: string;

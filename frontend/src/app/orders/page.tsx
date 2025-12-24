@@ -3,18 +3,20 @@
 import React, { useState } from "react";
 import { useGetSessionQuery } from "@/lib/redux/services/auth";
 import { useGetUserProfileOverviewQuery } from "@/lib/redux/services/userApi";
-import { 
-    useGetOrdersQuery, 
-    Order, 
+import {
+    useGetOrdersQuery,
+    Order,
     useCreateOrderMutation,
     useUpdateOrderMutation,
-    useDeleteOrderMutation 
+    useDeleteOrderMutation
 } from "@/lib/redux/services/orderApi";
+import { DateRange } from "react-day-picker";
 import { OrdersStats } from "@/components/orders/OrdersStats";
 import { OrdersFilter } from "@/components/orders/OrdersFilter";
 import { OrdersTable } from "@/components/orders/OrdersTable";
 import { OrdersMap } from "@/components/orders/OrdersMap";
 import OrderForm from "@/components/orders/OrderForm";
+import Pagination from "@/components/common/Pagination";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import {
@@ -54,12 +56,16 @@ export default function OrdersPage() {
         }
     }, [organizationId]);
 
-    const [date, setDate] = useState<Date | undefined>(new Date());
+    const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
     const [searchTerm, setSearchTerm] = useState("");
+    const [statusFilter, setStatusFilter] = useState<string | null>(null);
+    const [priorityFilter, setPriorityFilter] = useState<string | null>(null);
     const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
     const [isFormOpen, setIsFormOpen] = useState(false);
     const [editingOrder, setEditingOrder] = useState<Order | null>(null);
     const [deleteOrderId, setDeleteOrderId] = useState<string | null>(null);
+    const [currentPage, setCurrentPage] = useState(1);
+    const ordersPerPage = 10;
 
     const [createOrder] = useCreateOrderMutation();
     const [updateOrder] = useUpdateOrderMutation();
@@ -72,12 +78,50 @@ export default function OrdersPage() {
         search: searchTerm,
     }, { skip: !organizationId });
 
-    // Filter by date client-side for now as API might not support simple date match yet
-    const filteredOrders = orders.filter(order => {
-        if (!date) return true;
+    // Filter by date client-side (Base filter for stats)
+    const dateFilteredOrders = orders.filter(order => {
+        if (!dateRange || !dateRange.from) return true;
+
         const orderDate = new Date(order.created_at);
-        return orderDate.toDateString() === date.toDateString();
+        // Reset time parts for comparison to match date-only logic
+        const orderDateOnly = new Date(orderDate.getFullYear(), orderDate.getMonth(), orderDate.getDate());
+
+        const fromDate = new Date(dateRange.from.getFullYear(), dateRange.from.getMonth(), dateRange.from.getDate());
+
+        if (!dateRange.to) {
+            // Compare single date
+            return orderDateOnly.getTime() === fromDate.getTime();
+        }
+
+        const toDate = new Date(dateRange.to.getFullYear(), dateRange.to.getMonth(), dateRange.to.getDate());
+        // Compare range
+        return orderDateOnly.getTime() >= fromDate.getTime() && orderDateOnly.getTime() <= toDate.getTime();
     });
+
+    // Apply specific widget filters (status/priority) - For table/map list
+    const finalFilteredOrders = dateFilteredOrders.filter(order => {
+        if (statusFilter && order.status !== statusFilter && !((statusFilter === 'failed' && order.status === 'cancelled'))) {
+            // Handle 'failed' grouping carefully matching Stats logic
+            if (statusFilter === 'failed') {
+                if (order.status !== 'failed' && order.status !== 'cancelled') return false;
+            } else {
+                return false;
+            }
+        }
+        if (priorityFilter && order.priority !== priorityFilter) return false;
+        return true;
+    });
+
+    // Pagination calculations
+    const totalPages = Math.ceil(finalFilteredOrders.length / ordersPerPage);
+    const indexOfLastOrder = currentPage * ordersPerPage;
+    const indexOfFirstOrder = indexOfLastOrder - ordersPerPage;
+    const currentOrders = finalFilteredOrders.slice(indexOfFirstOrder, indexOfLastOrder);
+
+    // Reset to first page when filters change
+    React.useEffect(() => {
+        setCurrentPage(1);
+    }, [searchTerm, dateRange, statusFilter, priorityFilter]);
 
     const handleCreateOrder = () => {
         setEditingOrder(null);
@@ -95,7 +139,7 @@ export default function OrdersPage() {
 
     const handleDeleteConfirm = async () => {
         if (!deleteOrderId) return;
-        
+
         try {
             await deleteOrder(deleteOrderId).unwrap();
             toast.success('Đã xóa đơn hàng');
@@ -121,21 +165,34 @@ export default function OrdersPage() {
     }
 
     return (
-        <div className="w-full p-3 sm:p-4 md:p-6 space-y-4 md:space-y-6 bg-gray-50 min-h-screen">
-            <div className="flex flex-col space-y-2">
-                <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-gray-900">Danh sách đơn hàng</h1>
-                {isProfileLoading && (
-                    <p className="text-sm text-gray-500">Đang tải thông tin tổ chức...</p>
-                )}
-                {!isProfileLoading && !organizationId && (
-                    <p className="text-sm text-red-500">Không tìm thấy thông tin tổ chức. Vui lòng kiểm tra tài khoản.</p>
-                )}
-                {organizationId && (
-                    <p className="text-xs text-gray-400">Organization ID: {organizationId}</p>
-                )}
+        <div className="w-full pt-2 px-4 space-y-4 md:space-y-2 bg-gray-50 min-h-[calc(100vh-4rem)]">
+            {/* Header with Title and Stats */}
+            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-2">
+                <div>
+                    <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-gray-900">Danh sách đơn hàng</h1>
+                    <p className="text-sm text-gray-500 mt-1">
+                        {organizationId ? `Organization ID: ${organizationId}` : "Đang tải..."}
+                    </p>
+                </div>
+
+                {/* Statistics */}
+                <div className="flex-shrink-0">
+                    <OrdersStats
+                        orders={dateFilteredOrders}
+                        statusFilter={statusFilter}
+                        priorityFilter={priorityFilter}
+                        onStatusFilterChange={setStatusFilter}
+                        onPriorityFilterChange={setPriorityFilter}
+                    />
+                </div>
             </div>
 
-            <OrdersStats orders={filteredOrders} />
+            {isProfileLoading && (
+                <p className="text-sm text-gray-500">Đang tải thông tin tổ chức...</p>
+            )}
+            {!isProfileLoading && !organizationId && (
+                <p className="text-sm text-red-500">Không tìm thấy thông tin tổ chức. Vui lòng kiểm tra tài khoản.</p>
+            )}
 
             {isOrdersLoading && (
                 <div className="text-center py-12">
@@ -146,8 +203,6 @@ export default function OrdersPage() {
             {!isOrdersLoading && orders.length === 0 && organizationId && (
                 <div className="bg-white rounded-lg p-8 text-center">
                     <p className="text-gray-500 mb-4">Chưa có đơn hàng nào trong hệ thống.</p>
-                    <p className="text-sm text-gray-400 mb-2">Organization ID hiện tại: {organizationId}</p>
-                    <p className="text-sm text-gray-400">Orders được seed cho org: 2d80e39d-698c-4532-9fb7-408772744c8d</p>
                 </div>
             )}
 
@@ -155,26 +210,36 @@ export default function OrdersPage() {
                 <div className="lg:col-span-2 space-y-4">
                     <div className="bg-white p-3 sm:p-4 rounded-lg shadow-sm border">
                         <OrdersFilter
-                            date={date}
-                            setDate={setDate}
+                            date={dateRange}
+                            setDate={setDateRange}
                             searchTerm={searchTerm}
                             setSearchTerm={setSearchTerm}
                             onCreateOrder={handleCreateOrder}
                             onPlanRoute={handlePlanRoute}
                         />
                         <OrdersTable
-                            orders={filteredOrders}
+                            orders={currentOrders}
                             onOrderClick={(order) => setSelectedOrderIds([order.id])}
                             selectedOrderIds={selectedOrderIds}
                             onSelectionChange={setSelectedOrderIds}
                             onEdit={handleEditOrder}
                             onDelete={handleDeleteClick}
+                            startIndex={indexOfFirstOrder}
                         />
+
+                        {/* Pagination */}
+                        {finalFilteredOrders.length > ordersPerPage && (
+                            <Pagination
+                                currentPage={currentPage}
+                                totalPages={totalPages}
+                                setCurrentPage={setCurrentPage}
+                            />
+                        )}
                     </div>
                 </div>
 
                 <div className="lg:col-span-1 h-[400px] sm:h-[500px] lg:h-auto bg-white rounded-lg shadow-sm border p-1 lg:sticky lg:top-6">
-                    <OrdersMap orders={filteredOrders} selectedOrderIds={selectedOrderIds} />
+                    <OrdersMap orders={finalFilteredOrders} selectedOrderIds={selectedOrderIds} />
                 </div>
             </div>
 

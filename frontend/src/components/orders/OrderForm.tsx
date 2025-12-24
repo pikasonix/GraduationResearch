@@ -211,10 +211,8 @@ export default function OrderForm({
                                     value={formData.priority}
                                     onChange={(e) => setFormData({ ...formData, priority: e.target.value as PriorityLevel })}
                                 >
-                                    <option value="low">Thấp</option>
-                                    <option value="normal">Bình thường</option>
-                                    <option value="high">Cao</option>
-                                    <option value="urgent">Khẩn cấp</option>
+                                    <option value="normal">Thường</option>
+                                    <option value="urgent">Hoả tốc</option>
                                 </select>
                             </div>
                         </div>

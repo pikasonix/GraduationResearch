@@ -3,7 +3,7 @@
 import React from "react";
 import { Order, OrderStatus, PriorityLevel } from "@/lib/redux/services/orderApi";
 import { format } from "date-fns";
-import { MoreHorizontal, Edit, Eye, Trash } from "lucide-react";
+import { MoreHorizontal, Edit, Eye, Trash, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -15,6 +15,7 @@ interface OrdersTableProps {
     onSelectionChange: (ids: string[]) => void;
     onEdit?: (order: Order) => void;
     onDelete?: (orderId: string) => void;
+    startIndex?: number;
 }
 
 export const OrdersTable: React.FC<OrdersTableProps> = ({
@@ -24,6 +25,7 @@ export const OrdersTable: React.FC<OrdersTableProps> = ({
     onSelectionChange,
     onEdit,
     onDelete,
+    startIndex = 0,
 }) => {
     const toggleSelectAll = () => {
         if (selectedOrderIds.length === orders.length) {
@@ -70,9 +72,7 @@ export const OrdersTable: React.FC<OrdersTableProps> = ({
     const getPriorityColor = (priority: PriorityLevel) => {
         switch (priority) {
             case "urgent": return "bg-red-600";
-            case "high": return "bg-orange-500";
             case "normal": return "bg-blue-500";
-            case "low": return "bg-gray-500";
             default: return "bg-blue-500";
         }
     };
@@ -80,19 +80,17 @@ export const OrdersTable: React.FC<OrdersTableProps> = ({
     const getPriorityLabel = (priority: PriorityLevel) => {
         switch (priority) {
             case "urgent": return "Hỏa tốc";
-            case "high": return "Cao";
             case "normal": return "Thường";
-            case "low": return "Thấp";
             default: return "Thường";
         }
     }
 
     return (
         <div className="w-full overflow-x-auto rounded-md border bg-white">
-            <table className="w-full min-w-[900px] text-sm text-left">
+            <table className="w-full min-w-[900px] text-xs text-left">
                 <thead className="bg-gray-50 text-gray-500 font-medium">
                     <tr>
-                        <th className="p-4 w-10">
+                        <th className="p-3 w-10 text-center">
                             <input
                                 type="checkbox"
                                 className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
@@ -100,15 +98,15 @@ export const OrdersTable: React.FC<OrdersTableProps> = ({
                                 onChange={toggleSelectAll}
                             />
                         </th>
-                        <th className="p-4">STT</th>
-                        <th className="p-4">Ngày tạo</th>
-                        <th className="p-4">Mã đơn hàng</th>
-                        <th className="p-4">Trạng thái</th>
-                        <th className="p-4">Độ ưu tiên</th>
-                        <th className="p-4">Khách hàng</th>
-                        <th className="p-4">Điểm lấy</th>
-                        <th className="p-4">Điểm giao</th>
-                        <th className="p-4 text-right">Hành động</th>
+                        <th className="p-3 text-center whitespace-nowrap">STT</th>
+                        <th className="p-3 text-center whitespace-nowrap">Ngày tạo</th>
+                        <th className="p-3 text-center whitespace-nowrap">Mã đơn hàng</th>
+                        <th className="p-3 text-center whitespace-nowrap">Trạng thái</th>
+                        <th className="p-3 text-center whitespace-nowrap">Độ ưu tiên</th>
+                        <th className="p-3 whitespace-nowrap">Khách hàng</th>
+                        <th className="p-3 whitespace-nowrap">Điểm lấy</th>
+                        <th className="p-3 whitespace-nowrap">Điểm giao</th>
+                        <th className="p-3 text-right whitespace-nowrap"><Settings className="h-4 w-4 ml-auto" /></th>
                     </tr>
                 </thead>
                 <tbody className="divide-y">
@@ -125,7 +123,7 @@ export const OrdersTable: React.FC<OrdersTableProps> = ({
                                 className="hover:bg-gray-50 cursor-pointer transition-colors"
                                 onClick={() => onOrderClick(order)}
                             >
-                                <td className="p-4" onClick={(e) => e.stopPropagation()}>
+                                <td className="p-3 text-center" onClick={(e) => e.stopPropagation()}>
                                     <input
                                         type="checkbox"
                                         className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
@@ -133,29 +131,29 @@ export const OrdersTable: React.FC<OrdersTableProps> = ({
                                         onChange={() => toggleSelectOrder(order.id)}
                                     />
                                 </td>
-                                <td className="p-4 text-gray-500">{index + 1}</td>
-                                <td className="p-4">
+                                <td className="p-2 text-center text-gray-500 whitespace-nowrap">{startIndex + index + 1}</td>
+                                <td className="p-2 text-center whitespace-nowrap">
                                     {format(new Date(order.created_at), "dd/MM/yyyy HH:mm")}
                                 </td>
-                                <td className="p-4 font-medium">{order.tracking_number}</td>
-                                <td className="p-4">
-                                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(order.status)}`}>
+                                <td className="p-2 text-center font-medium whitespace-nowrap">{order.tracking_number}</td>
+                                <td className="p-2 text-center whitespace-nowrap">
+                                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${getStatusColor(order.status)}`}>
                                         {getStatusLabel(order.status)}
                                     </span>
                                 </td>
-                                <td className="p-4">
-                                    <Badge className={`${getPriorityColor(order.priority)} hover:${getPriorityColor(order.priority)} border-0`}>
+                                <td className="p-2 text-center whitespace-nowrap">
+                                    <Badge className={`${getPriorityColor(order.priority)} hover:${getPriorityColor(order.priority)} border-0 text-xs`}>
                                         {getPriorityLabel(order.priority)}
                                     </Badge>
                                 </td>
-                                <td className="p-4">{order.delivery_contact_name}</td>
-                                <td className="p-4 truncate max-w-[150px]" title={order.pickup_address}>
+                                <td className="p-2 whitespace-nowrap truncate max-w-[100px]" title={order.delivery_contact_name}>{order.delivery_contact_name}</td>
+                                <td className="p-2 whitespace-nowrap truncate max-w-[100px]" title={order.pickup_address}>
                                     {order.pickup_address}
                                 </td>
-                                <td className="p-4 truncate max-w-[150px]" title={order.delivery_address}>
+                                <td className="p-2 whitespace-nowrap truncate max-w-[100px]" title={order.delivery_address}>
                                     {order.delivery_address}
                                 </td>
-                                <td className="p-4 text-right" onClick={(e) => e.stopPropagation()}>
+                                <td className="p-2 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                                     <Popover>
                                         <PopoverTrigger asChild>
                                             <Button variant="ghost" className="h-8 w-8 p-0">

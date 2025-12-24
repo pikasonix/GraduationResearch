@@ -1,21 +1,15 @@
 "use client";
 
 import React from "react";
-import { format } from "date-fns";
-import { Calendar as CalendarIcon, Filter, Plus, MapPin } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { DateRange } from "react-day-picker";
+import { Filter, Plus, MapPin } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Calendar } from "@/components/ui/calendar";
-import {
-    Popover,
-    PopoverContent,
-    PopoverTrigger,
-} from "@/components/ui/popover";
 import { Input } from "@/components/ui/input";
+import { DateRangePicker } from "@/components/ui/date-range-picker";
 
 interface OrdersFilterProps {
-    date: Date | undefined;
-    setDate: (date: Date | undefined) => void;
+    date: DateRange | undefined;
+    setDate: (date: DateRange | undefined) => void;
     searchTerm: string;
     setSearchTerm: (term: string) => void;
     onCreateOrder: () => void;
@@ -46,35 +40,18 @@ export const OrdersFilter: React.FC<OrdersFilterProps> = ({
                 </div>
 
                 {/* Date Picker */}
-                <Popover>
-                    <PopoverTrigger asChild>
-                        <Button
-                            variant={"outline"}
-                            className={cn(
-                                "w-full sm:w-auto justify-start text-left font-normal",
-                                !date && "text-muted-foreground"
-                            )}
-                        >
-                            <CalendarIcon className="mr-2 h-4 w-4" />
-                            {date ? format(date, "PPP") : <span>Chọn ngày</span>}
-                        </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
-                        <Calendar
-                            mode="single"
-                            selected={date}
-                            onSelect={setDate}
-                            initialFocus
-                        />
-                    </PopoverContent>
-                </Popover>
+                <DateRangePicker
+                    date={date}
+                    setDate={setDate}
+                    className="w-full sm:w-[260px]"
+                />
             </div>
 
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
                 <Button
                     onClick={onPlanRoute}
                     variant="outline"
-                    className="flex items-center justify-center w-full sm:w-auto"
+                    className="flex items-center justify-center w-full sm:w-auto bg-white"
                 >
                     <MapPin className="mr-2 h-4 w-4" />
                     Lập lộ trình
