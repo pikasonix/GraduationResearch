@@ -30,8 +30,20 @@ export const metadata: Metadata = {
   title: "WAYO",
   description: "WAYO",
   icons: {
-    icon: process.env.NEXT_PUBLIC_LOGO_WAYO,
-    apple: process.env.NEXT_PUBLIC_LOGO_WAYO,
+    icon:
+      (process.env.NEXT_PUBLIC_LOGO_WAYO
+        ? process.env.NEXT_PUBLIC_LOGO_WAYO.startsWith("http") ||
+          process.env.NEXT_PUBLIC_LOGO_WAYO.startsWith("/")
+          ? process.env.NEXT_PUBLIC_LOGO_WAYO
+          : `/${process.env.NEXT_PUBLIC_LOGO_WAYO}`
+        : "/favicon.svg"),
+    apple:
+      (process.env.NEXT_PUBLIC_LOGO_WAYO
+        ? process.env.NEXT_PUBLIC_LOGO_WAYO.startsWith("http") ||
+          process.env.NEXT_PUBLIC_LOGO_WAYO.startsWith("/")
+          ? process.env.NEXT_PUBLIC_LOGO_WAYO
+          : `/${process.env.NEXT_PUBLIC_LOGO_WAYO}`
+        : "/favicon.svg"),
   },
 };
 
@@ -67,7 +79,7 @@ export default function RootLayout({
                     {/* Logo */}
                     <Link href="/" className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
                       <Image
-                        src={process.env.NEXT_PUBLIC_LOGO_WAYO || "/favicon.png"}
+                        src={process.env.NEXT_PUBLIC_LOGO_WAYO || "/favicon.svg"}
                         alt="WAYO Logo"
                         width={28}
                         height={28}

@@ -156,7 +156,16 @@ export class SolverWorker {
                 },
                 (error, stdout, stderr) => {
                     if (error) {
-                        reject(new Error(stderr || error.message));
+                        const code = (error as any)?.code;
+                        const signal = (error as any)?.signal;
+                        const details = [
+                            `Solver failed${code !== undefined ? ` (code: ${code})` : ''}${signal ? ` (signal: ${signal})` : ''}`,
+                            error.message,
+                            stdout ? `--- stdout ---\n${stdout}` : '',
+                            stderr ? `--- stderr ---\n${stderr}` : '',
+                        ].filter(Boolean).join('\n\n');
+
+                        reject(new Error(details));
                         return;
                     }
                     resolve({ stdout, stderr });

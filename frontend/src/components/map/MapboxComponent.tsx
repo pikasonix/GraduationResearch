@@ -262,18 +262,65 @@ const MapboxComponent: React.FC<MapComponentProps> = ({
       return route.path;
     }
 
-    // Helper to safely get coords
-    const getCoords = (id: number): [number, number] => {
-      if (!instance || !instance.nodes) return [0, 0];
-      const node = instance.nodes.find(n => n.id === id);
-      return node ? node.coords : [0, 0];
+    const depotCoords = instance?.nodes?.find((n) => n.id === 0)?.coords;
+    const depotIsZeroZero =
+      !!depotCoords &&
+      Number.isFinite(depotCoords[0]) &&
+      Number.isFinite(depotCoords[1]) &&
+      depotCoords[0] === 0 &&
+      depotCoords[1] === 0;
+
+    const isFiniteLatLng = (coords: [number, number]) => {
+      const [lat, lng] = coords;
+      return (
+        Number.isFinite(lat) &&
+        Number.isFinite(lng) &&
+        lat >= -90 &&
+        lat <= 90 &&
+        lng >= -180 &&
+        lng <= 180
+      );
     };
 
+    const isPlaceholderZeroZero = (coords: [number, number], nodeId: number) => {
+      if (nodeId === 0) return false;
+      if (coords[0] !== 0 || coords[1] !== 0) return false;
+      // Treat (0,0) as invalid if depot isn't also (0,0)
+      return !depotIsZeroZero;
+    };
+
+    // Helper to safely get coords (null means invalid/missing)
+    const getCoords = (id: number): [number, number] | null => {
+      if (!instance || !instance.nodes) return null;
+      const node = instance.nodes.find((n) => n.id === id);
+      if (!node) return null;
+      const coords = node.coords as [number, number];
+      if (!isFiniteLatLng(coords)) return null;
+      if (isPlaceholderZeroZero(coords, id)) return null;
+      return coords;
+    };
+
+    const seqWithCoords = sequence.map((id) => ({ id, coords: getCoords(id) }));
+    const invalidNodeIds = seqWithCoords.filter((x) => !x.coords).map((x) => x.id);
+    if (invalidNodeIds.length > 0) {
+      console.warn('Route has invalid coords; skipping invalid nodes to avoid (0,0) artifacts', {
+        routeId: route.id,
+        invalidNodeIds,
+      });
+      const fallback = seqWithCoords
+        .filter((x): x is { id: number; coords: [number, number] } => Boolean(x.coords))
+        .map((x) => x.coords);
+      route.path = fallback;
+      return fallback;
+    }
+
     if (useRealRouting && instance) {
-      const coordPairs = sequence.map((id: number) => {
-        const c = getCoords(id);
-        return `${c[1]},${c[0]}`;
-      }).join(';');
+      const coordPairs = seqWithCoords
+        .map((x) => {
+          const c = x.coords as [number, number];
+          return `${c[1]},${c[0]}`;
+        })
+        .join(';');
       const cacheKey = `full:${coordPairs}`;
 
       if (routingCacheRef.current.has(cacheKey)) {
@@ -292,7 +339,7 @@ const MapboxComponent: React.FC<MapComponentProps> = ({
           routeCoords = data.routes[0].geometry.coordinates.map((coord: [number, number]) => [coord[1], coord[0]]);
         } else {
           console.warn('No full route found, fallback to straight lines');
-          routeCoords = sequence.map(id => getCoords(id));
+          routeCoords = seqWithCoords.map((x) => x.coords as [number, number]);
         }
         routingCacheRef.current.set(cacheKey, routeCoords);
         saveCacheToStorage();
@@ -300,13 +347,13 @@ const MapboxComponent: React.FC<MapComponentProps> = ({
         return routeCoords;
       } catch (error) {
         console.warn('Full route API error:', error, 'Using straight lines fallback');
-        const fallback = sequence.map(id => getCoords(id));
+        const fallback = seqWithCoords.map((x) => x.coords as [number, number]);
         route.path = fallback;
         routingCacheRef.current.set(cacheKey, fallback);
         return fallback;
       }
     } else {
-      return sequence.map(id => getCoords(id));
+      return seqWithCoords.map((x) => x.coords as [number, number]);
     }
   }, [useRealRouting, instance, saveCacheToStorage]);
 
@@ -552,6 +599,23 @@ const MapboxComponent: React.FC<MapComponentProps> = ({
     console.log('✅ drawSolution completed successfully');
   }, [useRealRouting, buildRealRoute, onClickRoute, highlightRoute, selectedRoute]);
 
+  const clearDrawnRoutes = useCallback(() => {
+    if (!mapRef.current) return;
+    const map = mapRef.current;
+    if (!map.isStyleLoaded()) return;
+
+    drawnRouteIdsRef.current.forEach((routeId) => {
+      const routeLayerId = `route-${routeId}`;
+      const routeSourceId = `route-source-${routeId}`;
+      const routeFillId = `route-fill-${routeId}`;
+
+      if (map.getLayer(routeFillId)) map.removeLayer(routeFillId);
+      if (map.getLayer(routeLayerId)) map.removeLayer(routeLayerId);
+      if (map.getSource(routeSourceId)) map.removeSource(routeSourceId);
+    });
+    drawnRouteIdsRef.current.clear();
+  }, []);
+
   // Highlight segment between two nodes
   const highlightSegment = useCallback(async (fromId: number, toId: number, routeOverride?: Route) => {
     if (!mapRef.current || !instance) return;
@@ -743,6 +807,8 @@ const MapboxComponent: React.FC<MapComponentProps> = ({
 
     if (solution) {
       await drawSolution(solution);
+    } else {
+      clearDrawnRoutes();
     }
 
     if (useRealRouting) {
@@ -751,7 +817,7 @@ const MapboxComponent: React.FC<MapComponentProps> = ({
 
     // Don't fitBounds here - it causes unwanted camera resets during interactions
     // fitBounds is only called when instance actually changes (in instance effect)
-  }, [useRealRouting, solution, drawSolution, saveCacheToStorage]);
+  }, [useRealRouting, solution, drawSolution, clearDrawnRoutes, saveCacheToStorage]);
 
   // Toggle real routing handler
   const handleToggleRealRouting = useCallback(() => {
@@ -840,6 +906,54 @@ const MapboxComponent: React.FC<MapComponentProps> = ({
       setMapReady(false);
     };
   }, []); // Empty dependency array to ensure map only initializes once
+
+  // Ensure Mapbox canvas resizes when the container size changes
+  useEffect(() => {
+    if (!mapRef.current || !mapContainer.current || !mapReady) return;
+
+    const map = mapRef.current;
+
+    // Initial resize after mount/layout
+    const rafId = window.requestAnimationFrame(() => {
+      try {
+        map.resize();
+      } catch (e) {
+        // Ignore resize errors
+      }
+    });
+
+    // Use ResizeObserver if available
+    if (typeof ResizeObserver !== "undefined") {
+      const ro = new ResizeObserver(() => {
+        try {
+          map.resize();
+        } catch (e) {
+          // Ignore resize errors
+        }
+      });
+      ro.observe(mapContainer.current);
+
+      return () => {
+        window.cancelAnimationFrame(rafId);
+        ro.disconnect();
+      };
+    }
+
+    // Fallback: listen to window resize
+    const handleResize = () => {
+      try {
+        map.resize();
+      } catch (e) {
+        // Ignore resize errors
+      }
+    };
+    window.addEventListener('resize', handleResize);
+
+    return () => {
+      window.cancelAnimationFrame(rafId);
+      window.removeEventListener('resize', handleResize);
+    };
+  }, [mapReady]);
 
   // Handle instance changes (nodes)
   useEffect(() => {

@@ -98,7 +98,7 @@ export default function SignupPage() {
         <div className="text-center mb-4">
           <Link href="/" className="inline-flex items-center gap-3 mb-4">
             <Image
-              src={process.env.NEXT_PUBLIC_LOGO_WAYO || "/favicon.png"}
+              src={process.env.NEXT_PUBLIC_LOGO_WAYO || "/favicon.svg"}
               alt="WAYO Logo"
               width={32}
               height={32}

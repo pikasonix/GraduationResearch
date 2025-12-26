@@ -3,20 +3,20 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
-import { DispatchDriver, DispatchRoute } from '@/app/dispatch/DispatchClient';
+import { DispatchVehicle, DispatchRoute } from '@/app/dispatch/DispatchClient';
 import config from '@/config/config';
 import { Instance } from '@/utils/dataModels';
 import { useMapControls } from '@/hooks/useMapControls';
 
 interface DispatchMapProps {
-    drivers: DispatchDriver[];
-    selectedDriverId: string | null;
-    onSelectDriver: (id: string) => void;
+    vehicles: DispatchVehicle[];
+    selectedVehicleId: string | null;
+    onSelectVehicle: (id: string) => void;
     selectedRoute: DispatchRoute | null;
     instance: Instance | null;
 }
 
-export default function DispatchMap({ drivers, selectedDriverId, onSelectDriver, selectedRoute, instance }: DispatchMapProps) {
+export default function DispatchMap({ vehicles, selectedVehicleId, onSelectVehicle, selectedRoute, instance }: DispatchMapProps) {
     const mapContainer = useRef<HTMLDivElement>(null);
     const map = useRef<mapboxgl.Map | null>(null);
     const markersRef = useRef<{ [key: string]: mapboxgl.Marker }>({});
@@ -60,18 +60,18 @@ export default function DispatchMap({ drivers, selectedDriverId, onSelectDriver,
         loadCacheFromStorage();
     }, [loadCacheFromStorage]);
 
-    // Update Driver Markers
+    // Update Vehicle Markers
     useEffect(() => {
         if (!map.current || !isMapLoaded) return;
 
-        drivers.forEach(driver => {
-            const isSelected = selectedDriverId === driver.id;
-            const color = driver.status === 'available' ? '#52c41a' : driver.status === 'busy' ? '#faad14' : '#d9d9d9';
+        vehicles.forEach(vehicle => {
+            const isSelected = selectedVehicleId === vehicle.id;
+            const color = vehicle.status === 'available' ? '#52c41a' : vehicle.status === 'busy' ? '#faad14' : '#d9d9d9';
 
-            if (!markersRef.current[driver.id]) {
+            if (!markersRef.current[vehicle.id]) {
                 // Create marker
                 const el = document.createElement('div');
-                el.className = 'driver-marker';
+                el.className = 'vehicle-marker';
                 el.style.width = '24px';
                 el.style.height = '24px';
                 el.style.backgroundColor = color;
@@ -85,17 +85,17 @@ export default function DispatchMap({ drivers, selectedDriverId, onSelectDriver,
                 el.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 17h4V5H10v12z"></path><path d="M20 17h2v-3.34a4 4 0 0 0-1.17-2.83L19 9h-5"></path><path d="M14 17h1"></path><circle cx="7.5" cy="17.5" r="2.5"></circle><circle cx="17.5" cy="17.5" r="2.5"></circle></svg>`; // Simple truck icon
 
                 el.addEventListener('click', () => {
-                    onSelectDriver(driver.id);
+                    onSelectVehicle(vehicle.id);
                 });
 
                 const marker = new mapboxgl.Marker(el)
-                    .setLngLat([driver.currentLng, driver.currentLat])
+                    .setLngLat([vehicle.currentLng, vehicle.currentLat])
                     .addTo(map.current!);
 
-                markersRef.current[driver.id] = marker;
+                markersRef.current[vehicle.id] = marker;
             } else {
                 // Update marker style
-                const marker = markersRef.current[driver.id];
+                const marker = markersRef.current[vehicle.id];
                 const el = marker.getElement();
                 el.style.backgroundColor = color;
                 el.style.width = isSelected ? '32px' : '24px';
@@ -105,7 +105,7 @@ export default function DispatchMap({ drivers, selectedDriverId, onSelectDriver,
             }
         });
 
-    }, [drivers, selectedDriverId, onSelectDriver, isMapLoaded]);
+    }, [vehicles, selectedVehicleId, onSelectVehicle, isMapLoaded]);
 
     // Helper to build real route
     const buildRealRoute = useCallback(async (route: any): Promise<[number, number][]> => {

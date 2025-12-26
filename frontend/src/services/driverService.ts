@@ -46,6 +46,32 @@ export interface RouteAssignment {
     created_at: string;
 }
 
+export async function assignExistingRouteToVehicle(params: {
+    organizationId: string;
+    routeId: string;
+    vehicleId: string;
+    driverId?: string | null;
+}): Promise<RouteAssignment> {
+    const { data, error } = await supabase
+        .from('routes')
+        .update({
+            vehicle_id: params.vehicleId,
+            driver_id: params.driverId || null,
+            status: 'assigned',
+        })
+        .eq('organization_id', params.organizationId)
+        .eq('id', params.routeId)
+        .select('*')
+        .single();
+
+    if (error) {
+        console.error('Error assigning existing route:', error);
+        throw error;
+    }
+
+    return data;
+}
+
 export interface Team {
     id: string;
     organization_id: string;
@@ -129,25 +155,26 @@ export async function getVehicles(organizationId?: string, includeInactive: bool
 }
 
 /**
- * Assign a route to a driver
+ * Assign a route to a vehicle (driver_id is optional)
  * Creates an optimization_solution record first, then creates the route with the solution_id
  */
-export async function assignRouteToDriver(params: {
+export async function assignRouteToVehicle(params: {
     organizationId: string;
-    driverId: string;
     vehicleId: string;
+    driverId?: string | null;
     solutionData: object;
     totalDistanceKm?: number;
     totalDurationHours?: number;
 }): Promise<RouteAssignment> {
     // Step 1: Create optimization_solution record first (to get solution_id for routes table)
     // Note: optimization_solutions table only has: id, job_id, solution_data
-    // Generate a unique job_id for dispatch-created solutions
-    const dispatchJobId = `dispatch_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    // Generate a proper UUID for job_id (required by schema)
+    const dispatchJobId = crypto.randomUUID();
 
     const { data: solutionRecord, error: solutionError } = await supabase
         .from('optimization_solutions')
         .insert({
+            organization_id: params.organizationId,
             job_id: dispatchJobId,
             solution_data: params.solutionData
         })
@@ -163,7 +190,7 @@ export async function assignRouteToDriver(params: {
         const fallbackAssignment: RouteAssignment = {
             id: fallbackId,
             organization_id: params.organizationId,
-            driver_id: params.driverId,
+            driver_id: params.driverId || null,
             vehicle_id: params.vehicleId,
             status: 'assigned',
             solution_id: null,
@@ -186,12 +213,12 @@ export async function assignRouteToDriver(params: {
         return fallbackAssignment;
     }
 
-    // Step 2: Create route with the solution_id
+    // Step 2: Create route with the solution_id (driver_id is optional)
     const { data, error } = await supabase
         .from('routes')
         .insert({
             organization_id: params.organizationId,
-            driver_id: params.driverId,
+            driver_id: params.driverId || null,
             vehicle_id: params.vehicleId,
             solution_id: solutionRecord.id,
             status: 'assigned',
@@ -206,7 +233,7 @@ export async function assignRouteToDriver(params: {
         console.error('Error details:', JSON.stringify(error, null, 2));
         console.error('Insert params:', {
             organization_id: params.organizationId,
-            driver_id: params.driverId,
+            driver_id: params.driverId || null,
             vehicle_id: params.vehicleId,
             solution_id: solutionRecord.id
         });
@@ -222,7 +249,7 @@ export async function assignRouteToDriver(params: {
         const fallbackAssignment: RouteAssignment = {
             id: fallbackId,
             organization_id: params.organizationId,
-            driver_id: params.driverId,
+            driver_id: params.driverId || null,
             vehicle_id: params.vehicleId,
             status: 'assigned',
             solution_id: null,
@@ -276,6 +303,67 @@ export async function getDriverRoutes(driverId: string): Promise<RouteAssignment
     }
 
     return data || [];
+}
+
+/**
+ * Get unassigned routes (planned routes without vehicle assignment) for an organization
+ */
+export async function getUnassignedRoutes(organizationId: string): Promise<Array<RouteAssignment & { optimization_solutions: { solution_data: any } | null }>> {
+    const { data, error } = await supabase
+        .from('routes')
+        .select(`
+            *,
+            optimization_solutions (
+                solution_data
+            )
+        `)
+        .eq('organization_id', organizationId)
+        .or('vehicle_id.is.null,status.eq.planned')
+        .order('created_at', { ascending: false });
+
+    if (error) {
+        console.error('Error fetching unassigned routes:', error);
+        throw error;
+    }
+
+    return data || [];
+}
+
+/**
+ * Get active routes to find which vehicles are assigned
+ */
+export async function getActiveRouteAssignments(organizationId: string): Promise<RouteAssignment[]> {
+    const { data, error } = await supabase
+        .from('routes')
+        .select('*')
+        .eq('organization_id', organizationId)
+        .in('status', ['assigned', 'in_progress'])
+        .not('vehicle_id', 'is', null);
+
+    if (error) {
+        console.error('Error fetching active route assignments:', error);
+        throw error;
+    }
+
+    return data || [];
+}
+
+/**
+ * Assign a route to a driver (legacy function, kept for backward compatibility)
+ * @deprecated Use assignRouteToVehicle instead
+ */
+export async function assignRouteToDriver(params: {
+    organizationId: string;
+    driverId: string;
+    vehicleId: string;
+    solutionData: object;
+    totalDistanceKm?: number;
+    totalDurationHours?: number;
+}): Promise<RouteAssignment> {
+    return assignRouteToVehicle({
+        ...params,
+        driverId: params.driverId
+    });
 }
 
 /**

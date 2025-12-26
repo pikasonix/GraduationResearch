@@ -7,6 +7,7 @@ import { JobQueue } from './queue/JobQueue';
 import { SolverWorker } from './workers/SolverWorker';
 import { setupJobRoutes } from './routes/jobRoutes';
 import { SolverParams } from './types';
+import { persistSolutionSnapshot } from './persistence/persistSolutionSnapshot';
 
 const app = express();
 const PORT = parseInt(process.env.PORT || '3001', 10);
@@ -63,7 +64,40 @@ const solverWorker = new SolverWorker(PDPTW_SOLVER_PATH, {
 // Setup job processing
 jobQueue.on('processJob', (job, callbacks) => {
     console.log(`[Server] Starting to process job ${job.id}`);
-    solverWorker.solve(job, callbacks);
+
+    solverWorker.solve(job, {
+        ...callbacks,
+        onComplete: (result) => {
+            (async () => {
+                try {
+                    if (job.organizationId && job.createdBy && job.inputData) {
+                        const persisted = await persistSolutionSnapshot({
+                            jobId: job.id,
+                            organizationId: job.organizationId,
+                            solutionText: result.solution,
+                            solverFilename: result.filename,
+                            inputData: job.inputData,
+                        });
+
+                        callbacks.onComplete({
+                            ...result,
+                            persisted: !!persisted,
+                            solutionId: persisted?.solutionId,
+                        });
+                        return;
+                    }
+
+                    callbacks.onComplete({
+                        ...result,
+                        persisted: false,
+                    });
+                } catch (e) {
+                    const message = e instanceof Error ? e.message : String(e);
+                    callbacks.onFail(message);
+                }
+            })();
+        },
+    });
 });
 
 jobQueue.on('jobCompleted', (job) => {

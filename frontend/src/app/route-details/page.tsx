@@ -35,7 +35,7 @@ export default function RouteDetailsIndexPage() {
     };
 
     return (
-        <div className="h-screen flex flex-col">
+        <div className="h-[calc(100vh-4rem)] flex flex-col">
             <div className="bg-white border-b border-gray-200 p-2 flex items-center justify-between">
                 <div className="flex items-center">
                     <h1 className="text-xl font-bold text-gray-800 mr-4">Chi tiết tuyến đường</h1>
@@ -64,7 +64,7 @@ export default function RouteDetailsIndexPage() {
                                     <SelectRadioContent>
                                         {data.routes.map(r => (
                                             <SelectRadioItem key={r.id} value={String(r.id)} className="py-1 px-2 text-sm">
-                                                {`Route #${r.id}${r.cost ? ` (Cost: ${r.cost})` : ''}`}
+                                                {`Route #${(r as any).route_number ?? r.id}${r.cost ? ` (Cost: ${r.cost})` : ''}`}
                                             </SelectRadioItem>
                                         ))}
                                     </SelectRadioContent>
@@ -85,6 +85,7 @@ export default function RouteDetailsIndexPage() {
                         useRealRouting={useRealRouting}
                         onToggleRealRouting={() => setUseRealRouting(v => !v)}
                         showBack={false}
+                        allRoutes={data?.routes || undefined}
                     />
                 </div>
             </div>

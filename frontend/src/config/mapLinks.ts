@@ -15,12 +15,12 @@ export interface NavLink {
 
 export const NAV_LINKS: NavLink[] = [
     // Dashboard / Map Pages
-    {
-        href: "/map",
-        label: "Dashboard",
-        icon: "LayoutDashboard",
-        context: ["default", "map"]
-    },
+    // {
+    //     href: "/map",
+    //     label: "Dashboard",
+    //     icon: "LayoutDashboard",
+    //     context: ["default", "map"]
+    // },
     {
         href: "/dispatch",
         label: "Điều phối",
@@ -37,13 +37,13 @@ export const NAV_LINKS: NavLink[] = [
     },
 
     // Operations Pages
-    {
-        href: "/add-instance",
-        label: "Tạo Instance",
-        icon: "PlusCircle",
-        roles: ["super_admin", "admin", "manager"],
-        context: ["default", "map"]
-    },
+    // {
+    //     href: "/add-instance",
+    //     label: "Tạo Instance",
+    //     icon: "PlusCircle",
+    //     roles: ["super_admin", "admin", "manager"],
+    //     context: ["default", "map"]
+    // },
     {
         href: "/orders",
         label: "Đơn hàng",

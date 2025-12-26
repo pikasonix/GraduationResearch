@@ -6,6 +6,8 @@ import "mapbox-gl/dist/mapbox-gl.css";
 import { Order } from "@/lib/redux/services/orderApi";
 import config from "@/config/config";
 
+
+
 // Generic node interface for add-instance mode
 export interface MapNode {
     id: number;
@@ -30,6 +32,9 @@ export interface UniversalMapProps {
     onMapClick?: (lat: number, lng: number) => void;
     showPairLines?: boolean;
 
+    // Pending marker (temporary marker at click location)
+    pendingMarker?: { lat: number; lng: number } | null;
+
     // Map settings
     center?: [number, number]; // [lng, lat]
     zoom?: number;
@@ -48,6 +53,7 @@ export const UniversalMap: React.FC<UniversalMapProps> = ({
     onNodeClick,
     onMapClick,
     showPairLines = true,
+    pendingMarker = null,
     center = [105.8342, 21.0278], // Hanoi default [lng, lat]
     zoom = 13,
     interactive = true,
@@ -74,10 +80,93 @@ export const UniversalMap: React.FC<UniversalMapProps> = ({
     const lastMarkersKeyRef = useRef<string | null>(null);
     const onOrderSelectRef = useRef<UniversalMapProps["onOrderSelect"]>(onOrderSelect);
     const activeOrderPopupRef = useRef<mapboxgl.Popup | null>(null);
+    const pendingMarkerRef = useRef<mapboxgl.Marker | null>(null);
 
     useEffect(() => {
         onOrderSelectRef.current = onOrderSelect;
     }, [onOrderSelect]);
+
+    // Render pending marker at click location
+    useEffect(() => {
+        if (!mapInstance.current || !mapReady) return;
+
+        // Remove existing pending marker
+        if (pendingMarkerRef.current) {
+            pendingMarkerRef.current.remove();
+            pendingMarkerRef.current = null;
+        }
+
+        // Create new pending marker if we have coordinates
+        if (pendingMarker) {
+            const el = document.createElement('div');
+            el.className = 'pending-marker';
+            el.innerHTML = `
+                <div style="position: relative; width: 16px; height: 16px;">
+                    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);">
+                        <div style="
+                            width: 32px;
+                            height: 32px;
+                            background: rgba(59, 130, 246, 0.3);
+                            border-radius: 50%;
+                            transform-origin: center;
+                            animation: ping 1s cubic-bezier(0, 0, 0.2, 1) infinite;
+                        "></div>
+                    </div>
+                    <div style="
+                        position: absolute;
+                        top: 50%;
+                        left: 50%;
+                        width: 16px;
+                        height: 16px;
+                        transform: translate(-50%, -50%);
+                        background: #3b82f6;
+                        border-radius: 50%;
+                        border: 2px solid white;
+                        box-shadow: 0 4px 12px rgba(0,0,0,0.3), 0 0 0 3px rgba(59, 130, 246, 0.3);
+                    "></div>
+                </div>
+            `;
+
+            const marker = new mapboxgl.Marker({ element: el, anchor: 'center' })
+                .setLngLat([pendingMarker.lng, pendingMarker.lat])
+                .addTo(mapInstance.current);
+
+            pendingMarkerRef.current = marker;
+        }
+    }, [pendingMarker, mapReady]);
+
+    // Ensure Mapbox canvas resizes when the container size changes.
+    // Without this, the map may render shorter than its container (leaving blank space).
+    useEffect(() => {
+        if (!mapInstance.current || !mapRef.current) return;
+
+        const map = mapInstance.current;
+
+        // Initial resize after mount/layout.
+        const rafId = window.requestAnimationFrame(() => {
+            try {
+                map.resize();
+            } catch { }
+        });
+
+        if (typeof ResizeObserver === "undefined") {
+            return () => window.cancelAnimationFrame(rafId);
+        }
+
+        const ro = new ResizeObserver(() => {
+            try {
+                map.resize();
+            } catch { }
+        });
+        ro.observe(mapRef.current);
+
+        return () => {
+            window.cancelAnimationFrame(rafId);
+            try {
+                ro.disconnect();
+            } catch { }
+        };
+    }, [mapReady]);
 
     // Helper: Get status info for orders
     const getStatusInfo = useCallback((status: string) => {
@@ -372,7 +461,7 @@ export const UniversalMap: React.FC<UniversalMapProps> = ({
             innerEl.style.boxShadow = isSelected
                 ? kind === "pickup"
                     ? "0 0 0 4px rgba(96, 165, 250, 0.9), 0 8px 18px rgba(0,0,0,0.18)"
-                    : "0 0 0 4px rgba(74, 222, 128, 0.9), 0 8px 18px rgba(0,0,0,0.18)"
+                    : "0 0 0 4px rgba(239, 68, 68, 0.9), 0 8px 18px rgba(0,0,0,0.18)"
                 : isDimmed
                     ? "0 3px 10px rgba(0,0,0,0.12)"
                     : "0 8px 18px rgba(0,0,0,0.18)";
@@ -434,8 +523,14 @@ export const UniversalMap: React.FC<UniversalMapProps> = ({
                 wrapper.style.pointerEvents = "auto";
                 wrapper.style.zIndex = "1";
 
+                // Create inner circle for pickup (indigo/blue)
                 const inner = document.createElement("div");
+                inner.style.width = "16px";
+                inner.style.height = "16px";
+                inner.style.borderRadius = "50%";
                 inner.style.backgroundColor = "#6366f1";
+                inner.style.border = "2px solid white";
+                inner.style.boxShadow = "0 2px 6px rgba(0,0,0,0.3)";
                 wrapper.appendChild(inner);
 
                 const popupHtml = createOrderPopup(order, "pickup");
@@ -465,7 +560,7 @@ export const UniversalMap: React.FC<UniversalMapProps> = ({
                     ) {
                         try {
                             activeOrderPopupRef.current.remove();
-                        } catch {}
+                        } catch { }
                     }
 
                     if (popup.isOpen()) {
@@ -516,8 +611,14 @@ export const UniversalMap: React.FC<UniversalMapProps> = ({
                 wrapper.style.pointerEvents = "auto";
                 wrapper.style.zIndex = "1";
 
+                // Create inner circle for delivery (red)
                 const inner = document.createElement("div");
-                inner.style.backgroundColor = "#22c55e";
+                inner.style.width = "16px";
+                inner.style.height = "16px";
+                inner.style.borderRadius = "50%";
+                inner.style.backgroundColor = "#ef4444";
+                inner.style.border = "2px solid white";
+                inner.style.boxShadow = "0 2px 6px rgba(0,0,0,0.3)";
                 wrapper.appendChild(inner);
 
                 const popupHtml = createOrderPopup(order, "delivery");
@@ -547,7 +648,7 @@ export const UniversalMap: React.FC<UniversalMapProps> = ({
                     ) {
                         try {
                             activeOrderPopupRef.current.remove();
-                        } catch {}
+                        } catch { }
                     }
 
                     if (popup.isOpen()) {
@@ -605,15 +706,27 @@ export const UniversalMap: React.FC<UniversalMapProps> = ({
         if (!mapInstance.current || !mapReady) return;
 
         markersRef.current.forEach(({ innerEl, orderId, kind, popup, marker }) => {
-            applyOrderSelectionStyles(orderId, kind, innerEl);
-
-            // also update fill color for selected state
+            // Apply selection styles for circle markers
             if (orderId && kind) {
+                const hasSelection = selectedOrderIds.length > 0;
                 const isSelected = selectedOrderIds.includes(orderId);
+                const isDimmed = hasSelection && !isSelected;
+
+                innerEl.style.transition = "all 120ms ease";
+                innerEl.style.width = isSelected ? "20px" : isDimmed ? "12px" : "16px";
+                innerEl.style.height = isSelected ? "20px" : isDimmed ? "12px" : "16px";
+                innerEl.style.opacity = isDimmed ? "0.4" : "1";
+                innerEl.style.boxShadow = isSelected
+                    ? kind === "pickup"
+                        ? "0 0 0 3px rgba(99, 102, 241, 0.5), 0 4px 8px rgba(0,0,0,0.3)"
+                        : "0 0 0 3px rgba(239, 68, 68, 0.5), 0 4px 8px rgba(0,0,0,0.3)"
+                    : "0 2px 6px rgba(0,0,0,0.3)";
+
+                // Update background color for selected state
                 if (kind === "pickup") {
-                    innerEl.style.backgroundColor = isSelected ? "#2563eb" : "#6366f1";
+                    innerEl.style.backgroundColor = isSelected ? "#4f46e5" : "#6366f1";
                 } else {
-                    innerEl.style.backgroundColor = isSelected ? "#16a34a" : "#22c55e";
+                    innerEl.style.backgroundColor = isSelected ? "#dc2626" : "#ef4444";
                 }
             }
 
@@ -624,7 +737,7 @@ export const UniversalMap: React.FC<UniversalMapProps> = ({
                 } catch { }
             }
         });
-    }, [selectedOrderIds, mapReady, applyOrderSelectionStyles]);
+    }, [selectedOrderIds, mapReady]);
 
     // Update node markers
     useEffect(() => {

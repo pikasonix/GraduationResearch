@@ -8,7 +8,7 @@ import {
   useUpdateUserMutation,
   useUploadAvatarMutation,
   useLazyCheckUsernameQuery,
-  type DbUser,
+  useUpdateOrganizationMutation,
   type UserRole,
 } from "@/lib/redux/services/userApi";
 import type { FetchBaseQueryError } from "@reduxjs/toolkit/query";
@@ -22,13 +22,6 @@ import FileUpload from "@/components/common/FileUpload";
 import { Avatar } from "@/components/common/Avatar";
 import { getAvatarUrl } from "@/lib/utils/avatar";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
   Dialog,
   DialogContent,
   DialogHeader,
@@ -37,6 +30,9 @@ import {
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { User, Building2, Phone, Mail, Shield, Pencil, Briefcase, Truck } from "lucide-react";
+import { getGeocoder } from "@/services/geocoding";
+import { UniversalMap } from "@/components/map/UniversalMap";
+import { HomePinIcon } from "@/components/icon";
 
 const roleLabels: Record<UserRole, string> = {
   super_admin: "Super Admin",
@@ -78,6 +74,13 @@ interface EditProfileForm {
   avatarFile?: File | null;
 }
 
+interface EditDepotForm {
+  depot_name: string;
+  depot_address: string;
+  depot_latitude: string;
+  depot_longitude: string;
+}
+
 const ProfilePage: React.FC = () => {
   const { data: sessionData, isLoading: isLoadingSession } = useGetSessionQuery();
   const router = useRouter();
@@ -106,11 +109,21 @@ const ProfilePage: React.FC = () => {
   });
 
   const [updateUser, { isLoading: isUpdating }] = useUpdateUserMutation();
+  const [updateOrganization, { isLoading: isUpdatingOrg }] = useUpdateOrganizationMutation();
   const [uploadAvatar] = useUploadAvatarMutation();
   const [checkUsername] = useLazyCheckUsernameQuery();
 
   const user = overviewData?.user ?? null;
   const organization = overviewData?.organization ?? null;
+
+  const [isDepotModalOpen, setIsDepotModalOpen] = useState(false);
+  const [depotForm, setDepotForm] = useState<EditDepotForm>({
+    depot_name: "",
+    depot_address: "",
+    depot_latitude: "",
+    depot_longitude: "",
+  });
+  const [isGeocodingDepot, setIsGeocodingDepot] = useState(false);
 
   const handleMutationError = useCallback((err: unknown, context: string) => {
     console.error(`Failed to ${context}:`, err);
@@ -159,7 +172,7 @@ const ProfilePage: React.FC = () => {
             message: "Username đã tồn tại",
           });
         }
-      } catch (error) {
+      } catch {
         setUsernameCheckStatus({
           checking: false,
           available: null,
@@ -291,6 +304,109 @@ const ProfilePage: React.FC = () => {
     }
   };
 
+  const handleEditDepot = () => {
+    setDepotForm({
+      depot_name: organization?.depot_name || "",
+      depot_address: organization?.depot_address || "",
+      depot_latitude:
+        organization?.depot_latitude === null || organization?.depot_latitude === undefined
+          ? ""
+          : String(organization.depot_latitude),
+      depot_longitude:
+        organization?.depot_longitude === null || organization?.depot_longitude === undefined
+          ? ""
+          : String(organization.depot_longitude),
+    });
+    setIsDepotModalOpen(true);
+  };
+
+  const handleGeocodeDepot = async () => {
+    const query = depotForm.depot_address.trim();
+    if (!query) {
+      toast.error("Vui lòng nhập địa chỉ depot trước");
+      return;
+    }
+    setIsGeocodingDepot(true);
+    try {
+      const geocoder = getGeocoder();
+      const result = await geocoder.geocode(query);
+      if (!result) {
+        toast.error("Không tìm thấy tọa độ cho địa chỉ này");
+        return;
+      }
+      const [lng, lat] = result.center;
+      setDepotForm((prev) => ({
+        ...prev,
+        depot_address: result.place_name || prev.depot_address,
+        depot_latitude: String(lat),
+        depot_longitude: String(lng),
+      }));
+      toast.success("Đã lấy tọa độ depot");
+    } catch (err) {
+      console.error("Failed to geocode depot:", err);
+      toast.error("Lỗi khi lấy tọa độ depot");
+    } finally {
+      setIsGeocodingDepot(false);
+    }
+  };
+
+  const handleDepotMapPick = async (lat: number, lng: number) => {
+    setDepotForm((prev) => ({
+      ...prev,
+      depot_latitude: String(lat),
+      depot_longitude: String(lng),
+    }));
+
+    try {
+      const geocoder = getGeocoder();
+      if (typeof geocoder.reverse === "function") {
+        const addr = await geocoder.reverse(lng, lat);
+        if (addr) {
+          setDepotForm((prev) => ({
+            ...prev,
+            depot_address: prev.depot_address?.trim() ? prev.depot_address : addr,
+          }));
+        }
+      }
+    } catch (e) {
+      console.warn("Depot reverse-geocode failed", e);
+    }
+  };
+
+  const handleSaveDepot = async () => {
+    if (!organization?.id) {
+      toast.error("Không tìm thấy tổ chức để cập nhật depot");
+      return;
+    }
+
+    const depotName = depotForm.depot_name.trim() || null;
+    const depotAddress = depotForm.depot_address.trim() || null;
+
+    const latStr = depotForm.depot_latitude.trim();
+    const lngStr = depotForm.depot_longitude.trim();
+    const lat = latStr ? Number(latStr) : null;
+    const lng = lngStr ? Number(lngStr) : null;
+
+    if ((latStr || lngStr) && (lat === null || lng === null || Number.isNaN(lat) || Number.isNaN(lng))) {
+      toast.error("Tọa độ depot không hợp lệ");
+      return;
+    }
+
+    try {
+      await updateOrganization({
+        id: organization.id,
+        depot_name: depotName,
+        depot_address: depotAddress,
+        depot_latitude: lat,
+        depot_longitude: lng,
+      }).unwrap();
+      toast.success("Đã cập nhật depot");
+      setIsDepotModalOpen(false);
+    } catch (err) {
+      handleMutationError(err, "update depot");
+    }
+  };
+
   return (
     <div className="flex flex-col min-h-screen pt-16">
       <Toaster />
@@ -407,6 +523,38 @@ const ProfilePage: React.FC = () => {
                   <p className="font-medium">{organization.tax_code}</p>
                 </div>
               )}
+
+              <div className="md:col-span-2 border-t pt-4">
+                <div className="flex items-center justify-between gap-3">
+                  <Label className="text-muted-foreground text-sm flex items-center gap-2">
+                    <HomePinIcon width={16} height={16} />
+                    Depot (kho xuất phát)
+                  </Label>
+                  <Button variant="outline" size="sm" onClick={handleEditDepot}>
+                    <Pencil className="h-4 w-4 mr-2" />
+                    Nhập depot
+                  </Button>
+                </div>
+
+                <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-2">
+                  <div>
+                    <Label className="text-muted-foreground text-xs">Tên depot</Label>
+                    <p className="font-medium">{organization?.depot_name || "Chưa cập nhật"}</p>
+                  </div>
+                  <div>
+                    <Label className="text-muted-foreground text-xs">Tọa độ</Label>
+                    <p className="font-medium">
+                      {organization?.depot_latitude != null && organization?.depot_longitude != null
+                        ? `${organization.depot_latitude}, ${organization.depot_longitude}`
+                        : "Chưa cập nhật"}
+                    </p>
+                  </div>
+                  <div className="md:col-span-2">
+                    <Label className="text-muted-foreground text-xs">Địa chỉ depot</Label>
+                    <p className="font-medium">{organization?.depot_address || "Chưa cập nhật"}</p>
+                  </div>
+                </div>
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -494,6 +642,114 @@ const ProfilePage: React.FC = () => {
               className="bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isUpdating ? "Đang lưu..." : "Lưu thay đổi"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Depot Modal */}
+      <Dialog open={isDepotModalOpen} onOpenChange={setIsDepotModalOpen}>
+        <DialogContent className="max-h-[90vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle>Nhập depot (kho xuất phát)</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4 flex-1 overflow-y-auto px-1">
+            <div className="space-y-1.5">
+              <Label htmlFor="depot_name">Tên depot</Label>
+              <Input
+                id="depot_name"
+                value={depotForm.depot_name}
+                onChange={(e) => setDepotForm({ ...depotForm, depot_name: e.target.value })}
+                placeholder="VD: Kho chính"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="depot_address">Địa chỉ depot</Label>
+              <Input
+                id="depot_address"
+                value={depotForm.depot_address}
+                onChange={(e) => setDepotForm({ ...depotForm, depot_address: e.target.value })}
+                placeholder="Nhập địa chỉ depot"
+              />
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleGeocodeDepot}
+                  disabled={isGeocodingDepot}
+                >
+                  {isGeocodingDepot ? "Đang lấy tọa độ..." : "Lấy tọa độ từ địa chỉ"}
+                </Button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="depot_latitude">Vĩ độ (lat)</Label>
+                <Input
+                  id="depot_latitude"
+                  value={depotForm.depot_latitude}
+                  onChange={(e) => setDepotForm({ ...depotForm, depot_latitude: e.target.value })}
+                  placeholder="21.0..."
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="depot_longitude">Kinh độ (lng)</Label>
+                <Input
+                  id="depot_longitude"
+                  value={depotForm.depot_longitude}
+                  onChange={(e) => setDepotForm({ ...depotForm, depot_longitude: e.target.value })}
+                  placeholder="105.8..."
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-muted-foreground text-sm flex items-center gap-2">
+                <HomePinIcon width={16} height={16} />
+                Chọn depot trên bản đồ
+              </Label>
+              <div className="w-full h-[280px] rounded-md overflow-hidden border">
+                <UniversalMap
+                  interactive
+                  height="280px"
+                  center={
+                    depotForm.depot_longitude.trim() && depotForm.depot_latitude.trim()
+                      ? ([Number(depotForm.depot_longitude), Number(depotForm.depot_latitude)] as [number, number])
+                      : ([105.8342, 21.0278] as [number, number])
+                  }
+                  zoom={
+                    depotForm.depot_longitude.trim() && depotForm.depot_latitude.trim()
+                      ? 14
+                      : 12
+                  }
+                  pendingMarker={
+                    depotForm.depot_longitude.trim() && depotForm.depot_latitude.trim()
+                      ? { lat: Number(depotForm.depot_latitude), lng: Number(depotForm.depot_longitude) }
+                      : null
+                  }
+                  onMapClick={(lat, lng) => {
+                    // click to set depot
+                    handleDepotMapPick(lat, lng);
+                  }}
+                  showOrderLines={false}
+                  showPairLines={false}
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">Click lên bản đồ để đặt vị trí depot.</p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsDepotModalOpen(false)}>
+              Hủy
+            </Button>
+            <Button
+              onClick={handleSaveDepot}
+              disabled={isUpdatingOrg}
+              className="bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isUpdatingOrg ? "Đang lưu..." : "Lưu depot"}
             </Button>
           </DialogFooter>
         </DialogContent>

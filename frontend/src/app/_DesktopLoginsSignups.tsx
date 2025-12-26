@@ -1,10 +1,11 @@
 "use client";
 
-import React from "react";
+import React, { useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useGetSessionQuery, useLogoutMutation } from "@/lib/redux/services/auth";
-import { useGetUserQuery } from "@/lib/redux/services/userApi";
+import { useGetUserQuery, useGetUserProfileOverviewQuery } from "@/lib/redux/services/userApi";
+import { useGetOrdersQuery } from "@/lib/redux/services/orderApi";
 import { User, LogOut, ChevronDown, PieChart, MessageSquare, Bell } from "lucide-react";
 import {
     Popover,
@@ -18,14 +19,41 @@ export const DesktopLoginsSignups: React.FC = () => {
     const { data, isLoading } = useGetSessionQuery();
     const [logout] = useLogoutMutation();
     const router = useRouter();
-    
+
     const authUser = data?.user;
     const userId = authUser?.id;
-    
+
     // Get user data from database
     const { data: dbUser } = useGetUserQuery(userId ?? "", {
         skip: !userId,
     });
+
+    // Get user profile with organization info
+    const { data: userProfile } = useGetUserProfileOverviewQuery(userId ?? "", {
+        skip: !userId,
+    });
+
+    const organizationId = userProfile?.organization?.id ?? null;
+
+    // Fetch orders for the organization
+    const { data: orders = [] } = useGetOrdersQuery(
+        { organizationId: organizationId ?? "", limit: 500 },
+        { skip: !organizationId }
+    );
+
+    // Calculate today's orders count
+    const todayOrdersCount = useMemo(() => {
+        if (!orders || orders.length === 0) return 0;
+
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        return orders.filter((order) => {
+            const orderDate = new Date(order.created_at);
+            orderDate.setHours(0, 0, 0, 0);
+            return orderDate.getTime() === today.getTime();
+        }).length;
+    }, [orders]);
 
     const handleLogout = async () => {
         await logout();
@@ -38,14 +66,14 @@ export const DesktopLoginsSignups: React.FC = () => {
         // Display name or email
         const displayName = dbUser?.full_name || authUser.user_metadata?.full_name || authUser.user_metadata?.name || authUser.email?.split("@")[0] || "User";
         const roleMap: Record<string, string> = {
-          super_admin: "Super Admin",
-          admin: "Quản trị viên",
-          manager: "Quản lý",
-          driver: "Tài xế",
-          user: "Người dùng",
+            super_admin: "Super Admin",
+            admin: "Quản trị viên",
+            manager: "Quản lý",
+            driver: "Tài xế",
+            user: "Người dùng",
         };
         const role = roleMap[dbUser?.role || "user"] || "Người dùng";
-        
+
         // Get avatar with priority: db avatar -> oauth avatar -> null (will show initials)
         const avatarUrl = getAvatarUrl(dbUser?.avatar_url, authUser.user_metadata?.avatar_url);
 
@@ -53,7 +81,7 @@ export const DesktopLoginsSignups: React.FC = () => {
             <div className="flex items-center gap-3 lg:gap-4 xl:gap-6">
                 {/* Stats Section */}
                 <div className="hidden xl:flex items-center">
-                    <span className="text-2xl font-bold text-gray-800 mr-2">16</span>
+                    <span className="text-2xl font-bold text-gray-800 mr-2">{todayOrdersCount}</span>
                     <div className="flex flex-col leading-tight">
                         <span className="text-xs text-gray-500 font-medium">Đơn hàng</span>
                         <span className="text-xs text-gray-500 font-medium">hôm nay</span>
@@ -80,7 +108,7 @@ export const DesktopLoginsSignups: React.FC = () => {
                 <Popover>
                     <PopoverTrigger asChild>
                         <button className="flex items-center gap-2 lg:gap-3 focus:outline-none group">
-                            <Avatar 
+                            <Avatar
                                 src={avatarUrl}
                                 name={displayName}
                                 size={32}

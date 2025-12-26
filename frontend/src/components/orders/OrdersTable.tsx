@@ -1,39 +1,55 @@
 "use client";
 
 import React from "react";
-import { Order, OrderStatus, PriorityLevel } from "@/lib/redux/services/orderApi";
+import { Order, OrderStatus } from "@/lib/redux/services/orderApi";
 import { format } from "date-fns";
 import { MoreHorizontal, Edit, Eye, Trash, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import type { DispatchSettings } from "@/lib/dispatchSettings";
+import { isOrderDispatchable } from "@/lib/dispatchSettings";
 
 interface OrdersTableProps {
     orders: Order[];
+    allOrderIds?: string[]; // All filtered order IDs for "select all" functionality
     onOrderClick: (order: Order) => void;
     selectedOrderIds: string[];
     onSelectionChange: (ids: string[]) => void;
     onEdit?: (order: Order) => void;
     onDelete?: (orderId: string) => void;
-    startIndex?: number;
+    dispatchSettings?: DispatchSettings;
 }
 
 export const OrdersTable: React.FC<OrdersTableProps> = ({
     orders,
+    allOrderIds,
     onOrderClick,
     selectedOrderIds,
     onSelectionChange,
     onEdit,
     onDelete,
-    startIndex = 0,
+    dispatchSettings,
 }) => {
+    // Use allOrderIds for select all functionality, fallback to current page orders
+    const totalOrderIds = allOrderIds ?? orders.map((o) => o.id);
+
     const toggleSelectAll = () => {
-        if (selectedOrderIds.length === orders.length) {
+        // Check if all orders are selected
+        const allSelected = totalOrderIds.length > 0 &&
+            totalOrderIds.every(id => selectedOrderIds.includes(id));
+
+        if (allSelected) {
             onSelectionChange([]);
         } else {
-            onSelectionChange(orders.map((o) => o.id));
+            onSelectionChange(totalOrderIds);
         }
     };
+
+    // Determine checkbox state
+    const isAllSelected = totalOrderIds.length > 0 &&
+        totalOrderIds.every(id => selectedOrderIds.includes(id));
+    const isPartiallySelected = selectedOrderIds.length > 0 && !isAllSelected;
 
     const toggleSelectOrder = (id: string) => {
         if (selectedOrderIds.includes(id)) {
@@ -69,55 +85,47 @@ export const OrdersTable: React.FC<OrdersTableProps> = ({
         }
     };
 
-    const getPriorityColor = (priority: PriorityLevel) => {
-        switch (priority) {
-            case "urgent": return "bg-red-600";
-            case "normal": return "bg-blue-500";
-            default: return "bg-blue-500";
-        }
+    const formatTW = (start?: string, end?: string) => {
+        if (!start && !end) return "-";
+        const s = start ? format(new Date(start), "dd/MM HH:mm") : "-";
+        const e = end ? format(new Date(end), "dd/MM HH:mm") : "-";
+        return `${s} → ${e}`;
     };
-
-    const getPriorityLabel = (priority: PriorityLevel) => {
-        switch (priority) {
-            case "urgent": return "Hỏa tốc";
-            case "normal": return "Thường";
-            default: return "Thường";
-        }
-    }
 
     return (
         <div className="w-full overflow-x-auto rounded-md border bg-white">
-            <table className="w-full min-w-[900px] text-xs text-left">
+            <table className="w-full min-w-[980px] text-xs text-left">
                 <thead className="bg-gray-50 text-gray-500 font-medium">
                     <tr>
                         <th className="p-3 w-10 text-center">
                             <input
                                 type="checkbox"
                                 className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                                checked={orders.length > 0 && selectedOrderIds.length === orders.length}
+                                checked={isAllSelected}
+                                ref={(el) => {
+                                    if (el) el.indeterminate = isPartiallySelected;
+                                }}
                                 onChange={toggleSelectAll}
                             />
                         </th>
-                        <th className="p-3 text-center whitespace-nowrap">STT</th>
-                        <th className="p-3 text-center whitespace-nowrap">Ngày tạo</th>
-                        <th className="p-3 text-center whitespace-nowrap">Mã đơn hàng</th>
-                        <th className="p-3 text-center whitespace-nowrap">Trạng thái</th>
-                        <th className="p-3 text-center whitespace-nowrap">Độ ưu tiên</th>
-                        <th className="p-3 whitespace-nowrap">Khách hàng</th>
-                        <th className="p-3 whitespace-nowrap">Điểm lấy</th>
-                        <th className="p-3 whitespace-nowrap">Điểm giao</th>
+                        <th className="p-3 text-center whitespace-nowrap">Order ID</th>
+                        <th className="p-3 text-center whitespace-nowrap">Status</th>
+                        <th className="p-3 whitespace-nowrap">Pickup → Delivery</th>
+                        <th className="p-3 whitespace-nowrap">TW</th>
+                        <th className="p-3 text-center whitespace-nowrap">Assigned Vehicle</th>
+                        <th className="p-3 text-center whitespace-nowrap">Dispatchable</th>
                         <th className="p-3 text-right whitespace-nowrap"><Settings className="h-4 w-4 ml-auto" /></th>
                     </tr>
                 </thead>
                 <tbody className="divide-y">
                     {orders.length === 0 ? (
                         <tr>
-                            <td colSpan={10} className="p-8 text-center text-gray-500">
+                            <td colSpan={8} className="p-8 text-center text-gray-500">
                                 Không có đơn hàng nào.
                             </td>
                         </tr>
                     ) : (
-                        orders.map((order, index) => (
+                        orders.map((order) => (
                             <tr
                                 key={order.id}
                                 className="hover:bg-gray-50 cursor-pointer transition-colors"
@@ -131,27 +139,37 @@ export const OrdersTable: React.FC<OrdersTableProps> = ({
                                         onChange={() => toggleSelectOrder(order.id)}
                                     />
                                 </td>
-                                <td className="p-2 text-center text-gray-500 whitespace-nowrap">{startIndex + index + 1}</td>
-                                <td className="p-2 text-center whitespace-nowrap">
-                                    {format(new Date(order.created_at), "dd/MM/yyyy HH:mm")}
-                                </td>
                                 <td className="p-2 text-center font-medium whitespace-nowrap">{order.tracking_number}</td>
                                 <td className="p-2 text-center whitespace-nowrap">
                                     <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${getStatusColor(order.status)}`}>
                                         {getStatusLabel(order.status)}
                                     </span>
                                 </td>
+                                <td className="p-2 whitespace-nowrap truncate max-w-[260px]" title={`${order.pickup_address} → ${order.delivery_address}`}>
+                                    <span className="text-gray-700">{order.pickup_address}</span>
+                                    <span className="text-gray-400"> → </span>
+                                    <span className="text-gray-700">{order.delivery_address}</span>
+                                </td>
+                                <td className="p-2 whitespace-nowrap" title={`Pickup: ${formatTW(order.pickup_time_start, order.pickup_time_end)}\nDelivery: ${formatTW(order.delivery_time_start, order.delivery_time_end)}`}>
+                                    {formatTW(order.pickup_time_start, order.pickup_time_end)}
+                                </td>
+                                <td className="p-2 text-center whitespace-nowrap text-gray-500">-</td>
                                 <td className="p-2 text-center whitespace-nowrap">
-                                    <Badge className={`${getPriorityColor(order.priority)} hover:${getPriorityColor(order.priority)} border-0 text-xs`}>
-                                        {getPriorityLabel(order.priority)}
-                                    </Badge>
-                                </td>
-                                <td className="p-2 whitespace-nowrap truncate max-w-[100px]" title={order.delivery_contact_name}>{order.delivery_contact_name}</td>
-                                <td className="p-2 whitespace-nowrap truncate max-w-[100px]" title={order.pickup_address}>
-                                    {order.pickup_address}
-                                </td>
-                                <td className="p-2 whitespace-nowrap truncate max-w-[100px]" title={order.delivery_address}>
-                                    {order.delivery_address}
+                                    {dispatchSettings ? (
+                                        isOrderDispatchable(order.status, dispatchSettings) ? (
+                                            <Badge className="bg-green-100 text-green-800 border border-green-200" title="Order eligible for dispatch based on settings">
+                                                Yes
+                                            </Badge>
+                                        ) : (
+                                            <Badge className="bg-gray-100 text-gray-700 border border-gray-200" title="Order eligible for dispatch based on settings">
+                                                No
+                                            </Badge>
+                                        )
+                                    ) : (
+                                        <Badge className="bg-gray-100 text-gray-700 border border-gray-200" title="Order eligible for dispatch based on settings">
+                                            -
+                                        </Badge>
+                                    )}
                                 </td>
                                 <td className="p-2 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                                     <Popover>

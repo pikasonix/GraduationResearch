@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import { useGetSessionQuery } from "@/lib/redux/services/auth";
-import { useGetUserProfileOverviewQuery } from "@/lib/redux/services/userApi";
+import { useGetUserProfileOverviewQuery, useUpdateOrganizationMutation } from "@/lib/redux/services/userApi";
 import {
     useGetOrdersQuery,
     Order,
@@ -10,7 +10,6 @@ import {
     useUpdateOrderMutation,
     useDeleteOrderMutation
 } from "@/lib/redux/services/orderApi";
-import { DateRange } from "react-day-picker";
 import { OrdersStats } from "@/components/orders/OrdersStats";
 import { OrdersFilter } from "@/components/orders/OrdersFilter";
 import { OrdersTable } from "@/components/orders/OrdersTable";
@@ -19,6 +18,7 @@ import OrderForm from "@/components/orders/OrderForm";
 import Pagination from "@/components/common/Pagination";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
 import {
     AlertDialog,
     AlertDialogAction,
@@ -29,6 +29,47 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog";
+import {
+    DEFAULT_DISPATCH_SETTINGS,
+    normalizeDispatchSettings,
+    type DispatchOrderStatus,
+    type DispatchSettings,
+} from "@/lib/dispatchSettings";
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+    return !!value && typeof value === "object" && !Array.isArray(value);
+}
+
+function deepMergePreserveUnknown(base: unknown, patch: unknown): unknown {
+    if (Array.isArray(patch)) return patch.slice();
+    if (!isPlainObject(base) || !isPlainObject(patch)) return patch;
+
+    const out: Record<string, unknown> = { ...base };
+    for (const [k, v] of Object.entries(patch)) {
+        const existing = out[k];
+        if (isPlainObject(existing) && isPlainObject(v)) {
+            out[k] = deepMergePreserveUnknown(existing, v);
+        } else if (Array.isArray(v)) {
+            out[k] = v.slice();
+        } else {
+            out[k] = v;
+        }
+    }
+    return out;
+}
+
+type DateRange = {
+    from?: Date;
+    to?: Date;
+};
 
 export default function OrdersPage() {
     const router = useRouter();
@@ -48,6 +89,21 @@ export default function OrdersPage() {
     );
 
     const organizationId = userProfile?.organization?.id;
+    const organization = userProfile?.organization ?? null;
+
+    const [updateOrganization, { isLoading: isSavingDispatchSettings }] =
+        useUpdateOrganizationMutation();
+
+    const [dispatchSettingsOpen, setDispatchSettingsOpen] = useState(false);
+    const [dispatchSettingsDraft, setDispatchSettingsDraft] = useState<DispatchSettings>(() =>
+        normalizeDispatchSettings(organization?.dispatch_settings ?? DEFAULT_DISPATCH_SETTINGS)
+    );
+
+    React.useEffect(() => {
+        setDispatchSettingsDraft(
+            normalizeDispatchSettings(organization?.dispatch_settings ?? DEFAULT_DISPATCH_SETTINGS)
+        );
+    }, [organization?.dispatch_settings]);
 
     // Debug: log organization ID
     React.useEffect(() => {
@@ -70,6 +126,41 @@ export default function OrdersPage() {
     const [createOrder] = useCreateOrderMutation();
     const [updateOrder] = useUpdateOrderMutation();
     const [deleteOrder] = useDeleteOrderMutation();
+
+    const toggleAllowedStatus = (status: DispatchOrderStatus) => {
+        setDispatchSettingsDraft((prev) => {
+            const exists = prev.allowed_statuses.includes(status);
+            const nextAllowed = exists
+                ? prev.allowed_statuses.filter((s) => s !== status)
+                : [...prev.allowed_statuses, status];
+            return { ...prev, allowed_statuses: nextAllowed };
+        });
+    };
+
+    const handleSaveDispatchSettings = async () => {
+        if (!organizationId) {
+            toast.error("Chưa tải được thông tin tổ chức");
+            return;
+        }
+
+        // IMPORTANT: Supabase update replaces the whole jsonb value.
+        // Merge with current org settings to preserve unknown keys (future-proof & safer across tabs).
+        const baseRaw = (organization?.dispatch_settings ?? {}) as unknown;
+        const mergedRaw = deepMergePreserveUnknown(baseRaw, dispatchSettingsDraft) as unknown;
+        const normalizedKnown = normalizeDispatchSettings(mergedRaw);
+        const finalToSave = deepMergePreserveUnknown(mergedRaw, normalizedKnown) as unknown;
+        try {
+            await updateOrganization({
+                id: organizationId,
+                dispatch_settings: finalToSave as any,
+            }).unwrap();
+            toast.success("Đã lưu Dispatch Settings");
+            setDispatchSettingsOpen(false);
+        } catch (e: unknown) {
+            console.error("Failed to save dispatch settings:", e);
+            toast.error("Không thể lưu Dispatch Settings");
+        }
+    };
 
     // Fetch orders
     const { data: orders = [], isLoading: isOrdersLoading } = useGetOrdersQuery({
@@ -144,9 +235,18 @@ export default function OrdersPage() {
             await deleteOrder(deleteOrderId).unwrap();
             toast.success('Đã xóa đơn hàng');
             setDeleteOrderId(null);
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error('Error deleting order:', error);
-            toast.error(error?.error || 'Không thể xóa đơn hàng');
+            const message =
+                typeof error === "object" &&
+                    error !== null &&
+                    "error" in error &&
+                    typeof (error as { error?: unknown }).error === "string"
+                    ? String((error as { error: string }).error)
+                    : error instanceof Error
+                        ? error.message
+                        : 'Không thể xóa đơn hàng';
+            toast.error(message);
         }
     };
 
@@ -157,12 +257,6 @@ export default function OrdersPage() {
             await createOrder(orderData).unwrap();
         }
     };
-
-    const handlePlanRoute = () => {
-        // router.push("/routing"); // Or open modal
-        toast.info("Chuyển đến trang lập lộ trình...");
-        router.push("/map");
-    }
 
     return (
         <div className="w-full pt-2 px-4 space-y-4 md:space-y-2 bg-gray-50 min-h-[calc(100vh-4rem)]">
@@ -175,8 +269,8 @@ export default function OrdersPage() {
                     </p>
                 </div>
 
-                {/* Statistics */}
-                <div className="flex-shrink-0">
+                <div className="flex flex-wrap items-stretch gap-3">
+                    {/* Statistics - Charts first */}
                     <OrdersStats
                         orders={dateFilteredOrders}
                         statusFilter={statusFilter}
@@ -184,27 +278,69 @@ export default function OrdersPage() {
                         onStatusFilterChange={setStatusFilter}
                         onPriorityFilterChange={setPriorityFilter}
                     />
+
+                    {/* Dispatch Actions - Stacked vertically */}
+                    <div className="flex flex-col gap-1.5 min-w-[200px]">
+                        {/* Settings Card */}
+                        <div
+                            onClick={() => setDispatchSettingsOpen(true)}
+                            className="px-3 py-2 bg-white border border-gray-200 rounded-lg cursor-pointer transition-all hover:border-gray-300 hover:shadow-sm flex items-center gap-3 flex-1"
+                        >
+                            <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center shrink-0">
+                                <svg className="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                </svg>
+                            </div>
+                            <div className="flex flex-col">
+                                <span className="text-sm font-semibold text-gray-800">Cài đặt</span>
+                                <span className="text-xs text-gray-500">Cấu hình điều phối</span>
+                            </div>
+                        </div>
+
+                        {/* Go to Dispatch Card */}
+                        <div
+                            onClick={() => router.push("/orders/dispatch")}
+                            className="px-3 py-2 bg-gradient-to-r from-blue-500 to-blue-600 border border-blue-500 rounded-lg cursor-pointer transition-all hover:from-blue-600 hover:to-blue-700 hover:shadow-md flex items-center gap-3 flex-1"
+                        >
+                            <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center shrink-0">
+                                <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                                </svg>
+                            </div>
+                            <div className="flex flex-col">
+                                <span className="text-sm font-semibold text-white">Điều phối đơn</span>
+                                <span className="text-xs text-blue-100">Bắt đầu dispatch</span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
 
             {isProfileLoading && (
                 <p className="text-sm text-gray-500">Đang tải thông tin tổ chức...</p>
             )}
-            {!isProfileLoading && !organizationId && (
-                <p className="text-sm text-red-500">Không tìm thấy thông tin tổ chức. Vui lòng kiểm tra tài khoản.</p>
-            )}
+            {
+                !isProfileLoading && !organizationId && (
+                    <p className="text-sm text-red-500">Không tìm thấy thông tin tổ chức. Vui lòng kiểm tra tài khoản.</p>
+                )
+            }
 
-            {isOrdersLoading && (
-                <div className="text-center py-12">
-                    <p className="text-gray-500">Đang tải đơn hàng...</p>
-                </div>
-            )}
+            {
+                isOrdersLoading && (
+                    <div className="text-center py-12">
+                        <p className="text-gray-500">Đang tải đơn hàng...</p>
+                    </div>
+                )
+            }
 
-            {!isOrdersLoading && orders.length === 0 && organizationId && (
-                <div className="bg-white rounded-lg p-8 text-center">
-                    <p className="text-gray-500 mb-4">Chưa có đơn hàng nào trong hệ thống.</p>
-                </div>
-            )}
+            {
+                !isOrdersLoading && orders.length === 0 && organizationId && (
+                    <div className="bg-white rounded-lg p-8 text-center">
+                        <p className="text-gray-500 mb-4">Chưa có đơn hàng nào trong hệ thống.</p>
+                    </div>
+                )
+            }
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
                 <div className="lg:col-span-2 space-y-4">
@@ -215,16 +351,16 @@ export default function OrdersPage() {
                             searchTerm={searchTerm}
                             setSearchTerm={setSearchTerm}
                             onCreateOrder={handleCreateOrder}
-                            onPlanRoute={handlePlanRoute}
                         />
                         <OrdersTable
                             orders={currentOrders}
+                            allOrderIds={finalFilteredOrders.map(o => o.id)}
                             onOrderClick={(order) => setSelectedOrderIds([order.id])}
                             selectedOrderIds={selectedOrderIds}
                             onSelectionChange={setSelectedOrderIds}
                             onEdit={handleEditOrder}
                             onDelete={handleDeleteClick}
-                            startIndex={indexOfFirstOrder}
+                            dispatchSettings={organization?.dispatch_settings ?? undefined}
                         />
 
                         {/* Pagination */}
@@ -239,8 +375,8 @@ export default function OrdersPage() {
                 </div>
 
                 <div className="lg:col-span-1 h-[400px] sm:h-[500px] lg:h-auto bg-white rounded-lg shadow-sm border p-1 lg:sticky lg:top-6">
-                    <OrdersMap 
-                        orders={finalFilteredOrders} 
+                    <OrdersMap
+                        orders={finalFilteredOrders}
                         selectedOrderIds={selectedOrderIds}
                         onOrderSelect={(orderId) => setSelectedOrderIds([orderId])}
                     />
@@ -275,6 +411,175 @@ export default function OrdersPage() {
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
+
+            <Dialog open={dispatchSettingsOpen} onOpenChange={setDispatchSettingsOpen}>
+                <DialogContent className="sm:max-w-xl">
+                    <DialogHeader>
+                        <DialogTitle>Cài đặt điều phối</DialogTitle>
+                        <DialogDescription>
+                            Các cài đặt này được lưu theo tổ chức và sử dụng cho Điều phối.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="space-y-4">
+                        <div className="space-y-2">
+                            <div className="text-sm font-medium">Trạng thái được phép điều phối</div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                {(
+                                    [
+                                        { key: "WAITING", label: "Đang chờ" },
+                                        { key: "IN_TRANSIT", label: "Đang giao" },
+                                        { key: "DISPATCHED", label: "Đã điều phối" },
+                                        { key: "COMPLETED", label: "Hoàn thành" },
+                                        { key: "CANCELLED", label: "Đã hủy" },
+                                    ] as const
+                                ).map((item) => (
+                                    <label
+                                        key={item.key}
+                                        className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm"
+                                    >
+                                        <input
+                                            type="checkbox"
+                                            className="h-4 w-4"
+                                            checked={dispatchSettingsDraft.allowed_statuses.includes(item.key)}
+                                            onChange={() => toggleAllowedStatus(item.key)}
+                                        />
+                                        <span>{item.label}</span>
+                                    </label>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div className="space-y-2">
+                            <div className="text-sm font-medium">Quy tắc động</div>
+                            <div className="space-y-2">
+                                <label className="flex items-center justify-between gap-3 text-sm rounded-md border px-3 py-2">
+                                    <span>Khoảng tái tối ưu (phút)</span>
+                                    <input
+                                        type="number"
+                                        min={1}
+                                        step={1}
+                                        className="h-9 w-24 rounded-md border px-2 text-sm"
+                                        value={dispatchSettingsDraft.dynamic.reopt_interval_minutes}
+                                        onChange={(e) => {
+                                            const raw = Number.parseInt(e.target.value, 10);
+                                            const next = Number.isFinite(raw) && raw > 0 ? raw : 1;
+                                            setDispatchSettingsDraft((prev) => ({
+                                                ...prev,
+                                                dynamic: { ...prev.dynamic, reopt_interval_minutes: next },
+                                            }));
+                                        }}
+                                    />
+                                </label>
+
+                                <label className="flex items-center gap-2 text-sm">
+                                    <input
+                                        type="checkbox"
+                                        className="h-4 w-4"
+                                        checked={dispatchSettingsDraft.dynamic.reopt_on_new_order}
+                                        onChange={(e) =>
+                                            setDispatchSettingsDraft((prev) => ({
+                                                ...prev,
+                                                dynamic: { ...prev.dynamic, reopt_on_new_order: e.target.checked },
+                                            }))
+                                        }
+                                    />
+                                    <span>Tái tối ưu khi có đơn mới</span>
+                                </label>
+
+                                <label className="flex items-center gap-2 text-sm">
+                                    <input
+                                        type="checkbox"
+                                        className="h-4 w-4"
+                                        checked={dispatchSettingsDraft.dynamic.reopt_on_delay}
+                                        onChange={(e) =>
+                                            setDispatchSettingsDraft((prev) => ({
+                                                ...prev,
+                                                dynamic: { ...prev.dynamic, reopt_on_delay: e.target.checked },
+                                            }))
+                                        }
+                                    />
+                                    <span>Tái tối ưu khi có delay</span>
+                                </label>
+
+                                <label className="flex items-center gap-2 text-sm">
+                                    <input
+                                        type="checkbox"
+                                        className="h-4 w-4"
+                                        checked={dispatchSettingsDraft.dynamic.reopt_on_cancellation}
+                                        onChange={(e) =>
+                                            setDispatchSettingsDraft((prev) => ({
+                                                ...prev,
+                                                dynamic: { ...prev.dynamic, reopt_on_cancellation: e.target.checked },
+                                            }))
+                                        }
+                                    />
+                                    <span>Tái tối ưu khi đơn bị hủy</span>
+                                </label>
+
+                                <label className="flex items-center gap-2 text-sm">
+                                    <input
+                                        type="checkbox"
+                                        className="h-4 w-4"
+                                        checked={dispatchSettingsDraft.dynamic.lock_completed}
+                                        onChange={(e) =>
+                                            setDispatchSettingsDraft((prev) => ({
+                                                ...prev,
+                                                dynamic: { ...prev.dynamic, lock_completed: e.target.checked },
+                                            }))
+                                        }
+                                    />
+                                    <span>Khóa tuyến đường đã hoàn thành</span>
+                                </label>
+                                <label className="flex items-center gap-2 text-sm">
+                                    <input
+                                        type="checkbox"
+                                        className="h-4 w-4"
+                                        checked={dispatchSettingsDraft.dynamic.allow_reorder}
+                                        onChange={(e) =>
+                                            setDispatchSettingsDraft((prev) => ({
+                                                ...prev,
+                                                dynamic: { ...prev.dynamic, allow_reorder: e.target.checked },
+                                            }))
+                                        }
+                                    />
+                                    <span>Cho phép sắp xếp lại điểm dừng</span>
+                                </label>
+                                <label className="flex items-center gap-2 text-sm">
+                                    <input
+                                        type="checkbox"
+                                        className="h-4 w-4"
+                                        checked={dispatchSettingsDraft.dynamic.allow_vehicle_change}
+                                        onChange={(e) =>
+                                            setDispatchSettingsDraft((prev) => ({
+                                                ...prev,
+                                                dynamic: {
+                                                    ...prev.dynamic,
+                                                    allow_vehicle_change: e.target.checked,
+                                                },
+                                            }))
+                                        }
+                                    />
+                                    <span>Cho phép đổi xe sau khi điều phối</span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <DialogFooter>
+                        <Button
+                            variant="outline"
+                            onClick={() => setDispatchSettingsOpen(false)}
+                            disabled={isSavingDispatchSettings}
+                        >
+                            Hủy
+                        </Button>
+                        <Button onClick={handleSaveDispatchSettings} disabled={isSavingDispatchSettings}>
+                            Lưu
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

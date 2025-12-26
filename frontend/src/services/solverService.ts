@@ -34,6 +34,8 @@ export interface Job {
     status: JobStatus;
     progress: number;
     result?: string;
+    solutionId?: string;
+    persisted?: boolean;
     error?: string;
     cost?: number;
     createdAt: string;
@@ -59,11 +61,11 @@ class SolverService {
     /**
      * Submit a new solver job
      */
-    async submitJob(instance: string, params: SolverParams = {}): Promise<string> {
+    async submitJob(instance: string, params: SolverParams = {}, meta?: { organizationId?: string; createdBy?: string; inputData?: unknown }): Promise<string> {
         const response = await fetch(`${this.baseURL}/jobs/submit`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ instance, params }),
+            body: JSON.stringify({ instance, params, ...meta }),
         });
 
         if (!response.ok) {
@@ -97,6 +99,8 @@ class SolverService {
             status: job.status,
             progress: job.progress || 0,
             result: job.result?.solution,
+            solutionId: job.result?.solutionId,
+            persisted: job.result?.persisted,
             error: job.error,
             cost: job.result?.cost,
             createdAt: job.createdAt,
@@ -169,10 +173,11 @@ class SolverService {
     async solveInstance(
         instance: string,
         params: SolverParams = {},
-        onProgress?: JobProgressCallback
-    ): Promise<string> {
+        onProgress?: JobProgressCallback,
+        meta?: { organizationId?: string; createdBy?: string; inputData?: unknown }
+    ): Promise<{ solutionText: string; solutionId?: string; persisted?: boolean }> {
         console.log('Submitting solver job...');
-        const jobId = await this.submitJob(instance, params);
+        const jobId = await this.submitJob(instance, params, meta);
         console.log('Job submitted with ID:', jobId);
 
         const job = await this.pollJob(jobId, onProgress);
@@ -181,7 +186,7 @@ class SolverService {
             throw new Error('Job completed but no result returned');
         }
 
-        return job.result;
+        return { solutionText: job.result, solutionId: job.solutionId, persisted: job.persisted };
     }
 
     /**

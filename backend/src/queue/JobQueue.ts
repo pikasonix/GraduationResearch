@@ -39,7 +39,7 @@ export class JobQueue extends EventEmitter {
     /**
      * Tạo job mới và thêm vào queue
      */
-    createJob(instance: string, params: SolverParams): string {
+    createJob(instance: string, params: SolverParams, meta?: { organizationId?: string; createdBy?: string; inputData?: unknown }): string {
         if (this.queue.length >= this.maxQueueSize) {
             throw new Error('Queue is full. Please try again later.');
         }
@@ -49,6 +49,9 @@ export class JobQueue extends EventEmitter {
             id: jobId,
             instance,
             params,
+            organizationId: meta?.organizationId,
+            createdBy: meta?.createdBy,
+            inputData: meta?.inputData,
             status: 'pending',
             createdAt: Date.now(),
             startedAt: null,

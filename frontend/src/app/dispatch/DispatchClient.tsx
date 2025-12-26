@@ -6,13 +6,17 @@ import { Button } from '@/components/ui/button';
 import DispatchSidebarLeft from '@/components/dispatch/DispatchSidebarLeft';
 import DispatchSidebarRight from '@/components/dispatch/DispatchSidebarRight';
 import DispatchMap from '@/components/dispatch/DispatchMap';
-import { Route, Instance, Node } from '@/utils/dataModels';
-import { getDrivers, getVehicles, assignRouteToDriver, Driver, Vehicle } from '@/services/driverService';
+import { Route, Instance, Node, createInstance, createNode, createRoute } from '@/utils/dataModels';
+import { getDrivers, getVehicles, assignExistingRouteToVehicle, assignRouteToVehicle, getUnassignedRoutes, getActiveRouteAssignments, Driver, Vehicle } from '@/services/driverService';
+import { useGetSessionQuery } from '@/lib/redux/services/auth';
+import { useGetUserProfileOverviewQuery } from '@/lib/redux/services/userApi';
 import { toast } from 'sonner';
+import { useSearchParams } from 'next/navigation';
+import { supabase } from '@/supabase/client';
 
 // --- Types ---
 export interface DispatchRoute {
-    id: number;
+    id: number | string;
     name: string;
     stops: number;
     distance: number;
@@ -20,18 +24,20 @@ export interface DispatchRoute {
     totalLoad: number;
     originalRoute: Route;
     isAssigned?: boolean;
+    dbRouteId?: string; // Database route ID for updating
 }
 
-export interface DispatchDriver {
+export interface DispatchVehicle {
     id: string;
-    name: string;
-    status: 'available' | 'busy' | 'offline';
+    licensePlate: string;
     vehicleType: string;
-    vehicleId: string | null;
     capacity: number;
+    status: 'available' | 'busy' | 'offline';
     currentLat: number;
     currentLng: number;
     distanceToDepot: string;
+    driverId?: string | null; // Optional driver assignment
+    driverName?: string | null;
 }
 
 // Vehicle type labels
@@ -43,99 +49,273 @@ const vehicleTypeLabels: Record<string, string> = {
     'truck_large': 'Xe tải lớn'
 };
 
+function isUuid(value: string | null | undefined): value is string {
+    if (!value) return false;
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
+function buildMinimalInstanceFromSolutionData(solutionData: any): Instance {
+    const inst = createInstance();
+    const mapping = Array.isArray(solutionData?.mapping_ids) ? solutionData.mapping_ids : [];
+
+    inst.name = String(solutionData?.instance_name || 'Persisted Solution');
+    inst.type = 'persisted';
+    inst.capacity = Number(solutionData?.capacity ?? 100);
+    inst.location = '';
+
+    inst.nodes = mapping.map((m: any, idx: number) => {
+        const lat = Number(m?.lat);
+        const lng = Number(m?.lng);
+        const kind = String(m?.kind || '');
+        const isPickup = kind === 'pickup';
+        const isDelivery = kind === 'delivery';
+        return createNode(
+            idx,
+            [Number.isFinite(lat) ? lat : 0, Number.isFinite(lng) ? lng : 0],
+            0,
+            [0, 1_000_000],
+            0,
+            isPickup,
+            isDelivery,
+        );
+    });
+
+    inst.all_coords = inst.nodes.map((n) => n.coords);
+    inst.size = inst.nodes.length;
+    inst.times = [];
+    return inst;
+}
+
+function buildRouteFromDbRow(dbRoute: any, idx: number, instance: Instance | null): Route {
+    const palette = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#f97316'];
+    const routeNumber = Number(dbRoute?.route_number);
+    const id = Number.isFinite(routeNumber) ? routeNumber : idx + 1;
+    const route = createRoute(id);
+    route.cost = Number(dbRoute?.planned_cost ?? 0);
+    route.set_color(palette[idx % palette.length]);
+
+    const seq = Array.isArray(dbRoute?.route_data?.route_sequence)
+        ? dbRoute.route_data.route_sequence.map((n: any) => Number(n)).filter((n: number) => Number.isFinite(n))
+        : [];
+
+    route.sequence = [0, ...seq, 0];
+    route.path = route.sequence
+        .map((nodeId) => instance?.nodes?.find((n) => n.id === nodeId)?.coords)
+        .filter(Boolean) as [number, number][];
+
+    (route as any).db_route_id = dbRoute?.id;
+    (route as any).route_number = dbRoute?.route_number;
+    (route as any).planned_distance_km = dbRoute?.planned_distance_km;
+    (route as any).planned_duration_hours = dbRoute?.planned_duration_hours;
+
+    return route;
+}
+
 export default function DispatchClient() {
-    const [selectedRouteId, setSelectedRouteId] = useState<number | null>(null);
-    const [selectedDriverId, setSelectedDriverId] = useState<string | null>(null);
+    const searchParams = useSearchParams();
+    const urlSolutionId = searchParams?.get('solutionId') || searchParams?.get('solution_id');
+    const scopedSolutionId = isUuid(urlSolutionId) ? urlSolutionId : null;
+
+    const [selectedRouteId, setSelectedRouteId] = useState<number | string | null>(null);
+    const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(null);
     const [routes, setRoutes] = useState<DispatchRoute[]>([]);
-    const [drivers, setDrivers] = useState<DispatchDriver[]>([]);
+    const [vehicles, setVehicles] = useState<DispatchVehicle[]>([]);
     const [instance, setInstance] = useState<Instance | null>(null);
     const [loading, setLoading] = useState(true);
     const [assignedCount, setAssignedCount] = useState(0);
+    const [organizationId, setOrganizationId] = useState<string | null>(null);
+
+    // Get current user session and profile
+    const { data: sessionData } = useGetSessionQuery();
+    const userId = sessionData?.session?.user?.id;
+    const { data: userProfile } = useGetUserProfileOverviewQuery(userId ?? "", { skip: !userId });
+    const currentOrgId = userProfile?.organization?.id;
+
+    useEffect(() => {
+        if (currentOrgId) {
+            setOrganizationId(currentOrgId);
+        }
+    }, [currentOrgId]);
 
     useEffect(() => {
         async function loadData() {
+            if (!organizationId) {
+                // Wait for organization ID
+                return;
+            }
+
             try {
-                // Load routes from localStorage
-                const lsRoutes = localStorage.getItem('allRoutes');
-                const lsInstance = localStorage.getItem('currentInstance');
+                setLoading(true);
 
-                if (lsRoutes && lsInstance) {
-                    const parsedRoutes: Route[] = JSON.parse(lsRoutes);
-                    const parsedInstance: Instance = JSON.parse(lsInstance);
+                // Fetch routes. If solutionId is present, scope to that solution; otherwise show unassigned routes.
+                const dbRoutes = scopedSolutionId
+                    ? (await supabase
+                        .from('routes')
+                        .select(`
+                            *,
+                            optimization_solutions (
+                                solution_data
+                            )
+                        `)
+                        .eq('organization_id', organizationId)
+                        .eq('solution_id', scopedSolutionId)
+                        .order('route_number', { ascending: true })
+                    ).data
+                    : await getUnassignedRoutes(organizationId);
 
-                    setInstance(parsedInstance);
+                const allDbRoutes: any[] = Array.isArray(dbRoutes) ? dbRoutes : [];
 
-                    const mappedRoutes: DispatchRoute[] = parsedRoutes.map((r, index) => {
-                        let totalLoad = 0;
-                        let stops = 0;
-                        let duration = 0;
+                // Extract instance and routes from persisted DB format.
+                // - optimization_solutions.solution_data commonly has mapping_ids (not full instance/routes)
+                // - routes.route_data commonly has route_sequence
+                let parsedInstance: Instance | null = null;
+                const routeMap = new Map<string, { route: Route; dbRouteId: string; isAssigned: boolean }>();
 
-                        if (r.sequence && parsedInstance.nodes) {
-                            let currentLoad = 0;
-                            let maxLoad = 0;
+                for (let i = 0; i < allDbRoutes.length; i++) {
+                    const dbRoute: any = allDbRoutes[i];
+                    const solutionData = dbRoute?.optimization_solutions?.solution_data;
 
-                            for (let i = 0; i < r.sequence.length; i++) {
-                                const nodeId = r.sequence[i];
-                                const node = parsedInstance.nodes.find(n => n.id === nodeId);
-                                if (node) {
-                                    currentLoad += node.demand || 0;
-                                    maxLoad = Math.max(maxLoad, currentLoad);
-                                    duration += node.duration || 0;
-                                    if (!node.is_depot) stops++;
-                                }
+                    // Determine if route is assigned based on vehicle_id and status
+                    const hasVehicle = !!dbRoute?.vehicle_id;
+                    const isAssignedStatus = dbRoute?.status === 'assigned' || dbRoute?.status === 'in_progress';
+                    const isAssigned = hasVehicle && isAssignedStatus;
 
-                                if (i < r.sequence.length - 1 && parsedInstance.times) {
-                                    const nextNodeId = r.sequence[i + 1];
-                                    if (parsedInstance.times[nodeId] && parsedInstance.times[nodeId][nextNodeId] !== undefined) {
-                                        duration += parsedInstance.times[nodeId][nextNodeId];
-                                    }
-                                }
-                            }
-                            totalLoad = maxLoad;
+                    if (!parsedInstance && solutionData) {
+                        if (Array.isArray(solutionData?.mapping_ids)) {
+                            parsedInstance = buildMinimalInstanceFromSolutionData(solutionData);
+                        } else if (solutionData?.instance) {
+                            // Back-compat if older solutions stored full instance.
+                            parsedInstance = solutionData.instance as Instance;
                         }
+                    }
 
-                        return {
-                            id: r.id,
-                            name: `Route #${r.id}`,
-                            stops: stops,
-                            distance: r.cost || 0,
-                            duration: parseFloat(duration.toFixed(2)),
-                            totalLoad: totalLoad,
-                            originalRoute: r,
-                            isAssigned: false
-                        };
-                    });
+                    // Primary: build route from routes.route_data.route_sequence
+                    const hasRouteSequence = Array.isArray(dbRoute?.route_data?.route_sequence);
+                    if (hasRouteSequence) {
+                        const built = buildRouteFromDbRow(dbRoute, i, parsedInstance);
+                        routeMap.set(String(dbRoute.id), { route: built, dbRouteId: String(dbRoute.id), isAssigned });
+                        continue;
+                    }
 
-                    setRoutes(mappedRoutes);
-                    if (mappedRoutes.length > 0) {
-                        setSelectedRouteId(mappedRoutes[0].id);
+                    // Fallback: if some older records stored route in solution_data
+                    if (solutionData?.route) {
+                        routeMap.set(String(dbRoute.id), { route: solutionData.route as Route, dbRouteId: String(dbRoute.id), isAssigned });
                     }
                 }
 
-                // Fetch drivers and vehicles from Supabase
-                const [driversData, vehiclesData] = await Promise.all([
-                    getDrivers(),
-                    getVehicles()
-                ]);
+                // Fallback to localStorage if no database routes found
+                if (!parsedInstance || routeMap.size === 0) {
+                    const lsRoutes = localStorage.getItem('allRoutes');
+                    const lsInstance = localStorage.getItem('currentInstance');
 
-                // Map drivers with their vehicles
-                const mappedDrivers: DispatchDriver[] = driversData.map(driver => {
-                    // Find a vehicle for this driver (simple assignment for now)
-                    const vehicle = vehiclesData.find(v => v.is_active);
+                    if (lsRoutes && lsInstance) {
+                        const parsedRoutes = JSON.parse(lsRoutes);
+                        parsedInstance = JSON.parse(lsInstance);
+                        parsedRoutes.forEach((r: Route) => {
+                            routeMap.set(String(r.id), { route: r, dbRouteId: String(r.id), isAssigned: false });
+                        });
+                    }
+                }
+
+                if (parsedInstance) {
+                    setInstance(parsedInstance);
+                }
+
+                // Map routes to DispatchRoute format
+                const mappedRoutes: DispatchRoute[] = Array.from(routeMap.values()).map(({ route: r, dbRouteId, isAssigned }) => {
+                    let totalLoad = 0;
+                    let stops = 0;
+                    let duration = 0;
+
+                    if (r.sequence && parsedInstance?.nodes) {
+                        let currentLoad = 0;
+                        let maxLoad = 0;
+
+                        for (let i = 0; i < r.sequence.length; i++) {
+                            const nodeId = r.sequence[i];
+                            const node = parsedInstance.nodes.find(n => n.id === nodeId);
+                            if (node) {
+                                currentLoad += node.demand || 0;
+                                maxLoad = Math.max(maxLoad, currentLoad);
+                                duration += node.duration || 0;
+                                if (!node.is_depot) stops++;
+                            }
+
+                            if (i < r.sequence.length - 1 && parsedInstance.times) {
+                                const nextNodeId = r.sequence[i + 1];
+                                if (parsedInstance.times[nodeId] && parsedInstance.times[nodeId][nextNodeId] !== undefined) {
+                                    duration += parsedInstance.times[nodeId][nextNodeId];
+                                }
+                            }
+                        }
+                        totalLoad = maxLoad;
+                    }
+
                     return {
-                        id: driver.id,
-                        name: driver.full_name,
-                        status: driver.is_active ? 'available' : 'offline',
-                        vehicleType: vehicle ? (vehicleTypeLabels[vehicle.vehicle_type] || vehicle.vehicle_type) : 'Chưa có xe',
-                        vehicleId: vehicle?.id || null,
-                        capacity: vehicle?.capacity_weight || 1000,
-                        currentLat: vehicle?.current_latitude || 0,
-                        currentLng: vehicle?.current_longitude || 0,
-                        distanceToDepot: 'N/A'
+                        // Use DB route id as the stable unique identifier for UI keys and selection.
+                        id: dbRouteId,
+                        name: `Route #${(r as any).route_number ?? r.id}`,
+                        stops: stops,
+                        distance: r.cost || 0,
+                        duration: parseFloat(duration.toFixed(2)),
+                        totalLoad: totalLoad,
+                        originalRoute: r,
+                        isAssigned: isAssigned,
+                        dbRouteId: dbRouteId
                     };
                 });
 
-                setDrivers(mappedDrivers);
+                setRoutes(mappedRoutes);
+                if (mappedRoutes.length > 0) {
+                    setSelectedRouteId(mappedRoutes[0].id);
+                }
+
+                // Fetch vehicles and active route assignments
+                const [vehiclesData, activeAssignments, driversData] = await Promise.all([
+                    getVehicles(organizationId),
+                    getActiveRouteAssignments(organizationId),
+                    getDrivers(organizationId) // Still fetch drivers to show driver name if assigned
+                ]);
+
+                // Create a map of vehicle_id -> driver_id from active assignments (for display)
+                const vehicleDriverMap = new Map<string, string>();
+                activeAssignments.forEach(assignment => {
+                    if (assignment.vehicle_id && assignment.driver_id) {
+                        vehicleDriverMap.set(assignment.vehicle_id, assignment.driver_id);
+                    }
+                });
+
+                // Create a set of vehicles that are already assigned to routes
+                const usedVehicleIds = new Set(activeAssignments
+                    .map(a => a.vehicle_id)
+                    .filter((id): id is string => id !== null));
+
+                // Map vehicles for dispatch
+                const mappedVehicles: DispatchVehicle[] = vehiclesData
+                    .filter(v => v.is_active) // Only show active vehicles
+                    .map(vehicle => {
+                        const assignedDriverId = vehicleDriverMap.get(vehicle.id);
+                        const assignedDriver = assignedDriverId
+                            ? driversData.find(d => d.id === assignedDriverId)
+                            : null;
+
+                        const isBusy = usedVehicleIds.has(vehicle.id);
+
+                        return {
+                            id: vehicle.id,
+                            licensePlate: vehicle.license_plate,
+                            vehicleType: vehicleTypeLabels[vehicle.vehicle_type] || vehicle.vehicle_type,
+                            capacity: vehicle.capacity_weight,
+                            status: isBusy ? 'busy' : 'available',
+                            currentLat: vehicle.current_latitude || 0,
+                            currentLng: vehicle.current_longitude || 0,
+                            distanceToDepot: 'N/A',
+                            driverId: assignedDriverId || null,
+                            driverName: assignedDriver?.full_name || null
+                        };
+                    });
+
+                setVehicles(mappedVehicles);
             } catch (e) {
                 console.error("Failed to load data:", e);
                 toast.error('Không thể tải dữ liệu');
@@ -144,43 +324,59 @@ export default function DispatchClient() {
             }
         }
         loadData();
-    }, []);
+    }, [organizationId, scopedSolutionId]);
 
-    // Handle route assignment
-    const handleAssignRoute = async (driverId: string) => {
-        const driver = drivers.find(d => d.id === driverId);
+    // Handle route assignment to vehicle
+    const handleAssignRoute = async (vehicleId: string) => {
+        const vehicle = vehicles.find(v => v.id === vehicleId);
         const route = routes.find(r => r.id === selectedRouteId);
 
-        if (!driver || !route || !driver.vehicleId) {
-            toast.error('Vui lòng chọn tài xế có xe');
+        if (!vehicle || !route) {
+            toast.error('Vui lòng chọn xe và tuyến đường');
+            return;
+        }
+
+        if (!organizationId) {
+            toast.error('Không tìm thấy thông tin tổ chức');
             return;
         }
 
         try {
-            await assignRouteToDriver({
-                organizationId: '00000000-0000-0000-0000-000000000000', // TODO: Get from auth context
-                driverId: driver.id,
-                vehicleId: driver.vehicleId,
-                solutionData: {
-                    route: route.originalRoute,
-                    instance: instance
-                },
-                totalDistanceKm: route.distance / 1000,
-                totalDurationHours: route.duration / 60
-            });
+            const dbRouteId = route.dbRouteId;
+            const canUpdateExisting = isUuid(dbRouteId);
+            if (canUpdateExisting) {
+                await assignExistingRouteToVehicle({
+                    organizationId,
+                    routeId: dbRouteId as string,
+                    vehicleId: vehicle.id,
+                    driverId: vehicle.driverId || null,
+                });
+            } else {
+                await assignRouteToVehicle({
+                    organizationId: organizationId,
+                    vehicleId: vehicle.id,
+                    driverId: vehicle.driverId || null, // Optional driver
+                    solutionData: {
+                        route: route.originalRoute,
+                        instance: instance
+                    },
+                    totalDistanceKm: route.distance / 1000,
+                    totalDurationHours: route.duration / 60
+                });
+            }
 
-            // Update UI
+            // Update UI - mark route as assigned (instead of removing)
             setRoutes(prev => prev.map(r =>
                 r.id === route.id ? { ...r, isAssigned: true } : r
             ));
-            setDrivers(prev => prev.map(d =>
-                d.id === driverId ? { ...d, status: 'busy' } : d
+            setVehicles(prev => prev.map(v =>
+                v.id === vehicleId ? { ...v, status: 'busy' } : v
             ));
             setAssignedCount(prev => prev + 1);
             setSelectedRouteId(null);
-            setSelectedDriverId(null);
+            setSelectedVehicleId(null);
 
-            toast.success(`Đã gán ${route.name} cho ${driver.name}`);
+            toast.success(`Đã gán ${route.name} cho ${vehicle.licensePlate}`);
         } catch (error) {
             console.error('Assignment failed:', error);
             toast.error('Không thể gán tuyến đường');
@@ -188,7 +384,7 @@ export default function DispatchClient() {
     };
 
     const selectedRoute = routes.find(r => r.id === selectedRouteId) || null;
-    const selectedDriver = drivers.find(d => d.id === selectedDriverId) || null;
+    const selectedVehicle = vehicles.find(v => v.id === selectedVehicleId) || null;
 
     if (loading) {
         return <div className="flex items-center justify-center h-screen">Loading data...</div>;
@@ -218,7 +414,7 @@ export default function DispatchClient() {
                         <div>
                             <div className="text-xs text-gray-500 font-medium uppercase tracking-wide">Xe sẵn sàng</div>
                             <div className="text-xl font-bold text-gray-800">
-                                {drivers.filter(d => d.status === 'available').length} <span className="text-sm font-normal text-gray-400">/ {drivers.length}</span>
+                                {vehicles.filter(v => v.status === 'available').length} <span className="text-sm font-normal text-gray-400">/ {vehicles.length}</span>
                             </div>
                         </div>
                     </div>
@@ -258,9 +454,9 @@ export default function DispatchClient() {
                 {/* Center Map */}
                 <div className="flex-1 relative bg-gray-200">
                     <DispatchMap
-                        drivers={drivers}
-                        selectedDriverId={selectedDriverId}
-                        onSelectDriver={setSelectedDriverId}
+                        vehicles={vehicles}
+                        selectedVehicleId={selectedVehicleId}
+                        onSelectVehicle={setSelectedVehicleId}
                         selectedRoute={selectedRoute}
                         instance={instance}
                     />
@@ -268,9 +464,9 @@ export default function DispatchClient() {
 
                 {/* Right Sidebar */}
                 <DispatchSidebarRight
-                    drivers={drivers}
-                    selectedDriverId={selectedDriverId}
-                    onSelectDriver={setSelectedDriverId}
+                    vehicles={vehicles}
+                    selectedVehicleId={selectedVehicleId}
+                    onSelectVehicle={setSelectedVehicleId}
                     selectedRoute={selectedRoute}
                     onAssignRoute={handleAssignRoute}
                 />

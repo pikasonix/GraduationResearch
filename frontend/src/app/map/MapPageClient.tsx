@@ -2,13 +2,13 @@
 
 import { Suspense, useState, useCallback, useEffect } from 'react';
 import config from '@/config/config';
-import type { Instance, Solution, Route, Node } from '@/utils/dataModels';
+import type { Route, Node } from '@/utils/dataModels';
 import dynamic from 'next/dynamic';
 import { useFileReader } from '@/hooks/useFileReader';
 import sampleInstance from '@/data/sampleInstance.js';
 import { useMapControls } from '@/hooks/useMapControls';
-import { PanelLeftOpen, PanelRightOpen } from "lucide-react";
 import { solverService, type Job } from '@/services/solverService';
+import { supabase } from '@/supabase/client';
 
 // Dynamically import components to avoid SSR issues with Mapbox
 const MapComponent = dynamic(() => import('@/components/map/MapboxComponent'), { ssr: false });
@@ -16,17 +16,22 @@ const Sidebar = dynamic(() => import('@/components/map/Sidebar'), { ssr: false }
 const AddInstancePage = dynamic(() => import('@/components/add-instance/AddInstanceBuilder'), { ssr: false });
 
 type ViewKey = 'map' | 'guide' | 'addInstance' | 'trafficMonitoring';
-type RouteType = Route | any;
+type RouteType = Route | Record<string, unknown>;
+
+function getErrorMessage(error: unknown): string {
+    if (error instanceof Error) return error.message;
+    if (typeof error === 'string') return error;
+    if (typeof error === 'object' && error !== null && 'message' in error) {
+        const msg = (error as { message?: unknown }).message;
+        if (typeof msg === 'string') return msg;
+    }
+    return String(error);
+}
 
 function MapPageClient() {
-    const { instance, solution, readInstanceFile, readSolutionFile, setInstance, setSolution } = useFileReader();
+    const { instance, solution, readInstanceFile, readSolutionFile } = useFileReader();
     const {
         useRealRouting,
-        setUseRealRouting,
-        routingCacheRef,
-        generateCacheKey,
-        loadCacheFromStorage,
-        saveCacheToStorage,
         getCacheStats,
         showCacheInfo,
         clearRoutingCache,
@@ -52,7 +57,7 @@ function MapPageClient() {
         } catch (e) {
             console.error('Error loading sample instance:', e);
         }
-    }, [setInstance]);
+    }, [readInstanceFile]);
 
     const defaultParams = config.defaultParams;
     console.log('🔧 Default params from config:', defaultParams);
@@ -70,7 +75,10 @@ function MapPageClient() {
                 setInstanceText(text);
                 const blob = new Blob([text], { type: 'text/plain' });
                 const file = new File([blob], 'builder_instance.txt', { type: 'text/plain' });
-                readInstanceFile(file).catch((e) => console.error('Failed to parse builder instance:', e));
+                readInstanceFile(file).catch((e) => {
+                    console.error('Failed to parse builder instance:', e);
+                    alert(`Không thể parse instance từ /orders.\n\nChi tiết: ${getErrorMessage(e)}`);
+                });
             }
         } catch (e) {
             console.warn('Không thể đọc builderInstanceText từ localStorage', e);
@@ -96,13 +104,13 @@ function MapPageClient() {
             reader.readAsText(file);
 
             console.log('Instance loaded:', parsedInstance?.name);
-        } catch (error) {
+        } catch (error: unknown) {
             console.error('Error reading instance file:', error);
-            alert('Error reading instance file: ' + (error as any)?.message || error);
+            alert('Error reading instance file: ' + getErrorMessage(error));
         }
     }, [readInstanceFile, setInstanceText]);
 
-    const handleParamChange = useCallback((name: string, value: any) => {
+    const handleParamChange = useCallback((name: string, value: unknown) => {
         setParams(prev => ({ ...prev, [name]: value }));
     }, []);
 
@@ -163,6 +171,15 @@ function MapPageClient() {
             console.log('Submitting job with params:', params);
             
             // Use the new solver service with job queue
+            const metadataRaw = typeof window !== 'undefined' ? localStorage.getItem('routePlanningMetadata') : null;
+            const metadata = metadataRaw ? JSON.parse(metadataRaw) : null;
+            const inputDataRaw = typeof window !== 'undefined' ? localStorage.getItem('builderInputData') : null;
+            const inputData = inputDataRaw ? JSON.parse(inputDataRaw) : null;
+
+            const user = await supabase.auth.getUser().catch(() => ({ data: { user: null } } as any));
+            const createdBy = user?.data?.user?.id ?? undefined;
+            const organizationId = metadata?.organizationId ?? undefined;
+
             const result = await solverService.solveInstance(
                 instanceText,
                 params,
@@ -184,11 +201,21 @@ function MapPageClient() {
                     setJobStatus(statusText);
                     console.log(`Job ${job.jobId}: ${job.status} (${job.progress}%)`);
                 }
-            );
+            , {
+                createdBy,
+                organizationId,
+                inputData,
+            });
+
+            try {
+                if (result.solutionId) {
+                    localStorage.setItem('lastSolutionId', result.solutionId);
+                }
+            } catch { }
 
             console.log('Solution received, loading into visualizer...');
             setJobStatus('Đang tải kết quả...');
-            await loadSolutionFromText(result);
+            await loadSolutionFromText(result.solutionText);
             setJobStatus('Hoàn thành!');
             
         } catch (error: any) {

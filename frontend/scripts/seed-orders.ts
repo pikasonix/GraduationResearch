@@ -152,7 +152,8 @@ async function seedOrders() {
 
     const orders = [];
     const statuses = ['pending', 'assigned', 'in_transit', 'picked_up', 'delivered', 'cancelled'];
-    const priorities = ['low', 'normal', 'high', 'urgent'];
+    // priority_level enum was migrated to only allow 'normal' | 'urgent'
+    const priorities = ['normal', 'urgent'];
 
     console.log('📦 Generating 50 sample orders...');
 

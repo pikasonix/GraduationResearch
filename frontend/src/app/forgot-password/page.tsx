@@ -48,7 +48,7 @@ export default function ForgotPasswordPage() {
         <div className="text-center mb-8">
           <Link href="/" className="inline-flex items-center text-shadow-lg gap-3 mb-6">
             <Image
-              src={process.env.NEXT_PUBLIC_LOGO_WAYO || "/favicon.png"}
+              src={process.env.NEXT_PUBLIC_LOGO_WAYO || "/favicon.svg"}
               alt="WAYO Logo"
               width={32}
               height={32}

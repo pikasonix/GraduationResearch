@@ -1,24 +1,25 @@
 import React, { useState } from 'react';
-import { DispatchDriver, DispatchRoute } from '@/app/dispatch/DispatchClient';
+import { DispatchVehicle, DispatchRoute } from '@/app/dispatch/DispatchClient';
 import { Search, Filter, Truck, UserCircle2, MapPin, AlertTriangle, CheckCircle2, Loader2 } from 'lucide-react';
 
 interface DispatchSidebarRightProps {
-    drivers: DispatchDriver[];
-    selectedDriverId: string | null;
-    onSelectDriver: (id: string) => void;
+    vehicles: DispatchVehicle[];
+    selectedVehicleId: string | null;
+    onSelectVehicle: (id: string) => void;
     selectedRoute: DispatchRoute | null;
-    onAssignRoute?: (driverId: string) => Promise<void>;
+    onAssignRoute?: (vehicleId: string) => Promise<void>;
 }
 
-export default function DispatchSidebarRight({ drivers, selectedDriverId, onSelectDriver, selectedRoute, onAssignRoute }: DispatchSidebarRightProps) {
+export default function DispatchSidebarRight({ vehicles, selectedVehicleId, onSelectVehicle, selectedRoute, onAssignRoute }: DispatchSidebarRightProps) {
     const [filterStatus, setFilterStatus] = useState<'all' | 'available' | 'busy'>('all');
     const [searchTerm, setSearchTerm] = useState('');
     const [isAssigning, setIsAssigning] = useState(false);
 
-    const filteredDrivers = drivers.filter(driver => {
-        const matchesStatus = filterStatus === 'all' || driver.status === filterStatus;
-        const matchesSearch = driver.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            driver.vehicleType.toLowerCase().includes(searchTerm.toLowerCase());
+    const filteredVehicles = vehicles.filter(vehicle => {
+        const matchesStatus = filterStatus === 'all' || vehicle.status === filterStatus;
+        const matchesSearch = vehicle.licensePlate.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            vehicle.vehicleType.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            (vehicle.driverName && vehicle.driverName.toLowerCase().includes(searchTerm.toLowerCase()));
         return matchesStatus && matchesSearch;
     });
 
@@ -47,7 +48,7 @@ export default function DispatchSidebarRight({ drivers, selectedDriverId, onSele
                 <div className="flex items-center justify-between">
                     <h2 className="font-semibold text-gray-700 text-sm flex items-center gap-2">
                         <Truck size={16} className="text-blue-600" />
-                        <span>Đội xe ({drivers.length})</span>
+                        <span>Đội xe ({vehicles.length})</span>
                     </h2>
                     <div className="flex gap-1">
                         <button
@@ -75,7 +76,7 @@ export default function DispatchSidebarRight({ drivers, selectedDriverId, onSele
                     <Search size={14} className="absolute left-2.5 top-2 text-gray-400" />
                     <input
                         type="text"
-                        placeholder="Tìm tài xế hoặc xe..."
+                        placeholder="Tìm biển số hoặc loại xe..."
                         className="w-full pl-8 pr-3 py-1.5 text-xs border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white"
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
@@ -83,14 +84,14 @@ export default function DispatchSidebarRight({ drivers, selectedDriverId, onSele
                 </div>
             </div>
 
-            {/* Driver List */}
+            {/* Vehicle List */}
             <div className="flex-1 overflow-y-auto p-2 space-y-2">
-                {filteredDrivers.map(driver => {
-                    const isSelected = selectedDriverId === driver.id;
+                {filteredVehicles.map(vehicle => {
+                    const isSelected = selectedVehicleId === vehicle.id;
                     return (
                         <div
-                            key={driver.id}
-                            onClick={() => onSelectDriver(driver.id)}
+                            key={vehicle.id}
+                            onClick={() => onSelectVehicle(vehicle.id)}
                             className={`
                                 p-2 rounded-md border cursor-pointer transition-all duration-200
                                 ${isSelected
@@ -101,23 +102,25 @@ export default function DispatchSidebarRight({ drivers, selectedDriverId, onSele
                         >
                             <div className="flex items-center gap-3">
                                 <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center shrink-0">
-                                    <UserCircle2 size={18} className="text-gray-500" />
+                                    <Truck size={18} className="text-gray-500" />
                                 </div>
                                 <div className="flex-1 min-w-0">
                                     <div className="flex justify-between items-center mb-0.5">
                                         <h3 className={`font-semibold text-xs truncate ${isSelected ? 'text-blue-700' : 'text-gray-700'}`}>
-                                            {driver.name}
+                                            {vehicle.licensePlate}
                                         </h3>
-                                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full border ${getStatusColor(driver.status)}`}>
-                                            {getStatusText(driver.status)}
+                                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full border ${getStatusColor(vehicle.status)}`}>
+                                            {getStatusText(vehicle.status)}
                                         </span>
                                     </div>
                                     <div className="flex justify-between items-center text-[10px] text-gray-500">
-                                        <span className="truncate">{driver.vehicleType} • {driver.capacity}kg</span>
-                                        <span className="flex items-center gap-0.5">
-                                            <MapPin size={8} />
-                                            {driver.distanceToDepot}
-                                        </span>
+                                        <span className="truncate">{vehicle.vehicleType} • {vehicle.capacity}kg</span>
+                                        {vehicle.driverName && (
+                                            <span className="flex items-center gap-0.5">
+                                                <UserCircle2 size={8} />
+                                                {vehicle.driverName}
+                                            </span>
+                                        )}
                                     </div>
                                 </div>
                             </div>
@@ -135,11 +138,11 @@ export default function DispatchSidebarRight({ drivers, selectedDriverId, onSele
                             <span className="text-xs font-bold text-gray-800">{selectedRoute.name}</span>
                         </div>
 
-                        {selectedDriverId ? (
+                        {selectedVehicleId ? (
                             (() => {
-                                const driver = drivers.find(d => d.id === selectedDriverId);
-                                if (!driver) return null;
-                                const isOverloaded = selectedRoute.totalLoad > driver.capacity;
+                                const vehicle = vehicles.find(v => v.id === selectedVehicleId);
+                                if (!vehicle) return null;
+                                const isOverloaded = selectedRoute.totalLoad > vehicle.capacity;
 
                                 return (
                                     <div className="space-y-2">
@@ -147,13 +150,13 @@ export default function DispatchSidebarRight({ drivers, selectedDriverId, onSele
                                             <div className="flex justify-between text-xs mb-1">
                                                 <span className="text-gray-500">Tải trọng</span>
                                                 <span className={isOverloaded ? 'text-red-600 font-bold' : 'text-gray-700'}>
-                                                    {selectedRoute.totalLoad} / {driver.capacity} kg
+                                                    {selectedRoute.totalLoad} / {vehicle.capacity} kg
                                                 </span>
                                             </div>
                                             <div className="w-full bg-gray-200 rounded-full h-1.5">
                                                 <div
                                                     className={`h-1.5 rounded-full ${isOverloaded ? 'bg-red-500' : 'bg-green-500'}`}
-                                                    style={{ width: `${Math.min((selectedRoute.totalLoad / driver.capacity) * 100, 100)}%` }}
+                                                    style={{ width: `${Math.min((selectedRoute.totalLoad / vehicle.capacity) * 100, 100)}%` }}
                                                 ></div>
                                             </div>
                                         </div>
@@ -168,10 +171,10 @@ export default function DispatchSidebarRight({ drivers, selectedDriverId, onSele
                                                 className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white py-2 rounded-md text-xs font-semibold shadow-sm transition-colors flex items-center justify-center gap-2"
                                                 disabled={isAssigning || !onAssignRoute}
                                                 onClick={async () => {
-                                                    if (onAssignRoute && selectedDriverId) {
+                                                    if (onAssignRoute && selectedVehicleId) {
                                                         setIsAssigning(true);
                                                         try {
-                                                            await onAssignRoute(selectedDriverId);
+                                                            await onAssignRoute(selectedVehicleId);
                                                         } finally {
                                                             setIsAssigning(false);
                                                         }
@@ -196,7 +199,7 @@ export default function DispatchSidebarRight({ drivers, selectedDriverId, onSele
                             })()
                         ) : (
                             <div className="text-center py-4 text-gray-400 text-xs italic border-2 border-dashed border-gray-100 rounded-md">
-                                Chọn tài xế để điều phối
+                                Chọn xe để điều phối
                             </div>
                         )}
                     </div>

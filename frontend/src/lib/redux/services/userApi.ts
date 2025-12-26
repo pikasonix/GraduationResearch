@@ -3,6 +3,7 @@ import { PostgrestError } from "@supabase/supabase-js";
 import type { StorageError } from "@supabase/storage-js";
 import { supabase } from "@/supabase/client";
 import type { FetchBaseQueryError } from "@reduxjs/toolkit/query";
+import type { DispatchSettings } from "@/lib/dispatchSettings";
 
 // User role enum matching database
 export type UserRole = "super_admin" | "admin" | "manager" | "driver" | "user";
@@ -33,6 +34,11 @@ export interface DbOrganization {
   contact_phone: string | null;
   address: string | null;
   tax_code: string | null;
+  depot_name?: string | null;
+  depot_address?: string | null;
+  depot_latitude?: number | null;
+  depot_longitude?: number | null;
+  dispatch_settings?: DispatchSettings | null;
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -196,10 +202,18 @@ export const userApi = createApi({
           .from("organizations")
           .update(payload)
           .eq("id", id)
-          .select()
-          .single();
+          .select("*")
+          .maybeSingle();
 
         if (error) return { error: formatSupabaseError(error) };
+        if (!data) {
+          return {
+            error: {
+              status: 403,
+              data: "Không thể cập nhật organization (có thể do phân quyền RLS hoặc không tìm thấy bản ghi)",
+            },
+          };
+        }
         return { data: data as DbOrganization };
       },
       invalidatesTags: (result, error, { id }) =>

@@ -32,11 +32,9 @@ export default function FleetCharts({ statistics }: FleetChartsProps) {
                     'rgba(34, 197, 94, 0.8)', // Green for Active
                     'rgba(229, 231, 235, 0.8)', // Gray for Inactive
                 ],
-                borderColor: [
-                    'rgba(34, 197, 94, 1)',
-                    'rgba(229, 231, 235, 1)',
-                ],
-                borderWidth: 1,
+                borderColor: 'rgba(255, 255, 255, 1)',
+                borderWidth: 3,
+                borderRadius: 20,
             },
         ],
     };
@@ -52,11 +50,9 @@ export default function FleetCharts({ statistics }: FleetChartsProps) {
                     'rgba(59, 130, 246, 0.8)', // Blue for Active
                     'rgba(229, 231, 235, 0.8)', // Gray for Inactive
                 ],
-                borderColor: [
-                    'rgba(59, 130, 246, 1)',
-                    'rgba(229, 231, 235, 1)',
-                ],
-                borderWidth: 1,
+                borderColor: 'rgba(255, 255, 255, 1)',
+                borderWidth: 3,
+                borderRadius: 20,
             },
         ],
     };

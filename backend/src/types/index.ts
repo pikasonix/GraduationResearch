@@ -26,6 +26,9 @@ export interface Job {
     id: string;
     instance: string;
     params: SolverParams;
+    organizationId?: string;
+    createdBy?: string;
+    inputData?: unknown;
     status: JobStatus;
     createdAt: number;
     startedAt: number | null;
@@ -41,6 +44,8 @@ export interface SolutionResult {
     filename: string;
     stdout: string;
     workDir: string;
+    persisted?: boolean;
+    solutionId?: string;
 }
 
 export interface JobQueueStats {

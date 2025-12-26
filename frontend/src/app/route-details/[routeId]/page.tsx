@@ -11,7 +11,7 @@ export default function RouteDetailsDynamicPage() {
     const { data, error, loading } = useRouteDetailsData({ routeId: routeId as string });
 
     return (
-        <div className="h-screen flex flex-col">
+        <div className="h-[calc(100vh-4rem)] flex flex-col">
             {error && <div className="p-2 bg-red-50 text-red-600 text-sm">{error}</div>}
             {loading && <div className="p-2 bg-yellow-50 text-yellow-700 text-sm">Đang tải...</div>}
             <RouteDetailsView
@@ -21,6 +21,7 @@ export default function RouteDetailsDynamicPage() {
                 onToggleRealRouting={() => setUseRealRouting(v => !v)}
                 showBack
                 onBack={() => router.push('/route-details')}
+                allRoutes={data?.routes || undefined}
             />
         </div>
     );

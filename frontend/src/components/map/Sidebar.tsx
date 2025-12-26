@@ -40,6 +40,11 @@ interface SidebarProps {
     collapsed?: boolean;
     // notify parent when collapsed state changes
     onCollapseChange?: (collapsed: boolean) => void;
+
+    // Layout mode:
+    // - 'fixed' (default): positioned under the global navbar (top-16) and overlays page content
+    // - 'docked': participates in parent layout (no fixed positioning) to avoid overlaps
+    layout?: 'fixed' | 'docked';
 }
 
 // Function to generate result text for download
@@ -87,6 +92,7 @@ const Sidebar: React.FC<SidebarProps> = ({
     toggleSidebar,
     collapsed: collapsedProp,
     onCollapseChange,
+    layout = 'fixed',
 }) => {
     const [showParams, setShowParams] = useState(false);
     // support controlled/uncontrolled collapse state
@@ -104,6 +110,10 @@ const Sidebar: React.FC<SidebarProps> = ({
 
     // if parent explicitly hides sidebar, don't render
     if (typeof sidebarVisible === 'boolean' && !sidebarVisible) return null;
+
+    const isFixed = layout === 'fixed';
+    const containerPositionClasses = isFixed ? 'fixed top-16 left-0 bottom-0 z-40' : 'h-full';
+    const containerWidthClasses = isFixed ? (collapsed ? 'w-16' : 'w-80') : 'w-full';
 
     return (
         <>
@@ -130,7 +140,7 @@ const Sidebar: React.FC<SidebarProps> = ({
             />
 
             {collapsed ? (
-                <div className="fixed top-16 left-0 bottom-0 w-16 bg-white shadow-xl border-r border-gray-200 flex flex-col z-40 items-center py-4 space-y-3">
+                <div className={`${containerPositionClasses} ${containerWidthClasses} bg-white shadow-xl border-r border-gray-200 flex flex-col items-center py-4 space-y-3`}>
                     <button
                         onClick={() => setCollapsed(false)}
                         aria-label="Mở thanh bên"
@@ -178,7 +188,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                     </button>
                 </div>
             ) : (
-                <div className="fixed top-16 left-0 bottom-0 w-80 bg-white shadow-xl border-r border-gray-200 flex flex-col z-40">
+                <div className={`${containerPositionClasses} ${containerWidthClasses} bg-white shadow-xl border-r border-gray-200 flex flex-col`}>
                     <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-blue-600">
                         <h2 className="text-lg font-semibold text-white">Dashboard</h2>
                         <button

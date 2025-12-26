@@ -3,6 +3,20 @@ import { PostgrestError } from "@supabase/supabase-js";
 import { supabase } from "@/supabase/client";
 import type { FetchBaseQueryError } from "@reduxjs/toolkit/query";
 
+type LocationType = "warehouse" | "customer" | "pickup_point" | "delivery_point";
+
+type LocationInsert = {
+    organization_id: string;
+    location_type: LocationType;
+    name: string;
+    address: string;
+    latitude: number;
+    longitude: number;
+    contact_name?: string;
+    contact_phone?: string;
+    notes?: string;
+};
+
 // Types matching schema
 export type OrderStatus =
     | "pending"
@@ -70,6 +84,88 @@ export interface Order {
     cancellation_reason?: string;
 }
 
+function getOrderString(value: unknown): string | undefined {
+    if (typeof value === "string") return value;
+    return undefined;
+}
+
+function getOrderNumber(value: unknown): number | undefined {
+    if (typeof value === "number" && !Number.isNaN(value)) return value;
+    return undefined;
+}
+
+async function createLocationForOrderSide(order: Partial<Order>, side: "pickup" | "delivery"): Promise<string> {
+    const organizationId = getOrderString(order.organization_id);
+    if (!organizationId) throw new Error("Missing organization_id for location creation");
+
+    const isPickup = side === "pickup";
+    const address = getOrderString(isPickup ? order.pickup_address : order.delivery_address);
+    const latitude = getOrderNumber(isPickup ? order.pickup_latitude : order.delivery_latitude);
+    const longitude = getOrderNumber(isPickup ? order.pickup_longitude : order.delivery_longitude);
+
+    if (!address || latitude === undefined || longitude === undefined) {
+        throw new Error(`Missing ${side} address/latitude/longitude for location creation`);
+    }
+
+    const contactName = getOrderString(isPickup ? order.pickup_contact_name : order.delivery_contact_name);
+    const contactPhone = getOrderString(isPickup ? order.pickup_contact_phone : order.delivery_contact_phone);
+    const notes = getOrderString(isPickup ? order.pickup_notes : order.delivery_notes);
+
+    const payload: LocationInsert = {
+        organization_id: organizationId,
+        location_type: isPickup ? "pickup_point" : "delivery_point",
+        name: contactName?.trim() || (isPickup ? "Pickup" : "Delivery"),
+        address,
+        latitude,
+        longitude,
+        contact_name: contactName,
+        contact_phone: contactPhone,
+        notes,
+    };
+
+    const { data, error } = await supabase
+        .from("locations")
+        .insert(payload)
+        .select("id")
+        .single();
+
+    if (error) throw error;
+    return data.id as string;
+}
+
+async function updateLocationFromOrderSide(order: Partial<Order>, side: "pickup" | "delivery"): Promise<void> {
+    const isPickup = side === "pickup";
+    const locationId = getOrderString(isPickup ? order.pickup_location_id : order.delivery_location_id);
+    if (!locationId) return;
+
+    const address = getOrderString(isPickup ? order.pickup_address : order.delivery_address);
+    const latitude = getOrderNumber(isPickup ? order.pickup_latitude : order.delivery_latitude);
+    const longitude = getOrderNumber(isPickup ? order.pickup_longitude : order.delivery_longitude);
+    const contactName = getOrderString(isPickup ? order.pickup_contact_name : order.delivery_contact_name);
+    const contactPhone = getOrderString(isPickup ? order.pickup_contact_phone : order.delivery_contact_phone);
+    const notes = getOrderString(isPickup ? order.pickup_notes : order.delivery_notes);
+
+    const updates: Partial<LocationInsert> & { name?: string } = {};
+    if (address !== undefined) updates.address = address;
+    if (latitude !== undefined) updates.latitude = latitude;
+    if (longitude !== undefined) updates.longitude = longitude;
+    if (contactName !== undefined) {
+        updates.contact_name = contactName;
+        updates.name = contactName.trim() || (isPickup ? "Pickup" : "Delivery");
+    }
+    if (contactPhone !== undefined) updates.contact_phone = contactPhone;
+    if (notes !== undefined) updates.notes = notes;
+
+    if (Object.keys(updates).length === 0) return;
+
+    const { error } = await supabase
+        .from("locations")
+        .update(updates)
+        .eq("id", locationId);
+
+    if (error) throw error;
+}
+
 // Format Supabase errors for RTK Query
 function formatSupabaseError(error: PostgrestError): FetchBaseQueryError {
     return {
@@ -134,29 +230,55 @@ export const orderApi = createApi({
 
         createOrder: builder.mutation<Order, Partial<Order>>({
             queryFn: async (newOrder) => {
-                const { data, error } = await supabase
-                    .from("orders")
-                    .insert(newOrder)
-                    .select()
-                    .single();
+                try {
+                    const orderToInsert: Partial<Order> = { ...newOrder };
 
-                if (error) return { error: formatSupabaseError(error) };
-                return { data: data as Order };
+                    // Treat an order as a "shipment" record. Ensure we have normalized locations
+                    // because the DB schema requires pickup_location_id and delivery_location_id.
+                    if (!orderToInsert.pickup_location_id) {
+                        orderToInsert.pickup_location_id = await createLocationForOrderSide(orderToInsert, "pickup");
+                    }
+
+                    if (!orderToInsert.delivery_location_id) {
+                        orderToInsert.delivery_location_id = await createLocationForOrderSide(orderToInsert, "delivery");
+                    }
+
+                    const { data, error } = await supabase
+                        .from("orders")
+                        .insert(orderToInsert)
+                        .select()
+                        .single();
+
+                    if (error) return { error: formatSupabaseError(error) };
+                    return { data: data as Order };
+                } catch (e: any) {
+                    const message = e?.message || "Failed to create order";
+                    return { error: { status: "CUSTOM_ERROR", error: message, data: null } };
+                }
             },
             invalidatesTags: [{ type: "Order", id: "LIST" }],
         }),
 
         updateOrder: builder.mutation<Order, { id: string } & Partial<Order>>({
             queryFn: async ({ id, ...updates }) => {
-                const { data, error } = await supabase
-                    .from("orders")
-                    .update(updates)
-                    .eq("id", id)
-                    .select()
-                    .single();
+                try {
+                    // Keep locations in sync when users edit pickup/delivery details.
+                    await updateLocationFromOrderSide(updates, "pickup");
+                    await updateLocationFromOrderSide(updates, "delivery");
 
-                if (error) return { error: formatSupabaseError(error) };
-                return { data: data as Order };
+                    const { data, error } = await supabase
+                        .from("orders")
+                        .update(updates)
+                        .eq("id", id)
+                        .select()
+                        .single();
+
+                    if (error) return { error: formatSupabaseError(error) };
+                    return { data: data as Order };
+                } catch (e: any) {
+                    const message = e?.message || "Failed to update order";
+                    return { error: { status: "CUSTOM_ERROR", error: message, data: null } };
+                }
             },
             invalidatesTags: (result, error, { id }) => [
                 { type: "Order", id },

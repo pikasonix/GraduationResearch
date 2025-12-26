@@ -1,0 +1,175 @@
+import { createSupabaseAdminClient, isSupabaseEnabled } from '../supabaseAdmin';
+import { fetchRouteMetricsFromEnrichmentApi, type Waypoint } from '../enrichment/enrichmentClient';
+import { parseSolverSolutionText } from './parseSolverSolution';
+
+type MappingId = {
+    kind: 'depot' | 'pickup' | 'delivery';
+    order_id: string | null;
+    location_id: string | null;
+    lat: number;
+    lng: number;
+};
+
+type Edges = {
+    distance_meters: number[][];
+    duration_seconds: number[][];
+};
+
+function isFiniteNumber(n: unknown): n is number {
+    return typeof n === 'number' && Number.isFinite(n);
+}
+
+function toNumMatrix(value: any): number[][] | null {
+    if (!Array.isArray(value)) return null;
+    if (!value.every(Array.isArray)) return null;
+    return value.map((row: any[]) => row.map((v) => Number(v)));
+}
+
+function parseCostFromFilename(filename: string | undefined): number | null {
+    if (!filename) return null;
+    const base = filename.split('\\').pop() || filename;
+    const m = base.match(/_([0-9]+(?:\.[0-9]+)?)\.[a-z0-9]+$/i);
+    if (!m) return null;
+    const n = Number(m[1]);
+    return Number.isFinite(n) ? n : null;
+}
+
+function computeFromEdges(edges: Edges, nodePath: number[]): { distance_meters: number; duration_seconds: number } {
+    let dist = 0;
+    let dur = 0;
+
+    for (let i = 1; i < nodePath.length; i++) {
+        const a = nodePath[i - 1];
+        const b = nodePath[i];
+        dist += Number(edges.distance_meters?.[a]?.[b] ?? 0);
+        dur += Number(edges.duration_seconds?.[a]?.[b] ?? 0);
+    }
+
+    return { distance_meters: dist, duration_seconds: dur };
+}
+
+export async function persistSolutionSnapshot(opts: {
+    jobId: string;
+    organizationId: string;
+    solutionText: string;
+    solverFilename?: string;
+    inputData: any;
+}): Promise<{ solutionId: string } | null> {
+    if (!isSupabaseEnabled()) return null;
+
+    const mappingIds: MappingId[] | undefined = Array.isArray(opts.inputData?.mapping_ids)
+        ? (opts.inputData.mapping_ids as MappingId[])
+        : undefined;
+
+    if (!mappingIds || mappingIds.length === 0) {
+        // No mapping => cannot create route_stops (per requirement, skip persistence)
+        return null;
+    }
+
+    const depot = mappingIds[0];
+    if (!depot || depot.kind !== 'depot' || !isFiniteNumber(depot.lat) || !isFiniteNumber(depot.lng)) {
+        throw new Error('input_data.mapping_ids[0] must be depot with lat/lng');
+    }
+
+    const edgesDistance = toNumMatrix(opts.inputData?.edges?.distance_meters);
+    const edgesDuration = toNumMatrix(opts.inputData?.edges?.duration_seconds);
+    const edges: Edges | null = edgesDistance && edgesDuration ? { distance_meters: edgesDistance, duration_seconds: edgesDuration } : null;
+
+    const parsed = parseSolverSolutionText(opts.solutionText);
+    if (!parsed.routes.length) {
+        throw new Error('No routes parsed from solver solution text');
+    }
+
+    const routesPayload: any[] = [];
+
+    let totalDistanceMeters = 0;
+    let totalDurationSeconds = 0;
+
+    for (const r of parsed.routes) {
+        const nodePath = [0, ...r.sequence, 0];
+
+        const waypoints: Waypoint[] = nodePath.map((nodeIndex) => {
+            const m = mappingIds[nodeIndex];
+            if (!m) {
+                throw new Error(`Missing mapping_ids for node_index ${nodeIndex}`);
+            }
+            return { lat: Number(m.lat), lng: Number(m.lng) };
+        });
+
+        const metrics = edges
+            ? computeFromEdges(edges, nodePath)
+            : await fetchRouteMetricsFromEnrichmentApi(waypoints);
+
+        totalDistanceMeters += metrics.distance_meters;
+        totalDurationSeconds += metrics.duration_seconds;
+
+        const stops = r.sequence.map((nodeIndex, idx) => {
+            const m = mappingIds[nodeIndex];
+            if (!m || !m.order_id || !m.location_id) {
+                throw new Error(`mapping_ids[${nodeIndex}] missing order_id/location_id`);
+            }
+
+            return {
+                order_id: m.order_id,
+                location_id: m.location_id,
+                stop_sequence: idx + 1,
+                stop_type: m.kind,
+            };
+        });
+
+        routesPayload.push({
+            route_number: r.routeNumber,
+            planned_distance_km: Number((metrics.distance_meters / 1000).toFixed(2)),
+            planned_duration_hours: Number((metrics.duration_seconds / 3600).toFixed(2)),
+            planned_cost: 0,
+            route_data: {
+                route_sequence: r.sequence,
+                metrics_meters_seconds: metrics,
+                used_edges_matrix: !!edges,
+            },
+            stops,
+        });
+    }
+
+    const totalDistanceKm = Number((totalDistanceMeters / 1000).toFixed(2));
+    const totalTimeHours = Number((totalDurationSeconds / 3600).toFixed(2));
+    const totalCost = parseCostFromFilename(opts.solverFilename) ?? 0;
+
+    const solutionData = {
+        raw_solution_text: opts.solutionText,
+        mapping_ids: mappingIds,
+        routes: parsed.routes,
+        totals: {
+            distance_meters: totalDistanceMeters,
+            duration_seconds: totalDurationSeconds,
+            distance_km: totalDistanceKm,
+            time_hours: totalTimeHours,
+            solver_cost: totalCost,
+        },
+        edges_available: !!edges,
+    };
+
+    const payload = {
+        job_id: opts.jobId,
+        organization_id: opts.organizationId,
+        optimization_objective: 'minimize_cost',
+        total_vehicles_used: routesPayload.length,
+        total_distance_km: totalDistanceKm,
+        total_time_hours: totalTimeHours,
+        total_cost: totalCost,
+        solution_data: solutionData,
+        routes: routesPayload,
+    };
+
+    const supabase = createSupabaseAdminClient();
+    const { data, error } = await supabase.rpc('persist_solution_snapshot', { payload });
+    if (error) {
+        throw new Error(`persist_solution_snapshot RPC failed: ${error.message}`);
+    }
+
+    if (!data || typeof data !== 'string') {
+        throw new Error('persist_solution_snapshot did not return a solution id');
+    }
+
+    return { solutionId: data };
+}

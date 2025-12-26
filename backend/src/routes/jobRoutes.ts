@@ -1,10 +1,14 @@
 import { Router, Request, Response } from 'express';
 import { JobQueue } from '../queue/JobQueue';
 import { SolverParams } from '../types';
+import { createSupabaseAdminClient, isSupabaseEnabled } from '../supabaseAdmin';
 
 interface SubmitJobRequest {
     instance: string;
     params: SolverParams;
+    organizationId?: string;
+    createdBy?: string;
+    inputData?: unknown;
 }
 
 /**
@@ -12,14 +16,16 @@ interface SubmitJobRequest {
  */
 export function setupJobRoutes(jobQueue: JobQueue): Router {
     const router = Router();
+
+    const supabase = isSupabaseEnabled() ? createSupabaseAdminClient() : null;
     
     /**
      * POST /api/jobs/submit
      * Submit a new job to the queue
      */
-    router.post('/submit', (req: Request<{}, {}, SubmitJobRequest>, res: Response): void => {
+    router.post('/submit', async (req: Request<{}, {}, SubmitJobRequest>, res: Response): Promise<void> => {
         try {
-            const { instance, params } = req.body;
+            const { instance, params, organizationId, createdBy, inputData } = req.body;
 
             if (!instance || !params) {
                 res.status(400).json({
@@ -37,7 +43,27 @@ export function setupJobRoutes(jobQueue: JobQueue): Router {
                 return;
             }
 
-            const jobId = jobQueue.createJob(instance, params);
+            const jobId = jobQueue.createJob(instance, params, {
+                organizationId,
+                createdBy,
+                inputData,
+            });
+
+            if (supabase && organizationId && createdBy) {
+                const { error } = await supabase
+                    .from('optimization_jobs')
+                    .insert({
+                        id: jobId,
+                        organization_id: organizationId,
+                        created_by: createdBy,
+                        status: 'queued',
+                        input_data: inputData ?? null,
+                        config_params: params ?? null,
+                    });
+                if (error) {
+                    console.warn('[jobRoutes] Failed to persist optimization_jobs:', error.message);
+                }
+            }
 
             res.json({
                 success: true,

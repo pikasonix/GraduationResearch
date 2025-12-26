@@ -24,7 +24,7 @@ export const OrdersMap: React.FC<OrdersMapProps> = ({
             showOrderLines={true}
             height="100%"
             zoom={11}
-            className="min-h-[500px]"
+            className="h-full min-h-0"
         />
     );
 };
