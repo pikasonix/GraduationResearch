@@ -1,11 +1,12 @@
 "use client";
 import React, { useMemo, useState, useEffect, useRef, useCallback } from 'react';
-import { Map as MapIcon, BarChart3, Clock, Package, TrendingUp, AlertTriangle, CheckCircle, ChevronUp, ChevronDown, ArrowLeft } from 'lucide-react';
+import { Map as MapIcon, BarChart3, Clock, Package, TrendingUp, AlertTriangle, CheckCircle, ChevronUp, ChevronDown, ArrowLeft, Route as RouteIcon } from 'lucide-react';
+import { Button } from "@/components/ui/button";
 import RouteAnalysisDashboard from '@/components/map/RouteAnalysis';
 import type { Instance, Route, Solution } from '@/utils/dataModels';
 import dynamic from 'next/dynamic';
 const MapComponent = dynamic(() => import('@/components/map/MapboxComponent'), { ssr: false });
-const Sidebar = dynamic(() => import('@/components/map/Sidebar'), { ssr: false });
+const RouteDetailsSidebar = dynamic(() => import('@/components/route-details/RouteDetailsSidebar').then(mod => mod.RouteDetailsSidebar), { ssr: false });
 import { createSolution } from '@/utils/dataModels';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useFileReader } from '@/hooks/useFileReader';
@@ -516,17 +517,13 @@ export const RouteDetailsView: React.FC<RouteDetailsViewProps> = ({
             <div className="flex flex-1 overflow-hidden">
                 {/* Left Sidebar Wrapper - prevents overlap */}
                 <div className={`flex-shrink-0 transition-all duration-300 relative ${sidebarCollapsed ? 'w-16' : 'w-80'}`}>
-                    <Sidebar
-                        layout="docked"
+                    <RouteDetailsSidebar
                         instance={instance}
                         solution={solution}
                         onInstanceUpload={handleInstanceFileChange}
-                        onSolutionUpload={(file) => readSolutionFile(file, instance ?? undefined)}
+                        onSolutionUpload={(file: File) => readSolutionFile(file, instance ?? undefined)}
                         loadSampleInstance={loadSampleInstance}
-                        onToggleRealRouting={onToggleRealRouting}
-                        getCacheStats={getCacheStats}
-                        showCacheInfo={showCacheInfo}
-                        clearRoutingCache={clearRoutingCache}
+
                         instanceText={instanceText}
                         setInstanceText={setInstanceText}
                         params={params}
@@ -543,7 +540,21 @@ export const RouteDetailsView: React.FC<RouteDetailsViewProps> = ({
                 </div>
 
                 {/* Center: Map */}
-                <div className="flex-1 bg-gray-50 min-w-0 flex flex-col">
+                <div className="flex-1 bg-gray-50 min-w-0 flex flex-col relative">
+                    <div className="absolute top-4 right-4 z-10 flex flex-col gap-2">
+                        <Button
+                            variant="secondary"
+                            onClick={onToggleRealRouting}
+                            className={`shadow-md transition-all duration-200 gap-2 h-10 px-4 ${useRealRouting
+                                ? "bg-blue-600 hover:bg-blue-700 text-white shadow-blue-200 ring-2 ring-blue-100"
+                                : "bg-white hover:bg-gray-100 text-gray-700"
+                                }`}
+                            title={useRealRouting ? "Tắt chế độ đường đi thực tế" : "Bật chế độ đường đi thực tế"}
+                        >
+                            <RouteIcon className={`w-4 h-4 ${useRealRouting ? "text-white" : "text-gray-500"}`} />
+                            <span className="text-sm font-medium">Đường đi thực tế</span>
+                        </Button>
+                    </div>
                     <div className="flex-1 min-h-0">
                         <MapComponent
                             instance={filteredInstance || instance}

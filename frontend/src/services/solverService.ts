@@ -29,6 +29,28 @@ export interface SolverParams {
     format?: 'lilim' | 'sartori';
 }
 
+export interface VehicleState {
+    vehicle_id: string;
+    lat: number;
+    lng: number;
+    bearing?: number;
+    last_stop_location_id?: string;
+    last_stop_time?: string;
+    picked_order_ids: string[];
+}
+
+export interface ReoptimizationContext {
+    previous_solution_id?: string;
+    vehicle_states: VehicleState[];
+    order_delta: {
+        new_order_ids: string[];
+        cancelled_order_ids: string[];
+    };
+    organization_id: string;
+    require_depot_return?: boolean;
+    end_of_shift?: string;
+}
+
 export interface Job {
     jobId: string;
     status: JobStatus;
@@ -45,6 +67,17 @@ export interface Job {
 export interface SubmitJobResponse {
     jobId: string;
     status: JobStatus;
+}
+
+export interface ReoptimizeJobResponse {
+    jobId: string;
+    status: JobStatus;
+    preprocessing_stats?: {
+        total_nodes: number;
+        dummy_nodes: number;
+        ghost_pickups: number;
+        active_vehicles: number;
+    };
 }
 
 export interface JobProgressCallback {
@@ -184,6 +217,60 @@ class SolverService {
         
         if (!job.result) {
             throw new Error('Job completed but no result returned');
+        }
+
+        return { solutionText: job.result, solutionId: job.solutionId, persisted: job.persisted };
+    }
+
+    /**
+     * Submit a reoptimization job with vehicle states and order deltas
+     */
+    async submitReoptimizationJob(
+        reoptimizationContext: ReoptimizationContext,
+        params: SolverParams = {},
+        createdBy?: string
+    ): Promise<string> {
+        const response = await fetch(`${this.baseURL}/jobs/reoptimize`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                reoptimizationContext,
+                params,
+                createdBy,
+            }),
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.error || `Failed to submit reoptimization job: ${response.status}`);
+        }
+
+        const data: ReoptimizeJobResponse = await response.json();
+        
+        if (data.preprocessing_stats) {
+            console.log('[Reoptimization] Preprocessing stats:', data.preprocessing_stats);
+        }
+        
+        return data.jobId;
+    }
+
+    /**
+     * Submit and wait for reoptimization job completion (convenience method)
+     */
+    async reoptimizeRoutes(
+        reoptimizationContext: ReoptimizationContext,
+        params: SolverParams = {},
+        onProgress?: JobProgressCallback,
+        createdBy?: string
+    ): Promise<{ solutionText: string; solutionId?: string; persisted?: boolean }> {
+        console.log('[Reoptimization] Submitting reoptimization job...');
+        const jobId = await this.submitReoptimizationJob(reoptimizationContext, params, createdBy);
+        console.log('[Reoptimization] Job submitted with ID:', jobId);
+
+        const job = await this.pollJob(jobId, onProgress);
+        
+        if (!job.result) {
+            throw new Error('Reoptimization job completed but no result returned');
         }
 
         return { solutionText: job.result, solutionId: job.solutionId, persisted: job.persisted };

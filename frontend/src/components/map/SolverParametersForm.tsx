@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Settings, Clock, Info, ChevronDown, ChevronRight } from 'lucide-react';
 import { Tooltip } from './Tooltip';
 
-interface SolverParams {
+export interface SolverParams {
     // LNS parameters
     iterations?: number;
     max_non_improving?: number;
@@ -12,14 +12,14 @@ interface SolverParams {
     min_destroy_count?: number;
     max_destroy_count?: number;
     acceptance?: 'sa' | 'rtr' | 'greedy';
-    
+
     // General configuration
     seed?: number;
     max_vehicles?: number;
     log_level?: 'trace' | 'debug' | 'info' | 'warn' | 'error';
     authors?: string;
     reference?: string;
-    
+
     // Instance format
     format?: 'lilim' | 'sartori';
 }
@@ -43,7 +43,7 @@ export const SolverParametersForm: React.FC<SolverParametersFormProps> = ({ para
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { name, value, type } = e.target;
-        
+
         if (type === 'number') {
             onChange(name, value === '' ? undefined : Number(value));
         } else {
@@ -60,7 +60,7 @@ export const SolverParametersForm: React.FC<SolverParametersFormProps> = ({ para
             {/* Basic Parameters Section */}
             <div className="space-y-2">
                 <h4 className="text-xs font-semibold uppercase tracking-wide text-gray-600 border-b pb-1">Tham số</h4>
-                
+
                 {/* Time Limit */}
                 <div className="rounded-md border border-gray-200 bg-gray-50 px-2 py-2">
                     <div className="flex items-center justify-between mb-2">
@@ -73,11 +73,10 @@ export const SolverParametersForm: React.FC<SolverParametersFormProps> = ({ para
                                     key={opt.value}
                                     type="button"
                                     onClick={() => setTimeLimit(opt.value)}
-                                    className={`flex h-7 w-10 items-center justify-center gap-1 rounded-md text-xs font-medium transition-colors ${
-                                        params.time_limit === opt.value
+                                    className={`flex h-7 w-10 items-center justify-center gap-1 rounded-md text-xs font-medium transition-colors ${params.time_limit === opt.value
                                             ? 'bg-blue-600 text-white'
                                             : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                                    }`}
+                                        }`}
                                 >
                                     {opt.label}
                                 </button>

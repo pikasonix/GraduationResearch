@@ -21,7 +21,7 @@ export interface DispatchSettings {
 }
 
 export const DEFAULT_DISPATCH_SETTINGS: DispatchSettings = {
-  allowed_statuses: ["WAITING", "IN_TRANSIT"],
+  allowed_statuses: ["WAITING", "IN_TRANSIT", "DISPATCHED"],
   dynamic: {
     lock_completed: true,
     allow_reorder: true,

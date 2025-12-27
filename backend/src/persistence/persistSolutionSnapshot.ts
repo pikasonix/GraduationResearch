@@ -1,13 +1,17 @@
 import { createSupabaseAdminClient, isSupabaseEnabled } from '../supabaseAdmin';
 import { fetchRouteMetricsFromEnrichmentApi, type Waypoint } from '../enrichment/enrichmentClient';
 import { parseSolverSolutionText } from './parseSolverSolution';
+import type { CleanedRoute } from '../workers/dummyNodeCleaner';
 
 type MappingId = {
-    kind: 'depot' | 'pickup' | 'delivery';
+    kind: 'depot' | 'pickup' | 'delivery' | 'dummy_start' | 'ghost_pickup';
     order_id: string | null;
     location_id: string | null;
     lat: number;
     lng: number;
+    is_dummy?: boolean;
+    vehicle_id?: string;
+    original_order_ids?: string[];
 };
 
 type Edges = {
@@ -54,6 +58,7 @@ export async function persistSolutionSnapshot(opts: {
     solutionText: string;
     solverFilename?: string;
     inputData: any;
+    cleanedRoutes?: CleanedRoute[]; // For reoptimization with cleaned dummy nodes
 }): Promise<{ solutionId: string } | null> {
     if (!isSupabaseEnabled()) return null;
 
@@ -75,9 +80,25 @@ export async function persistSolutionSnapshot(opts: {
     const edgesDuration = toNumMatrix(opts.inputData?.edges?.duration_seconds);
     const edges: Edges | null = edgesDistance && edgesDuration ? { distance_meters: edgesDistance, duration_seconds: edgesDuration } : null;
 
-    const parsed = parseSolverSolutionText(opts.solutionText);
-    if (!parsed.routes.length) {
-        throw new Error('No routes parsed from solver solution text');
+    // Use cleaned routes if provided (from reoptimization), otherwise parse from text
+    const routesToProcess = opts.cleanedRoutes 
+        ? opts.cleanedRoutes.map(cr => ({
+              routeNumber: cr.route_number,
+              sequence: cr.node_sequence,
+              vehicle_id: cr.vehicle_id,
+              start_time: cr.start_time,
+              initial_load: cr.initial_load,
+          }))
+        : parseSolverSolutionText(opts.solutionText).routes.map(r => ({
+              routeNumber: r.routeNumber,
+              sequence: r.sequence,
+              vehicle_id: undefined,
+              start_time: undefined,
+              initial_load: undefined,
+          }));
+
+    if (!routesToProcess.length) {
+        throw new Error('No routes to persist');
     }
 
     const routesPayload: any[] = [];
@@ -85,7 +106,7 @@ export async function persistSolutionSnapshot(opts: {
     let totalDistanceMeters = 0;
     let totalDurationSeconds = 0;
 
-    for (const r of parsed.routes) {
+    for (const r of routesToProcess) {
         const nodePath = [0, ...r.sequence, 0];
 
         const waypoints: Waypoint[] = nodePath.map((nodeIndex) => {
@@ -103,7 +124,7 @@ export async function persistSolutionSnapshot(opts: {
         totalDistanceMeters += metrics.distance_meters;
         totalDurationSeconds += metrics.duration_seconds;
 
-        const stops = r.sequence.map((nodeIndex, idx) => {
+        const stops = r.sequence.map((nodeIndex: number, idx: number) => {
             const m = mappingIds[nodeIndex];
             if (!m || !m.order_id || !m.location_id) {
                 throw new Error(`mapping_ids[${nodeIndex}] missing order_id/location_id`);
@@ -113,12 +134,13 @@ export async function persistSolutionSnapshot(opts: {
                 order_id: m.order_id,
                 location_id: m.location_id,
                 stop_sequence: idx + 1,
-                stop_type: m.kind,
+                stop_type: m.kind === 'pickup' ? 'pickup' : 'delivery',
             };
         });
 
         routesPayload.push({
             route_number: r.routeNumber,
+            vehicle_id: r.vehicle_id || null, // Include vehicle_id if available from cleaned route
             planned_distance_km: Number((metrics.distance_meters / 1000).toFixed(2)),
             planned_duration_hours: Number((metrics.duration_seconds / 3600).toFixed(2)),
             planned_cost: 0,
@@ -126,6 +148,8 @@ export async function persistSolutionSnapshot(opts: {
                 route_sequence: r.sequence,
                 metrics_meters_seconds: metrics,
                 used_edges_matrix: !!edges,
+                start_time: r.start_time, // From dummy node extraction
+                initial_load: r.initial_load, // From ghost pickup extraction
             },
             stops,
         });
@@ -138,7 +162,7 @@ export async function persistSolutionSnapshot(opts: {
     const solutionData = {
         raw_solution_text: opts.solutionText,
         mapping_ids: mappingIds,
-        routes: parsed.routes,
+        routes: routesToProcess.map(r => ({ routeNumber: r.routeNumber, sequence: r.sequence })),
         totals: {
             distance_meters: totalDistanceMeters,
             duration_seconds: totalDurationSeconds,
@@ -147,6 +171,7 @@ export async function persistSolutionSnapshot(opts: {
             solver_cost: totalCost,
         },
         edges_available: !!edges,
+        is_reoptimization: !!opts.cleanedRoutes, // Flag to indicate this was a reoptimization
     };
 
     const payload = {

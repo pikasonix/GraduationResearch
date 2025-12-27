@@ -23,6 +23,7 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { SolverParametersForm } from "@/components/map/SolverParametersForm";
 import {
   ArrowLeft,
   Settings,
@@ -203,6 +204,35 @@ export function DispatchWorkspaceClient() {
   const [dynamicOverride, setDynamicOverride] = useState<DynamicOverride | null>(() =>
     readDynamicOverrideFromSessionStorage()
   );
+
+  // Solver parameters state
+  const [solverParams, setSolverParams] = useState({
+    iterations: 100000,
+    max_non_improving: 20000,
+    time_limit: 300,
+    acceptance: 'rtr' as 'sa' | 'rtr' | 'greedy',
+    min_destroy: 0.1,
+    max_destroy: 0.4,
+    seed: 42,
+  });
+  const [showSettingsPanel, setShowSettingsPanel] = useState(false);
+  const [showParams, setShowParams] = useState(false);
+
+  const handleParamChange = useCallback((name: string, value: any) => {
+    setSolverParams(prev => ({ ...prev, [name]: value }));
+  }, []);
+
+  const resetParameters = useCallback(() => {
+    setSolverParams({
+      iterations: 100000,
+      max_non_improving: 20000,
+      time_limit: 300,
+      acceptance: 'rtr',
+      min_destroy: 0.1,
+      max_destroy: 0.4,
+      seed: 42,
+    });
+  }, []);
 
   const effectiveDynamic = useMemo(() => {
     return {
@@ -778,7 +808,7 @@ export function DispatchWorkspaceClient() {
 
         const result = await solverService.solveInstance(
           instanceText,
-          {},
+          solverParams,
           undefined,
           {
             organizationId,
@@ -891,6 +921,7 @@ export function DispatchWorkspaceClient() {
       updateOrder,
       loadRouteEventsFromDb,
       setLastSolveAtMs,
+      solverParams,
     ]
   );
 
@@ -1295,9 +1326,14 @@ export function DispatchWorkspaceClient() {
               <ArrowLeft className="w-4 h-4 mr-1" />
               Orders
             </Button>
-            <Button variant="outline" size="sm" onClick={() => router.push("/orders")}>
+            <Button
+              variant={showSettingsPanel ? "default" : "outline"}
+              size="sm"
+              onClick={() => setShowSettingsPanel(!showSettingsPanel)}
+              className={showSettingsPanel ? "bg-blue-600 hover:bg-blue-700" : ""}
+            >
               <Settings className="w-4 h-4 mr-1" />
-              Settings
+              Solver
             </Button>
             <Button
               variant="outline"
@@ -1398,8 +1434,118 @@ export function DispatchWorkspaceClient() {
         </div>
       </div>
 
+      {/* ===== SETTINGS PANEL OVERLAY ===== */}
+      {showSettingsPanel && (
+        <>
+          {/* Backdrop */}
+          <div
+            className="fixed inset-0 bg-black/20 z-40"
+            onClick={() => setShowSettingsPanel(false)}
+          />
+          {/* Panel */}
+          <div className="fixed right-0 top-0 h-full w-72 bg-white shadow-xl z-50 flex flex-col">
+            {/* Header */}
+            <div className="flex items-center justify-between px-4 py-3 border-b bg-slate-50">
+              <h2 className="font-semibold text-gray-900">Cài đặt Solver</h2>
+              <button
+                onClick={() => setShowSettingsPanel(false)}
+                className="text-gray-500 hover:text-gray-700 text-sm"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              {/* Preset Templates */}
+              <div>
+                <div className="text-xs font-medium text-gray-500 mb-2">Chọn mẫu</div>
+                <div className="space-y-2">
+                  <button
+                    onClick={() => {
+                      handleParamChange('iterations', 10000);
+                      handleParamChange('max_non_improving', 2000);
+                      handleParamChange('time_limit', 120);
+                      handleParamChange('acceptance', 'greedy');
+                    }}
+                    className={`w-full text-left px-3 py-2 rounded-lg border transition-all ${solverParams.iterations === 10000 && solverParams.time_limit === 120
+                      ? 'border-blue-500 bg-blue-50'
+                      : 'border-gray-200 hover:border-gray-300'
+                      }`}
+                  >
+                    <div className="font-medium text-gray-900">Nhanh</div>
+                    <div className="text-xs text-gray-500">2 phút • Greedy</div>
+                  </button>
+                  <button
+                    onClick={() => {
+                      handleParamChange('iterations', 50000);
+                      handleParamChange('max_non_improving', 10000);
+                      handleParamChange('time_limit', 300);
+                      handleParamChange('acceptance', 'rtr');
+                    }}
+                    className={`w-full text-left px-3 py-2 rounded-lg border transition-all ${solverParams.iterations === 50000 && solverParams.time_limit === 300
+                      ? 'border-green-500 bg-green-50'
+                      : 'border-gray-200 hover:border-gray-300'
+                      }`}
+                  >
+                    <div className="font-medium text-gray-900">Cân bằng</div>
+                    <div className="text-xs text-gray-500">5 phút • RTR</div>
+                  </button>
+                  <button
+                    onClick={() => {
+                      handleParamChange('iterations', 100000);
+                      handleParamChange('max_non_improving', 20000);
+                      handleParamChange('time_limit', 600);
+                      handleParamChange('acceptance', 'rtr');
+                    }}
+                    className={`w-full text-left px-3 py-2 rounded-lg border transition-all ${solverParams.iterations === 100000 && solverParams.time_limit === 600
+                      ? 'border-purple-500 bg-purple-50'
+                      : 'border-gray-200 hover:border-gray-300'
+                      }`}
+                  >
+                    <div className="font-medium text-gray-900">Chất lượng cao</div>
+                    <div className="text-xs text-gray-500">10 phút • RTR</div>
+                  </button>
+                </div>
+              </div>
+
+              {/* Divider */}
+              <hr className="border-gray-200" />
+
+              {/* Advanced Settings Toggle */}
+              <div>
+                <button
+                  type="button"
+                  className="w-full flex items-center justify-between text-sm text-gray-600 hover:text-gray-900"
+                  onClick={() => setShowParams((p) => !p)}
+                >
+                  <span>Tùy chỉnh nâng cao</span>
+                  <span className={`transition-transform ${showParams ? 'rotate-180' : ''}`}>▼</span>
+                </button>
+
+                {showParams && (
+                  <div className="mt-3 space-y-3">
+                    <SolverParametersForm
+                      params={solverParams}
+                      onChange={handleParamChange}
+                    />
+                    <button
+                      type="button"
+                      onClick={resetParameters}
+                      className="w-full py-2 text-sm text-orange-600 hover:text-orange-700 font-medium"
+                    >
+                      Khôi phục mặc định
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
       {/* ===== MAIN CONTENT - SPLIT VIEW ===== */}
       <div className="flex-1 flex overflow-hidden">
+
         {/* LEFT PANEL - ORDERS */}
         <div className="w-1/2 border-r border-gray-200 bg-white flex flex-col overflow-hidden">
           {mode === "static" ? (

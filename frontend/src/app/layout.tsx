@@ -26,24 +26,19 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+const getLogoUrl = () => {
+  const logo = process.env.NEXT_PUBLIC_LOGO_WAYO;
+  if (!logo) return "/favicon.svg";
+  if (logo.startsWith("http") || logo.startsWith("/")) return logo;
+  return `/${logo}`;
+};
+
 export const metadata: Metadata = {
   title: "WAYO",
   description: "WAYO",
   icons: {
-    icon:
-      (process.env.NEXT_PUBLIC_LOGO_WAYO
-        ? process.env.NEXT_PUBLIC_LOGO_WAYO.startsWith("http") ||
-          process.env.NEXT_PUBLIC_LOGO_WAYO.startsWith("/")
-          ? process.env.NEXT_PUBLIC_LOGO_WAYO
-          : `/${process.env.NEXT_PUBLIC_LOGO_WAYO}`
-        : "/favicon.svg"),
-    apple:
-      (process.env.NEXT_PUBLIC_LOGO_WAYO
-        ? process.env.NEXT_PUBLIC_LOGO_WAYO.startsWith("http") ||
-          process.env.NEXT_PUBLIC_LOGO_WAYO.startsWith("/")
-          ? process.env.NEXT_PUBLIC_LOGO_WAYO
-          : `/${process.env.NEXT_PUBLIC_LOGO_WAYO}`
-        : "/favicon.svg"),
+    icon: getLogoUrl(),
+    apple: getLogoUrl(),
   },
 };
 
@@ -79,7 +74,7 @@ export default function RootLayout({
                     {/* Logo */}
                     <Link href="/" className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
                       <Image
-                        src={process.env.NEXT_PUBLIC_LOGO_WAYO || "/favicon.svg"}
+                        src={getLogoUrl()}
                         alt="WAYO Logo"
                         width={28}
                         height={28}

@@ -141,3 +141,106 @@ export async function fetchRouteMetricsFromEnrichmentApi(waypoints: Waypoint[]):
     }
     return fetchRouteMetricsFromCustomEnrichmentApi(waypoints);
 }
+
+/**
+ * Snap GPS coordinates to nearest valid road node
+ * @param lat Latitude
+ * @param lng Longitude
+ * @param bearing Optional bearing direction (0-360 degrees) for better snapping
+ * @returns Snapped location with metadata
+ */
+export async function snapToRoad(
+    lat: number,
+    lng: number,
+    bearing?: number
+): Promise<{ lat: number; lng: number; snapped: boolean; distance_from_original: number }> {
+    // Check if enrichment API is configured
+    if (!process.env.ENRICHMENT_API_BASE_URL || !process.env.ENRICHMENT_API_KEY) {
+        console.warn('Enrichment API not configured, using original coordinates');
+        return { lat, lng, snapped: false, distance_from_original: 0 };
+    }
+
+    const provider = getProvider();
+    const baseUrl = requireEnv('ENRICHMENT_API_BASE_URL').replace(/\/$/, '');
+    const apiKey = requireEnv('ENRICHMENT_API_KEY');
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), getTimeoutMs());
+
+    try {
+        if (provider === 'mapbox') {
+            // Mapbox Map Matching API for snapping to road
+            const coordString = `${lng},${lat}`;
+            const bearingParam = bearing !== undefined ? `&radiuses=50&bearings=${bearing},45` : '&radiuses=50';
+            const url = `${baseUrl}/matching/v5/mapbox/driving/${coordString}?access_token=${encodeURIComponent(apiKey)}${bearingParam}`;
+
+            const resp = await fetch(url, { signal: controller.signal });
+            if (!resp.ok) {
+                // Fallback to original coordinates if snapping fails
+                console.warn(`Mapbox snap-to-road failed: ${resp.status}, using original coordinates`);
+                return { lat, lng, snapped: false, distance_from_original: 0 };
+            }
+
+            const data: any = await resp.json();
+            const match = data?.matchings?.[0];
+            if (match?.geometry?.coordinates?.length > 0) {
+                const [snappedLng, snappedLat] = match.geometry.coordinates[0];
+                const distance = haversineDistance(lat, lng, snappedLat, snappedLng);
+                return { lat: snappedLat, lng: snappedLng, snapped: true, distance_from_original: distance };
+            }
+
+            return { lat, lng, snapped: false, distance_from_original: 0 };
+        } else {
+            // Custom enrichment API - check if it has snap-to-road endpoint
+            const resp = await fetch(`${baseUrl}/snap-to-road`, {
+                method: 'POST',
+                headers: {
+                    'content-type': 'application/json',
+                    'authorization': `Bearer ${apiKey}`,
+                    'x-api-key': apiKey,
+                },
+                body: JSON.stringify({ lat, lng, bearing }),
+                signal: controller.signal,
+            });
+
+            if (!resp.ok) {
+                // Fallback to original coordinates if API doesn't support or fails
+                console.warn(`Custom snap-to-road failed or not supported: ${resp.status}, using original coordinates`);
+                return { lat, lng, snapped: false, distance_from_original: 0 };
+            }
+
+            const data: any = await resp.json();
+            const snappedLat = Number(data?.lat ?? data?.latitude);
+            const snappedLng = Number(data?.lng ?? data?.longitude);
+
+            if (!Number.isFinite(snappedLat) || !Number.isFinite(snappedLng)) {
+                return { lat, lng, snapped: false, distance_from_original: 0 };
+            }
+
+            const distance = haversineDistance(lat, lng, snappedLat, snappedLng);
+            return { lat: snappedLat, lng: snappedLng, snapped: true, distance_from_original: distance };
+        }
+    } catch (error) {
+        console.warn('Snap-to-road error:', error, 'using original coordinates');
+        return { lat, lng, snapped: false, distance_from_original: 0 };
+    } finally {
+        clearTimeout(timeout);
+    }
+}
+
+/**
+ * Calculate distance between two coordinates using Haversine formula
+ */
+function haversineDistance(lat1: number, lng1: number, lat2: number, lng2: number): number {
+    const R = 6371000; // Earth radius in meters
+    const φ1 = (lat1 * Math.PI) / 180;
+    const φ2 = (lat2 * Math.PI) / 180;
+    const Δφ = ((lat2 - lat1) * Math.PI) / 180;
+    const Δλ = ((lng2 - lng1) * Math.PI) / 180;
+
+    const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+              Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+    return R * c; // Distance in meters
+}
