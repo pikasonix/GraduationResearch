@@ -161,27 +161,37 @@ export function setupJobRoutes(jobQueue: JobQueue): Router {
                 return;
             }
 
-            if (job.status === 'processing') {
-                res.status(400).json({
-                    success: false,
-                    error: 'Cannot cancel job that is currently processing'
-                });
+            // If job is pending or processing, treat DELETE as a cancel request.
+            if (job.status === 'pending' || job.status === 'processing') {
+                const cancelled = jobQueue.cancelJob(jobId);
+                if (cancelled) {
+                    res.json({
+                        success: true,
+                        message: 'Job cancelled successfully'
+                    });
+                } else {
+                    res.status(400).json({
+                        success: false,
+                        error: 'Failed to cancel job'
+                    });
+                }
                 return;
             }
 
+            // Otherwise, allow deletion of finished jobs.
             const deleted = jobQueue.deleteJob(jobId);
-
             if (deleted) {
                 res.json({
                     success: true,
                     message: 'Job deleted successfully'
                 });
-            } else {
-                res.status(400).json({
-                    success: false,
-                    error: 'Failed to delete job'
-                });
+                return;
             }
+
+            res.status(400).json({
+                success: false,
+                error: 'Failed to delete job'
+            });
 
         } catch (error) {
             console.error('Error deleting job:', error);

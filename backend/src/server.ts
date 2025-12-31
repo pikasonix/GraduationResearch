@@ -17,24 +17,34 @@ const MAX_FILE_SIZE = process.env.MAX_FILE_SIZE || '5mb';
 
 /**
  * Resolve pdptw_solver executable path
+ * Priority: 1. Rust solver, 2. C++ solver, 3. Custom path
  */
 function resolvePDPTWSolverExecutable(): string {
-    const binPath = path.join(__dirname, '..', 'bin', 'pdptw_solver.exe');
-    if (fs.existsSync(binPath)) {
-        return binPath;
+    // First priority: Rust solver
+    const rustPath = path.join(__dirname, '..', 'bin', 'pdptw_solver_rust.exe');
+    if (fs.existsSync(rustPath)) {
+        return rustPath;
     }
 
+    // Second priority: C++ solver
+    const cppPath = path.join(__dirname, '..', 'bin', 'pdptw_solver.exe');
+    if (fs.existsSync(cppPath)) {
+        return cppPath;
+    }
+
+    // Third priority: Old C++ solver location
     const oldPath = path.join(__dirname, '..', '..', 'pdptw_solver', 'build', 'apps', 'Release', 'pdptw_solver.exe');
     if (fs.existsSync(oldPath)) {
         return oldPath;
     }
     
+    // Fourth priority: Custom path from environment variable
     const customPath = process.env.PDPTW_SOLVER_PATH;
     if (customPath && fs.existsSync(customPath)) {
         return customPath;
     }
     
-    throw new Error(`Không tìm thấy pdptw_solver.exe. Đã thử: ${[binPath, oldPath, customPath].filter(Boolean).join(', ')}`);
+    throw new Error(`Không tìm thấy pdptw_solver. Đã thử: ${[rustPath, cppPath, oldPath, customPath].filter(Boolean).join(', ')}`);
 }
 
 // Initialize solver path
@@ -98,6 +108,18 @@ jobQueue.on('processJob', (job, callbacks) => {
             })();
         },
     });
+});
+
+// If a job is cancelled while processing, terminate the solver process.
+jobQueue.on('jobCancelled', (job) => {
+    try {
+        const cancelled = solverWorker.cancel(job.id);
+        if (cancelled) {
+            console.log(`[Server] Cancelled solver process for job ${job.id}`);
+        }
+    } catch (e) {
+        console.warn(`[Server] Failed to cancel solver process for job ${job.id}:`, e instanceof Error ? e.message : String(e));
+    }
 });
 
 jobQueue.on('jobCompleted', (job) => {

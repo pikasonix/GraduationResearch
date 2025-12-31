@@ -12,6 +12,7 @@ export class JobQueue extends EventEmitter {
     private queue: string[];
     private processing: boolean;
     private currentJobId: string | null;
+    private activeTimeouts: Map<string, NodeJS.Timeout>;
     
     // Configuration
     public readonly maxQueueSize: number;
@@ -27,6 +28,7 @@ export class JobQueue extends EventEmitter {
         this.queue = [];
         this.processing = false;
         this.currentJobId = null;
+        this.activeTimeouts = new Map();
         
         this.maxQueueSize = options.maxQueueSize || 100;
         this.jobTimeout = options.jobTimeout || 3600000; // 1 hour default
@@ -144,15 +146,18 @@ export class JobQueue extends EventEmitter {
         const timeout = setTimeout(() => {
             this.failJob(jobId, 'Job timeout exceeded');
         }, this.jobTimeout);
+        this.activeTimeouts.set(jobId, timeout);
 
         try {
             this.emit('processJob', job, {
                 onComplete: (result) => {
                     clearTimeout(timeout);
+                    this.activeTimeouts.delete(jobId);
                     this.completeJob(jobId, result);
                 },
                 onFail: (error) => {
                     clearTimeout(timeout);
+                    this.activeTimeouts.delete(jobId);
                     this.failJob(jobId, error);
                 },
                 onProgress: (progress) => {
@@ -161,6 +166,7 @@ export class JobQueue extends EventEmitter {
             } as JobCallbacks);
         } catch (error) {
             clearTimeout(timeout);
+            this.activeTimeouts.delete(jobId);
             this.failJob(jobId, error instanceof Error ? error.message : String(error));
         }
     }
@@ -171,6 +177,10 @@ export class JobQueue extends EventEmitter {
     completeJob(jobId: string, result: any): void {
         const job = this.jobs.get(jobId);
         if (!job) return;
+
+        if (job.status === 'cancelled') {
+            return;
+        }
 
         job.status = 'completed';
         job.completedAt = Date.now();
@@ -194,6 +204,10 @@ export class JobQueue extends EventEmitter {
         const job = this.jobs.get(jobId);
         if (!job) return;
 
+        if (job.status === 'cancelled') {
+            return;
+        }
+
         job.status = 'failed';
         job.completedAt = Date.now();
         job.error = error;
@@ -214,6 +228,10 @@ export class JobQueue extends EventEmitter {
         const job = this.jobs.get(jobId);
         if (!job) return;
 
+        if (job.status === 'cancelled') {
+            return;
+        }
+
         job.progress = progress;
         this.emit('jobProgress', job);
     }
@@ -228,7 +246,29 @@ export class JobQueue extends EventEmitter {
         }
 
         if (job.status === 'processing') {
-            return false;
+            // Only the currently processing job can be cancelled.
+            if (this.currentJobId !== jobId) {
+                return false;
+            }
+
+            const timeout = this.activeTimeouts.get(jobId);
+            if (timeout) {
+                clearTimeout(timeout);
+                this.activeTimeouts.delete(jobId);
+            }
+
+            job.status = 'cancelled';
+            job.completedAt = Date.now();
+            job.error = 'Cancelled';
+
+            console.log(`[JobQueue] Job ${jobId} cancelled (was processing)`);
+            this.emit('jobCancelled', job);
+
+            // Allow next job to start; the worker should be terminated by the server.
+            this.processing = false;
+            this.currentJobId = null;
+            this.processNext();
+            return true;
         }
 
         if (job.status === 'pending') {
@@ -240,6 +280,7 @@ export class JobQueue extends EventEmitter {
 
         job.status = 'cancelled';
         job.completedAt = Date.now();
+        job.error = 'Cancelled';
 
         console.log(`[JobQueue] Job ${jobId} cancelled`);
         this.emit('jobCancelled', job);

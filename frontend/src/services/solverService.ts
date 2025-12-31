@@ -146,14 +146,14 @@ class SolverService {
      * @param jobId Job ID to poll
      * @param onProgress Callback for progress updates
      * @param pollInterval Polling interval in milliseconds (default: 1000)
-     * @param timeout Maximum polling time in milliseconds (default: 600000 = 10 minutes)
+     * @param timeout Maximum polling time in milliseconds (default: 3900000 = 65 minutes)
      * @returns Final job result
      */
     async pollJob(
         jobId: string,
         onProgress?: JobProgressCallback,
         pollInterval: number = 1000,
-        timeout: number = 600000
+        timeout: number = 65 * 60 * 1000
     ): Promise<Job> {
         const startTime = Date.now();
 

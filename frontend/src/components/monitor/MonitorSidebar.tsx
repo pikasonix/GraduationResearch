@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { DispatchDriver } from "@/app/dispatch/DispatchClient";
+import { DispatchDriver } from "@/app/monitor/page";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Filter, Truck, Search } from "lucide-react";

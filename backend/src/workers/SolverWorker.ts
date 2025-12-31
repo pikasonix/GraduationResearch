@@ -1,4 +1,4 @@
-import { execFile } from 'child_process';
+import { spawn, ChildProcess } from 'child_process';
 import * as path from 'path';
 import * as fs from 'fs';
 import { Job, SolverParams, SolverWorkerOptions, JobCallbacks } from '../types';
@@ -11,12 +11,14 @@ export class SolverWorker {
     private solverPath: string;
     private baseWorkDir: string;
     private maxBuffer: number;
+    private runningProcesses: Map<string, ChildProcess>;
 
     constructor(solverPath: string, options: SolverWorkerOptions = {}) {
         this.solverPath = solverPath;
         // Use backend/storage folder for temp files
         this.baseWorkDir = options.baseWorkDir || path.resolve(__dirname, '../../storage/temp');
         this.maxBuffer = options.maxBuffer || 10 * 1024 * 1024; // 10MB
+        this.runningProcesses = new Map();
 
         try {
             fs.mkdirSync(this.baseWorkDir, { recursive: true });
@@ -50,7 +52,7 @@ export class SolverWorker {
 
             onProgress(10);
 
-            const result = await this.executeSolver(args, workDir, (progress) => {
+            const result = await this.executeSolver(job.id, args, workDir, (progress) => {
                 onProgress(10 + progress * 0.8);
             });
 
@@ -79,6 +81,38 @@ export class SolverWorker {
             }
 
             onFail(error instanceof Error ? error.message : String(error));
+        }
+    }
+
+    /**
+     * Attempt to cancel a running solver process for a job.
+     */
+    cancel(jobId: string): boolean {
+        const child = this.runningProcesses.get(jobId);
+        if (!child) return false;
+
+        try {
+            // Try graceful termination first.
+            child.kill();
+            // If still alive shortly after, force kill.
+            setTimeout(() => {
+                const stillRunning = this.runningProcesses.get(jobId);
+                if (stillRunning && !stillRunning.killed) {
+                    try {
+                        stillRunning.kill('SIGKILL');
+                    } catch {
+                        // Ignore; Windows may not support SIGKILL.
+                        try {
+                            stillRunning.kill();
+                        } catch {
+                            // ignore
+                        }
+                    }
+                }
+            }, 1000);
+            return true;
+        } catch {
+            return false;
         }
     }
 
@@ -145,42 +179,69 @@ export class SolverWorker {
     /**
      * Execute solver
      */
-    private executeSolver(args: string[], workDir: string, onProgress: (progress: number) => void): Promise<{ stdout: string; stderr: string }> {
+    private executeSolver(jobId: string, args: string[], workDir: string, onProgress: (progress: number) => void): Promise<{ stdout: string; stderr: string }> {
         return new Promise((resolve, reject) => {
-            const child = execFile(
-                this.solverPath,
-                args,
-                {
-                    cwd: workDir,
-                    maxBuffer: this.maxBuffer
-                },
-                (error, stdout, stderr) => {
-                    if (error) {
-                        const code = (error as any)?.code;
-                        const signal = (error as any)?.signal;
-                        const details = [
-                            `Solver failed${code !== undefined ? ` (code: ${code})` : ''}${signal ? ` (signal: ${signal})` : ''}`,
-                            error.message,
-                            stdout ? `--- stdout ---\n${stdout}` : '',
-                            stderr ? `--- stderr ---\n${stderr}` : '',
-                        ].filter(Boolean).join('\n\n');
+            let stdout = '';
+            let stderr = '';
 
-                        reject(new Error(details));
-                        return;
-                    }
-                    resolve({ stdout, stderr });
-                }
-            );
+            const child = spawn(this.solverPath, args, {
+                cwd: workDir
+            });
+
+            this.runningProcesses.set(jobId, child);
 
             if (child.stdout) {
                 child.stdout.on('data', (data: Buffer) => {
-                    const match = data.toString().match(/Progress:\s*(\d+)%/);
+                    const output = data.toString();
+                    stdout += output;
+                    
+                    // Check buffer size limit
+                    if (stdout.length > this.maxBuffer) {
+                        child.kill();
+                        reject(new Error(`Output exceeded maximum buffer size (${this.maxBuffer} bytes)`));
+                        return;
+                    }
+                    
+                    const match = output.match(/Progress:\s*(\d+)%/);
                     if (match) {
                         const progress = parseInt(match[1], 10);
                         onProgress(progress / 100);
                     }
                 });
             }
+
+            if (child.stderr) {
+                child.stderr.on('data', (data: Buffer) => {
+                    stderr += data.toString();
+                    
+                    // Check buffer size limit
+                    if (stderr.length > this.maxBuffer) {
+                        child.kill();
+                        reject(new Error(`Error output exceeded maximum buffer size (${this.maxBuffer} bytes)`));
+                        return;
+                    }
+                });
+            }
+
+            child.on('error', (error) => {
+                reject(new Error(`Failed to start solver: ${error.message}`));
+            });
+
+            child.on('close', (code, signal) => {
+                this.runningProcesses.delete(jobId);
+                if (code !== 0) {
+                    const details = [
+                        `Solver failed${code !== null ? ` (code: ${code})` : ''}${signal ? ` (signal: ${signal})` : ''}`,
+                        `Command: ${this.solverPath} ${args.join(' ')}`,
+                        stdout ? `--- stdout ---\n${stdout}` : '',
+                        stderr ? `--- stderr ---\n${stderr}` : '',
+                    ].filter(Boolean).join('\n\n');
+
+                    reject(new Error(details));
+                    return;
+                }
+                resolve({ stdout, stderr });
+            });
         });
     }
 
