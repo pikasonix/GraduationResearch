@@ -265,7 +265,9 @@ export function setupJobRoutes(jobQueue: JobQueue): Router {
                 return;
             }
 
-            const { organization_id, vehicle_states, order_delta } = reoptimizationContext;
+            const { organization_id, vehicle_states, order_delta, previous_solution_id } = reoptimizationContext;
+            
+            console.log(`[reoptimize] Request context: organization=${organization_id}, previous_solution_id=${previous_solution_id || 'NONE'}, vehicles=${vehicle_states.length}, new_orders=${order_delta.new_order_ids.length}`);
 
             if (!organization_id || !vehicle_states || !order_delta) {
                 res.status(400).json({
@@ -306,20 +308,61 @@ export function setupJobRoutes(jobQueue: JobQueue): Router {
                 longitude: org.depot_longitude,
             };
 
-            // Fetch active orders (not completed or cancelled)
-            const { data: activeOrders, error: activeOrdersError } = await supabase
-                .from('orders')
-                .select('*, pickup_location:locations!pickup_location_id(latitude, longitude), delivery_location:locations!delivery_location_id(latitude, longitude)')
-                .eq('organization_id', organization_id)
-                .in('status', ['WAITING', 'IN_TRANSIT', 'assigned'])
-                .not('id', 'in', `(${order_delta.cancelled_order_ids.join(',') || 'null'})`);
+            // Fetch active orders only if reoptimizing from previous solution
+            // For fresh routing (no previous_solution_id), active orders should be empty
+            let activeOrders: any[] = [];
+            
+            if (previous_solution_id) {
+                console.log(`[reoptimize] Fetching orders from previous solution: ${previous_solution_id}`);
+                
+                // First, get order IDs from the previous solution's route_stops
+                const { data: solutionStops, error: stopsError } = await supabase
+                    .from('route_stops')
+                    .select('order_id, routes!inner(solution_id)')
+                    .eq('routes.solution_id', previous_solution_id)
+                    .not('order_id', 'is', null);
+                
+                if (stopsError) {
+                    console.warn(`[reoptimize] Failed to fetch solution stops: ${stopsError.message}, falling back to empty active orders`);
+                } else if (solutionStops && solutionStops.length > 0) {
+                    // Get unique order IDs from the solution
+                    const solutionOrderIds = [...new Set(solutionStops.map(s => s.order_id).filter(Boolean))];
+                    console.log(`[reoptimize] Found ${solutionOrderIds.length} orders in previous solution`);
+                    
+                    // Fetch those specific orders (excluding cancelled and new orders)
+                    let activeOrdersQuery = supabase
+                        .from('orders')
+                        .select('*, pickup_location:locations!pickup_location_id(latitude, longitude), delivery_location:locations!delivery_location_id(latitude, longitude)')
+                        .in('id', solutionOrderIds)
+                        .in('status', ['pending', 'assigned', 'in_transit', 'picked_up']);
+                    
+                    // Exclude cancelled orders if any
+                    if (order_delta.cancelled_order_ids.length > 0) {
+                        activeOrdersQuery = activeOrdersQuery.not('id', 'in', `(${order_delta.cancelled_order_ids.join(',')})`);
+                    }
+                    
+                    // Exclude new orders to prevent duplication
+                    if (order_delta.new_order_ids.length > 0) {
+                        activeOrdersQuery = activeOrdersQuery.not('id', 'in', `(${order_delta.new_order_ids.join(',')})`);
+                    }
 
-            if (activeOrdersError) {
-                res.status(500).json({
-                    success: false,
-                    error: `Failed to fetch active orders: ${activeOrdersError.message}`
-                });
-                return;
+                    const { data: fetchedActiveOrders, error: activeOrdersError } = await activeOrdersQuery;
+
+                    if (activeOrdersError) {
+                        res.status(500).json({
+                            success: false,
+                            error: `Failed to fetch active orders: ${activeOrdersError.message}`
+                        });
+                        return;
+                    }
+                    
+                    activeOrders = fetchedActiveOrders || [];
+                } else {
+                    console.log(`[reoptimize] No orders found in previous solution ${previous_solution_id}`);
+                }
+            } else {
+                // No previous solution - treating as fresh routing with only new orders
+                console.log('[reoptimize] No previous_solution_id provided, treating as fresh routing');
             }
 
             // Fetch new orders
@@ -337,12 +380,15 @@ export function setupJobRoutes(jobQueue: JobQueue): Router {
                 });
                 return;
             }
+            
+            console.log(`[reoptimize] Fetched ${activeOrders.length} active orders, ${newOrders?.length || 0} new orders`);
+            console.log(`[reoptimize] New order IDs:`, order_delta.new_order_ids.slice(0, 5), order_delta.new_order_ids.length > 5 ? '...' : '');
 
             // Fetch vehicles
             const vehicleIds = vehicle_states.map(vs => vs.vehicle_id);
             const { data: vehicles, error: vehiclesError } = await supabase
                 .from('vehicles')
-                .select('id, vehicle_code, capacity_weight, capacity_volume')
+                .select('id, license_plate, capacity_weight, capacity_volume')
                 .in('id', vehicleIds);
 
             if (vehiclesError) {
@@ -354,26 +400,40 @@ export function setupJobRoutes(jobQueue: JobQueue): Router {
             }
 
             // Transform orders to expected format
+            // Use coordinates directly from orders table (pickup_latitude, delivery_latitude, etc.)
+            // instead of from locations table, as order-specific coords may differ from location defaults
             const transformOrder = (o: any) => ({
                 id: o.id,
                 pickup_location_id: o.pickup_location_id,
                 delivery_location_id: o.delivery_location_id,
-                pickup_lat: o.pickup_location?.latitude || 0,
-                pickup_lng: o.pickup_location?.longitude || 0,
-                delivery_lat: o.delivery_location?.latitude || 0,
-                delivery_lng: o.delivery_location?.longitude || 0,
+                pickup_lat: o.pickup_latitude || o.pickup_location?.latitude || 0,
+                pickup_lng: o.pickup_longitude || o.pickup_location?.longitude || 0,
+                delivery_lat: o.delivery_latitude || o.delivery_location?.latitude || 0,
+                delivery_lng: o.delivery_longitude || o.delivery_location?.longitude || 0,
                 demand_weight: o.weight || o.demand_weight || 1,
                 demand_volume: o.volume || o.demand_volume,
-                pickup_time_window_start: o.pickup_time_window_start,
-                pickup_time_window_end: o.pickup_time_window_end,
-                delivery_time_window_start: o.delivery_time_window_start,
-                delivery_time_window_end: o.delivery_time_window_end,
+                pickup_time_window_start: o.pickup_time_start || o.pickup_time_window_start,
+                pickup_time_window_end: o.pickup_time_end || o.pickup_time_window_end,
+                delivery_time_window_start: o.delivery_time_start || o.delivery_time_window_start,
+                delivery_time_window_end: o.delivery_time_end || o.delivery_time_window_end,
                 service_time_pickup: o.service_time_pickup || 5,
                 service_time_delivery: o.service_time_delivery || 5,
             });
 
             const allActiveOrders = (activeOrders || []).map(transformOrder);
             const allNewOrders = (newOrders || []).map(transformOrder);
+
+            // Validation: Check for unexpected order counts
+            const totalOrders = allActiveOrders.length + allNewOrders.length;
+            const expectedNewOrders = order_delta.new_order_ids.length;
+            
+            if (allNewOrders.length !== expectedNewOrders) {
+                console.warn(`[reoptimize] WARNING: Requested ${expectedNewOrders} new orders, but fetched ${allNewOrders.length}`);
+            }
+            
+            // Calculate expected node count for validation
+            const expectedNodes = 1 + (vehicle_states.length * 2) + (totalOrders * 2); // depot + dummies + order nodes
+            console.log(`[reoptimize] Expected ~${expectedNodes} nodes for ${totalOrders} orders and ${vehicle_states.length} vehicles`);
 
             // Run preprocessing
             console.log(`[reoptimize] Preprocessing for org ${organization_id}: ${vehicle_states.length} vehicles, ${allActiveOrders.length} active orders, ${allNewOrders.length} new orders`);

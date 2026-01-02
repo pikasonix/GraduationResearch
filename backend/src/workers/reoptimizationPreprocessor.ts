@@ -49,7 +49,7 @@ interface Depot {
 
 interface Vehicle {
     id: string;
-    vehicle_code: string;
+    license_plate: string;
     capacity_weight?: number;
     capacity_volume?: number;
 }
@@ -126,7 +126,43 @@ function calculateVehicleLoad(pickedOrderIds: string[], allOrders: Order[]): num
 }
 
 /**
+ * Convert Date to time window value relative to a reference start time (in minutes)
+ */
+function dateToRelativeMinutes(date: Date | string | undefined, referenceStart: Date, fallback: number): number {
+    if (!date) return fallback;
+    const d = typeof date === 'string' ? new Date(date) : date;
+    if (isNaN(d.getTime())) return fallback;
+    const diff = Math.floor((d.getTime() - referenceStart.getTime()) / 60000); // minutes
+    return Math.max(0, diff); // Never negative
+}
+
+/**
+ * Calculate reference start time from orders (earliest time window start or current time)
+ */
+function calculateReferenceStart(orders: Order[], currentTimestamp: Date): Date {
+    const times: Date[] = [];
+    
+    for (const o of orders) {
+        if (o.pickup_time_window_start) {
+            const t = new Date(o.pickup_time_window_start);
+            if (!isNaN(t.getTime())) times.push(t);
+        }
+        if (o.delivery_time_window_start) {
+            const t = new Date(o.delivery_time_window_start);
+            if (!isNaN(t.getTime())) times.push(t);
+        }
+    }
+    
+    if (times.length === 0) return currentTimestamp;
+    
+    const earliest = new Date(Math.min(...times.map(t => t.getTime())));
+    // Use earlier of current time or earliest time window
+    return earliest < currentTimestamp ? earliest : currentTimestamp;
+}
+
+/**
  * Convert Date to time window value (minutes from start of day or unix timestamp)
+ * @deprecated Use dateToRelativeMinutes instead
  */
 function dateToTimeWindow(date: Date | string | undefined, fallback: number): number {
     if (!date) return fallback;
@@ -150,10 +186,23 @@ export async function preprocessReoptimization(
         end_of_shift,
     } = input;
 
-    // Merge and filter orders
-    const allOrders = [...active_orders, ...new_orders].filter(
+    // Merge and deduplicate orders (new_orders may overlap with active_orders)
+    const orderMap = new Map<string, Order>();
+    for (const order of active_orders) {
+        orderMap.set(order.id, order);
+    }
+    for (const order of new_orders) {
+        orderMap.set(order.id, order); // New orders override active orders if duplicated
+    }
+    
+    console.log(`[PreprocessReopt] active_orders count: ${active_orders.length}, new_orders count: ${new_orders.length}, after dedup: ${orderMap.size}`);
+    
+    // Filter out cancelled orders
+    const allOrders = Array.from(orderMap.values()).filter(
         order => !context.order_delta.cancelled_order_ids.includes(order.id)
     );
+
+    console.log(`[PreprocessReopt] After filtering cancelled: ${allOrders.length} orders, vehicles: ${context.vehicle_states.length}`);
 
     const currentTimeMinutes = dateToTimeWindow(current_timestamp, 0);
     const endOfShiftMinutes = dateToTimeWindow(end_of_shift, currentTimeMinutes + 480); // Default 8 hour shift
@@ -265,11 +314,38 @@ export async function preprocessReoptimization(
     }
 
     // Add regular pickup and delivery nodes
+    let pickupNodesAdded = 0;
+    let deliveryNodesAdded = 0;
+    let skippedPickups = 0;
+    
+    // Calculate reference start for time windows
+    const referenceStart = calculateReferenceStart(allOrders, current_timestamp);
+    const horizonMinutes = 480; // 8 hours default
+    
     for (const order of allOrders) {
         // Check if this order is already picked up (on a vehicle)
         const isPickedUp = context.vehicle_states.some(vs => 
             vs.picked_order_ids.includes(order.id)
         );
+        
+        const pickupDemand = Math.max(1, Math.round(order.demand_weight || 1));
+        const pickupEtw = dateToRelativeMinutes(order.pickup_time_window_start, referenceStart, 0);
+        const pickupLtw = dateToRelativeMinutes(order.pickup_time_window_end, referenceStart, horizonMinutes);
+        const rawDeliveryEtw = dateToRelativeMinutes(order.delivery_time_window_start, referenceStart, 0);
+        const rawDeliveryLtw = dateToRelativeMinutes(order.delivery_time_window_end, referenceStart, horizonMinutes);
+        
+        // IMPORTANT: Ensure delivery time window is AFTER pickup time window
+        // Delivery must start after pickup completes (pickup_etw + service_time + min_travel_time)
+        const serviceTime = order.service_time_pickup || 5;
+        const minTravelTime = 10; // Assume minimum 10 minutes travel between pickup and delivery
+        const minDeliveryStart = pickupEtw + serviceTime + minTravelTime;
+        const deliveryEtw = Math.max(rawDeliveryEtw, minDeliveryStart);
+        
+        // CRITICAL FIX: Rust solver asserts: pickup.ready <= delivery.due - travel_time
+        // This means delivery.ltw must be >= pickupEtw + travel_time (at minimum)
+        // We ensure: delivery.ltw >= pickupEtw + serviceTime + minTravelTime + buffer
+        const minDeliveryLtw = pickupEtw + serviceTime + minTravelTime + 30; // 30 min buffer
+        const deliveryLtw = Math.max(rawDeliveryLtw, deliveryEtw + 60, minDeliveryLtw); // At least 60 min window AND feasible
 
         // Add pickup node only if not already picked up
         if (!isPickedUp) {
@@ -281,7 +357,15 @@ export async function preprocessReoptimization(
                 lat: order.pickup_lat,
                 lng: order.pickup_lng,
                 is_dummy: false,
+                // Order details for frontend
+                demand: pickupDemand,
+                time_window_start: pickupEtw,
+                time_window_end: Math.max(pickupEtw + 60, pickupLtw), // Ensure ltw >= etw
+                service_time: order.service_time_pickup || 5,
             });
+            pickupNodesAdded++;
+        } else {
+            skippedPickups++;
         }
 
         // Always add delivery node
@@ -293,8 +377,22 @@ export async function preprocessReoptimization(
             lat: order.delivery_lat,
             lng: order.delivery_lng,
             is_dummy: false,
+            // Order details for frontend
+            demand: -pickupDemand, // Negative for delivery (drop-off)
+            time_window_start: deliveryEtw,
+            time_window_end: Math.max(deliveryEtw + 60, deliveryLtw), // Ensure ltw >= etw
+            service_time: order.service_time_delivery || 5,
         });
+        deliveryNodesAdded++;
     }
+    
+    console.log(`[PreprocessReopt] Nodes breakdown: ${pickupNodesAdded} pickups, ${deliveryNodesAdded} deliveries, ${skippedPickups} skipped pickups (already picked), ${dummy_nodes.length} dummy nodes`);
+    
+    // DEBUG: Log sample mapping_ids with order details
+    const samplePickup = mapping_ids.find(m => m.kind === 'pickup' && !m.is_dummy);
+    const sampleDelivery = mapping_ids.find(m => m.kind === 'delivery' && !m.is_dummy);
+    console.log(`[PreprocessReopt DEBUG] Sample pickup mapping:`, JSON.stringify(samplePickup, null, 2));
+    console.log(`[PreprocessReopt DEBUG] Sample delivery mapping:`, JSON.stringify(sampleDelivery, null, 2));
 
     // Generate Sartori PDPTW instance text
     const instance_text = await buildSartoriInstanceText({
@@ -307,6 +405,8 @@ export async function preprocessReoptimization(
         current_timestamp,
     });
 
+    console.log(`[PreprocessReopt] Generated instance with ${mapping_ids.length} nodes (expected: 1 depot + ${context.vehicle_states.length} vehicles * 2 dummy + ${allOrders.length} orders * 2 = ${1 + context.vehicle_states.length * 2 + allOrders.length * 2})`);
+
     return {
         instance_text,
         mapping_ids,
@@ -317,7 +417,35 @@ export async function preprocessReoptimization(
 }
 
 /**
- * Build Sartori format PDPTW instance text with dummy nodes
+ * Calculate haversine distance in km between two points
+ */
+function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+    const toRad = (deg: number) => (deg * Math.PI) / 180;
+    const R = 6371;
+    const dLat = toRad(lat2 - lat1);
+    const dLon = toRad(lon2 - lon1);
+    const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+}
+
+/**
+ * Build Sartori format PDPTW instance text
+ * 
+ * CRITICAL: Sartori format requires:
+ * - Node 0 = single depot
+ * - Nodes 1..n = ALL pickups first
+ * - Nodes n+1..2n = ALL deliveries after
+ * - Pickup i (node index i) has delivery at node (i + num_requests)
+ * - p column = pickup index for delivery nodes (0 for pickups)
+ * - d column = delivery index for pickup nodes (0 for deliveries)
+ * 
+ * The Rust solver uses this formula internally:
+ * - num_requests = (SIZE - 1) / 2
+ * - Pickup node i in file corresponds to internal pickup
+ * - Delivery at file node i + num_requests
  */
 async function buildSartoriInstanceText(params: {
     depot: Depot;
@@ -328,97 +456,272 @@ async function buildSartoriInstanceText(params: {
     vehicle_capacity_dimensions: Map<string, number>;
     current_timestamp: Date;
 }): Promise<string> {
-    const { mapping_ids, dummy_nodes, allOrders, vehicles } = params;
+    const { depot, mapping_ids, allOrders, current_timestamp } = params;
 
-    // Count nodes
-    const numVehicles = vehicles.length;
+    const maxCapacity = Math.max(...params.vehicles.map(v => v.capacity_weight || 100), 100);
+    const horizonMinutes = 480; // 8 hours default
+    const speedKmh = 30;
 
-    // TODO: Calculate max vehicle capacity
-    const maxCapacity = Math.max(...vehicles.map(v => v.capacity_weight || 100));
+    // Calculate reference start time for time windows
+    const referenceStart = calculateReferenceStart(allOrders, current_timestamp);
 
-    // Build instance header
-    let instanceText = `PDPTW Instance\n`;
-    instanceText += `Dynamic Re-optimization ${new Date().toISOString()}\n`;
-    instanceText += `\n`;
-    instanceText += `VEHICLE\n`;
-    instanceText += `NUMBER     CAPACITY\n`;
-    instanceText += `  ${numVehicles}         ${maxCapacity.toFixed(0)}\n`;
-    instanceText += `\n`;
-    instanceText += `CUSTOMER\n`;
-    instanceText += `CUST NO.  XCOORD.   YCOORD.    DEMAND   READY TIME  DUE DATE  SERVICE TIME  PICKUP     DELIVERY\n`;
-    instanceText += `\n`;
-
-    // Node 0: Depot
-    const depotNode = mapping_ids[0];
-    instanceText += `    0    ${depotNode.lng.toFixed(6)}  ${depotNode.lat.toFixed(6)}       0        0       999999        0\n`;
-
-    // Add all other nodes (dummy, ghost, pickup, delivery)
-    for (let i = 1; i < mapping_ids.length; i++) {
-        const node = mapping_ids[i];
-        const dummyNode = dummy_nodes.find(d => d.node_index === i);
-
-        let demand = 0;
-        let readyTime = 0;
-        let dueTime = 999999;
-        let serviceTime = 0;
-        let pickupIndex = 0;
-        let deliveryIndex = 0;
-
-        if (node.kind === 'dummy_start' && dummyNode) {
-            // Dummy start node
-            demand = dummyNode.demand || 0;
-            readyTime = dummyNode.ready_time;
-            dueTime = dummyNode.due_time;
-            serviceTime = dummyNode.service_time;
-        } else if (node.kind === 'ghost_pickup' && dummyNode) {
-            // Ghost pickup node
-            demand = dummyNode.demand || 0;
-            readyTime = dummyNode.ready_time;
-            dueTime = dummyNode.due_time;
-            serviceTime = dummyNode.service_time;
-        } else if (node.kind === 'pickup') {
-            // Regular pickup node
-            const order = allOrders.find(o => o.id === node.order_id);
-            if (order) {
-                demand = order.demand_weight || 1;
-                readyTime = dateToTimeWindow(order.pickup_time_window_start, 0);
-                dueTime = dateToTimeWindow(order.pickup_time_window_end, 999999);
-                serviceTime = order.service_time_pickup || 5;
-                
-                // Find corresponding delivery index
-                const deliveryIdx = mapping_ids.findIndex(
-                    m => m.kind === 'delivery' && m.order_id === order.id
-                );
-                if (deliveryIdx > 0) {
-                    pickupIndex = i;
-                    deliveryIndex = deliveryIdx;
-                }
-            }
-        } else if (node.kind === 'delivery') {
-            // Regular delivery node
-            const order = allOrders.find(o => o.id === node.order_id);
-            if (order) {
-                demand = -(order.demand_weight || 1); // Negative for delivery
-                readyTime = dateToTimeWindow(order.delivery_time_window_start, 0);
-                dueTime = dateToTimeWindow(order.delivery_time_window_end, 999999);
-                serviceTime = order.service_time_delivery || 5;
-                
-                // Find corresponding pickup index
-                const pickupIdx = mapping_ids.findIndex(
-                    m => m.kind === 'pickup' && m.order_id === order.id
-                );
-                if (pickupIdx > 0) {
-                    pickupIndex = pickupIdx;
-                    deliveryIndex = i;
-                }
-            }
+    // Separate pickups and deliveries from mapping_ids
+    const pickupMappings = mapping_ids.filter(m => m.kind === 'pickup' && !m.is_dummy);
+    const deliveryMappings = mapping_ids.filter(m => m.kind === 'delivery' && !m.is_dummy);
+    
+    // Match pickup-delivery pairs by order_id
+    interface PickupDeliveryPair {
+        orderId: string;
+        pickup: MappingIdExtended;
+        delivery: MappingIdExtended;
+    }
+    
+    const pairs: PickupDeliveryPair[] = [];
+    for (const pickup of pickupMappings) {
+        const delivery = deliveryMappings.find(d => d.order_id === pickup.order_id);
+        if (delivery) {
+            pairs.push({ orderId: pickup.order_id!, pickup, delivery });
+        } else {
+            console.warn(`[buildSartoriInstanceText] No delivery found for pickup order ${pickup.order_id}`);
         }
+    }
+    
+    // Also handle deliveries for orders that are already picked up (no pickup node)
+    for (const delivery of deliveryMappings) {
+        const hasPickup = pairs.some(p => p.orderId === delivery.order_id);
+        if (!hasPickup) {
+            // This delivery's pickup is already done - create a ghost pickup at depot
+            console.log(`[buildSartoriInstanceText] Delivery ${delivery.order_id} has no pickup - creating ghost pickup at depot`);
+            const ghostPickup: MappingIdExtended = {
+                kind: 'pickup',
+                order_id: delivery.order_id,
+                location_id: null,
+                lat: depot.latitude,
+                lng: depot.longitude,
+                is_dummy: true,
+                demand: Math.abs(delivery.demand || 1),
+                time_window_start: 0,
+                time_window_end: horizonMinutes,
+                service_time: 0, // Ghost pickup has no service time
+            };
+            pairs.push({ orderId: delivery.order_id!, pickup: ghostPickup, delivery });
+        }
+    }
+    
+    const numRequests = pairs.length;
+    // Sartori format: SIZE = 1 (depot) + numRequests (pickups) + numRequests (deliveries) = 1 + 2*numRequests
+    const size = 1 + 2 * numRequests;
+    
+    console.log(`[buildSartoriInstanceText] Building Sartori format: ${numRequests} requests -> SIZE=${size}`);
 
-        instanceText += `  ${i.toString().padStart(3)}    ${node.lng.toFixed(6)}  ${node.lat.toFixed(6)}  `;
-        instanceText += `${demand.toString().padStart(6)}   ${readyTime.toString().padStart(6)}  `;
-        instanceText += `${dueTime.toString().padStart(6)}     ${serviceTime.toString().padStart(6)}    `;
-        instanceText += `${pickupIndex.toString().padStart(3)}        ${deliveryIndex.toString().padStart(3)}\n`;
+    // Build nodes array in STRICT Sartori order:
+    // Node 0: Depot
+    // Nodes 1..numRequests: All pickups
+    // Nodes numRequests+1..2*numRequests: All deliveries
+    
+    interface NodeData {
+        id: number;
+        lat: number;
+        lng: number;
+        demand: number;
+        etw: number;
+        ltw: number;
+        duration: number;
+        p: number; // pickup index (for delivery nodes)
+        d: number; // delivery index (for pickup nodes)
     }
 
-    return instanceText;
+    const nodes: NodeData[] = [];
+    
+    // Node 0: Depot
+    nodes.push({
+        id: 0,
+        lat: depot.latitude,
+        lng: depot.longitude,
+        demand: 0,
+        etw: 0,
+        ltw: horizonMinutes,
+        duration: 0,
+        p: 0,
+        d: 0,
+    });
+    
+    // Build pickup nodes (1..numRequests) and delivery nodes (numRequests+1..2*numRequests)
+    for (let i = 0; i < numRequests; i++) {
+        const pair = pairs[i];
+        const pickupNodeId = 1 + i;
+        const deliveryNodeId = 1 + numRequests + i;
+        
+        // Get order data
+        const order = allOrders.find(o => o.id === pair.orderId);
+        const pickupDemand = Math.max(1, Math.round(order?.demand_weight || pair.pickup.demand || 1));
+        
+        // Pickup time windows from mapping_ids or order
+        let pickupEtw = pair.pickup.time_window_start ?? 
+            (order ? dateToRelativeMinutes(order.pickup_time_window_start, referenceStart, 0) : 0);
+        let pickupLtw = pair.pickup.time_window_end ?? 
+            (order ? dateToRelativeMinutes(order.pickup_time_window_end, referenceStart, horizonMinutes) : horizonMinutes);
+        
+        // Delivery time windows from mapping_ids or order
+        let deliveryEtw = pair.delivery.time_window_start ?? 
+            (order ? dateToRelativeMinutes(order.delivery_time_window_start, referenceStart, 0) : 0);
+        let deliveryLtw = pair.delivery.time_window_end ?? 
+            (order ? dateToRelativeMinutes(order.delivery_time_window_end, referenceStart, horizonMinutes) : horizonMinutes);
+        
+        // Calculate travel time from pickup to delivery
+        const km = haversineKm(pair.pickup.lat, pair.pickup.lng, pair.delivery.lat, pair.delivery.lng);
+        const travelTime = Math.max(1, Math.round((km / speedKmh) * 60));
+        const serviceTime = pair.pickup.service_time || order?.service_time_pickup || 5;
+        
+        // CRITICAL TIME WINDOW ADJUSTMENTS:
+        // Rust solver asserts: pickup.ready <= delivery.due - travel_time
+        // This means: delivery.ltw >= pickup.etw + travel_time
+        
+        // 1. Ensure pickup LTW >= pickup ETW
+        if (pickupLtw <= pickupEtw) {
+            pickupLtw = Math.min(horizonMinutes, pickupEtw + 60);
+        }
+        
+        // 2. Ensure delivery ETW >= pickup ETW + service + travel
+        const minDeliveryEtw = pickupEtw + serviceTime + travelTime;
+        if (deliveryEtw < minDeliveryEtw) {
+            deliveryEtw = Math.min(horizonMinutes, minDeliveryEtw);
+        }
+        
+        // 3. CRITICAL: Ensure delivery LTW >= pickup ETW + travel_time (with buffer)
+        const minDeliveryLtw = pickupEtw + travelTime + 30; // 30 min buffer
+        if (deliveryLtw < minDeliveryLtw) {
+            deliveryLtw = Math.min(horizonMinutes, minDeliveryLtw);
+        }
+        
+        // 4. Ensure delivery LTW >= delivery ETW
+        if (deliveryLtw <= deliveryEtw) {
+            deliveryLtw = Math.min(horizonMinutes, deliveryEtw + 60);
+        }
+        
+        // Final validation: pickup.ready <= delivery.due - travel_time
+        if (pickupEtw > deliveryLtw - travelTime) {
+            console.warn(`[buildSartoriInstanceText] Time window violation for order ${pair.orderId}: pickup.ready=${pickupEtw} > delivery.due - tt = ${deliveryLtw} - ${travelTime} = ${deliveryLtw - travelTime}`);
+            // Adjust delivery LTW to be feasible
+            deliveryLtw = Math.min(horizonMinutes, pickupEtw + travelTime + 60);
+        }
+        
+        // Add PICKUP node at position i+1
+        nodes.push({
+            id: pickupNodeId,
+            lat: pair.pickup.lat,
+            lng: pair.pickup.lng,
+            demand: pickupDemand,
+            etw: Math.max(0, Math.min(pickupEtw, horizonMinutes)),
+            ltw: Math.max(0, Math.min(pickupLtw, horizonMinutes)),
+            duration: serviceTime,
+            p: 0, // Pickup nodes have p=0
+            d: deliveryNodeId, // Points to its delivery
+        });
+    }
+    
+    // Now add all DELIVERY nodes (indices numRequests+1 to 2*numRequests)
+    for (let i = 0; i < numRequests; i++) {
+        const pair = pairs[i];
+        const pickupNodeId = 1 + i;
+        const deliveryNodeId = 1 + numRequests + i;
+        
+        const order = allOrders.find(o => o.id === pair.orderId);
+        const deliveryDemand = -Math.max(1, Math.round(order?.demand_weight || Math.abs(pair.delivery.demand || 1)));
+        
+        // Get delivery time windows (already calculated above, recalculate for clarity)
+        let deliveryEtw = pair.delivery.time_window_start ?? 
+            (order ? dateToRelativeMinutes(order.delivery_time_window_start, referenceStart, 0) : 0);
+        let deliveryLtw = pair.delivery.time_window_end ?? 
+            (order ? dateToRelativeMinutes(order.delivery_time_window_end, referenceStart, horizonMinutes) : horizonMinutes);
+        
+        // Apply same adjustments as above
+        const pickupNode = nodes[pickupNodeId];
+        const km = haversineKm(pickupNode.lat, pickupNode.lng, pair.delivery.lat, pair.delivery.lng);
+        const travelTime = Math.max(1, Math.round((km / speedKmh) * 60));
+        
+        const minDeliveryEtw = pickupNode.etw + pickupNode.duration + travelTime;
+        if (deliveryEtw < minDeliveryEtw) {
+            deliveryEtw = Math.min(horizonMinutes, minDeliveryEtw);
+        }
+        
+        const minDeliveryLtw = pickupNode.etw + travelTime + 30;
+        if (deliveryLtw < minDeliveryLtw) {
+            deliveryLtw = Math.min(horizonMinutes, minDeliveryLtw);
+        }
+        
+        if (deliveryLtw <= deliveryEtw) {
+            deliveryLtw = Math.min(horizonMinutes, deliveryEtw + 60);
+        }
+        
+        const serviceTimeDelivery = pair.delivery.service_time || order?.service_time_delivery || 5;
+        
+        // Add DELIVERY node
+        nodes.push({
+            id: deliveryNodeId,
+            lat: pair.delivery.lat,
+            lng: pair.delivery.lng,
+            demand: deliveryDemand,
+            etw: Math.max(0, Math.min(deliveryEtw, horizonMinutes)),
+            ltw: Math.max(0, Math.min(deliveryLtw, horizonMinutes)),
+            duration: serviceTimeDelivery,
+            p: pickupNodeId, // Points back to its pickup
+            d: 0, // Delivery nodes have d=0
+        });
+    }
+    
+    console.log(`[buildSartoriInstanceText] Built ${nodes.length} nodes: 1 depot + ${numRequests} pickups + ${numRequests} deliveries`);
+
+    // Build time matrix (minutes based on haversine distance)
+    const times: number[][] = Array.from({ length: size }, () => Array.from({ length: size }, () => 0));
+    for (let i = 0; i < size; i++) {
+        for (let j = 0; j < size; j++) {
+            if (i === j) {
+                times[i][j] = 0;
+                continue;
+            }
+            const a = nodes[i];
+            const b = nodes[j];
+            const km = haversineKm(a.lat, a.lng, b.lat, b.lng);
+            const minutes = Math.max(1, Math.round((km / speedKmh) * 60));
+            times[i][j] = minutes;
+        }
+    }
+
+    // Build Sartori format output
+    const lines: string[] = [];
+    lines.push(`NAME: reopt-${new Date().toISOString().slice(0, 19).replace(/[:-]/g, '')}`);
+    lines.push(`LOCATION: ${depot.name || 'WAYO'}`);
+    lines.push(`COMMENT: Dynamic Re-optimization generated by backend`);
+    lines.push(`TYPE: PDPTW`);
+    lines.push(`SIZE: ${size}`);
+    lines.push(`DISTRIBUTION: custom (WAYO reoptimization)`);
+    lines.push(`DEPOT: ${depot.name || 'depot'}`);
+    lines.push(`ROUTE-TIME: ${horizonMinutes}`);
+    lines.push(`TIME-WINDOW: ${horizonMinutes}`);
+    lines.push(`CAPACITY: ${maxCapacity}`);
+    lines.push(`NODES`);
+
+    for (const n of nodes) {
+        lines.push([
+            n.id,
+            n.lat.toFixed(8),
+            n.lng.toFixed(8),
+            n.demand,
+            n.etw,
+            n.ltw,
+            n.duration,
+            n.p,
+            n.d,
+        ].join(' '));
+    }
+
+    lines.push(`EDGES`);
+    for (let i = 0; i < size; i++) {
+        lines.push(times[i].join(' '));
+    }
+
+    lines.push(`EOF`);
+
+    return lines.join('\n').trimEnd();
 }

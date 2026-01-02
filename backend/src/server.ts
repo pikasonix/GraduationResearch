@@ -8,6 +8,8 @@ import { SolverWorker } from './workers/SolverWorker';
 import { setupJobRoutes } from './routes/jobRoutes';
 import { SolverParams } from './types';
 import { persistSolutionSnapshot } from './persistence/persistSolutionSnapshot';
+import { cleanDummyNodes, parseSolverOutput } from './workers/dummyNodeCleaner';
+import { buildCleanedMappingIds } from './persistence/cleanMappingIds';
 
 const app = express();
 const PORT = parseInt(process.env.PORT || '3001', 10);
@@ -81,13 +83,57 @@ jobQueue.on('processJob', (job, callbacks) => {
             (async () => {
                 try {
                     if (job.organizationId && job.createdBy && job.inputData) {
-                        const persisted = await persistSolutionSnapshot({
+                        const isReoptimization = !!job.inputData.is_reoptimization;
+                        
+                        let persistOpts: Parameters<typeof persistSolutionSnapshot>[0] = {
                             jobId: job.id,
                             organizationId: job.organizationId,
                             solutionText: result.solution,
                             solverFilename: result.filename,
                             inputData: job.inputData,
-                        });
+                        };
+                        
+                        // Handle reoptimization: clean dummy nodes and re-index
+                        if (isReoptimization && job.inputData.mapping_ids && job.inputData.dummy_nodes) {
+                            console.log(`[Server] Processing reoptimization result for job ${job.id}`);
+                            
+                            // DEBUG: Log original mapping_ids
+                            console.log(`[Server DEBUG] Original mapping_ids count: ${job.inputData.mapping_ids.length}`);
+                            console.log(`[Server DEBUG] Sample original mapping_ids[1]:`, JSON.stringify(job.inputData.mapping_ids[1], null, 2));
+                            
+                            // Parse solver output
+                            const rawRoutes = parseSolverOutput(result.solution);
+                            
+                            // Clean dummy nodes from routes
+                            const cleanResult = cleanDummyNodes(
+                                rawRoutes,
+                                job.inputData.mapping_ids,
+                                job.inputData.dummy_nodes
+                            );
+                            
+                            console.log(`[Server] Cleaned ${cleanResult.removed_dummy_count} dummy nodes, ${cleanResult.removed_ghost_count} ghost nodes`);
+                            
+                            // Build cleaned mapping_ids without dummy nodes
+                            const cleanedMapping = buildCleanedMappingIds(
+                                job.inputData.mapping_ids,
+                                cleanResult.cleaned_routes
+                            );
+                            
+                            // DEBUG: Log cleaned mapping_ids
+                            console.log(`[Server DEBUG] Cleaned mapping_ids count: ${cleanedMapping.cleanedMappingIds.length}`);
+                            console.log(`[Server DEBUG] Sample cleaned mapping_ids[1]:`, JSON.stringify(cleanedMapping.cleanedMappingIds[1], null, 2));
+                            
+                            // Update inputData with cleaned mapping_ids
+                            persistOpts.inputData = {
+                                ...job.inputData,
+                                mapping_ids: cleanedMapping.cleanedMappingIds,
+                            };
+                            
+                            // Pass cleaned and re-indexed routes
+                            persistOpts.cleanedRoutes = cleanedMapping.reindexedRoutes;
+                        }
+                        
+                        const persisted = await persistSolutionSnapshot(persistOpts);
 
                         callbacks.onComplete({
                             ...result,

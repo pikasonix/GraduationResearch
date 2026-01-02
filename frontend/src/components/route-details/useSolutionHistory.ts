@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { supabase } from '@/supabase/client';
 
 export type SolutionHistoryItem = {
@@ -27,10 +27,16 @@ function getOrgIdFromLocalStorage(): string | null {
 
 export function useSolutionHistory(opts?: { organizationId?: string; limit?: number }) {
     const limit = opts?.limit ?? 20;
-    const organizationId = useMemo(() => {
-        if (opts?.organizationId) return opts.organizationId;
-        if (typeof window === 'undefined') return null;
-        return getOrgIdFromLocalStorage();
+    const [organizationId, setOrganizationId] = useState<string | null>(opts?.organizationId ?? null);
+    
+    // Load organizationId from localStorage on client side only (after hydration)
+    useEffect(() => {
+        if (!opts?.organizationId) {
+            const localOrgId = getOrgIdFromLocalStorage();
+            if (localOrgId) {
+                setOrganizationId(localOrgId);
+            }
+        }
     }, [opts?.organizationId]);
 
     const [solutions, setSolutions] = useState<SolutionHistoryItem[]>([]);

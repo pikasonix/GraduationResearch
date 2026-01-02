@@ -13,6 +13,8 @@ import {
 } from "@/lib/redux/services/orderApi";
 import { buildSartoriPdptwInstance } from "@/utils/pdptw/sartoriInstance";
 import { solverService } from "@/services/solverService";
+import type { ReoptimizationContext } from "@/services/solverService";
+import { buildVehicleStatesForRouting } from "@/services/vehicleStateService";
 import { supabase } from "@/supabase/client";
 import {
   DEFAULT_DISPATCH_SETTINGS,
@@ -209,11 +211,12 @@ export function DispatchWorkspaceClient() {
   const [solverParams, setSolverParams] = useState({
     iterations: 100000,
     max_non_improving: 20000,
-    time_limit: 300,
+    time_limit: 60,
     acceptance: 'rtr' as 'sa' | 'rtr' | 'greedy',
     min_destroy: 0.1,
     max_destroy: 0.4,
     seed: 42,
+    format: 'sartori' as 'lilim' | 'sartori',
   });
   const [showSettingsPanel, setShowSettingsPanel] = useState(false);
   const [showParams, setShowParams] = useState(false);
@@ -226,11 +229,12 @@ export function DispatchWorkspaceClient() {
     setSolverParams({
       iterations: 100000,
       max_non_improving: 20000,
-      time_limit: 300,
+      time_limit: 60,
       acceptance: 'rtr',
       min_destroy: 0.1,
       max_destroy: 0.4,
       seed: 42,
+      format: 'sartori',
     });
   }, []);
 
@@ -736,49 +740,6 @@ export function DispatchWorkspaceClient() {
       setIsSolving(true);
 
       try {
-        const instanceText = buildSartoriPdptwInstance({
-          name: `wajo-org-${organizationId}-dispatch-dynamic-${new Date().toISOString().slice(0, 10)}`,
-          location: "Vietnam",
-          depot: {
-            name: organization?.depot_name ?? "Depot",
-            address: organization?.depot_address ?? null,
-            latitude: Number(depotLat),
-            longitude: Number(depotLng),
-          },
-          orders: selectedOrders,
-        });
-
-        const nOrders = selectedOrders.length;
-        const size = 1 + nOrders * 2;
-        const mapping_ids: any[] = Array.from({ length: size }, () => null);
-        mapping_ids[0] = {
-          kind: "depot",
-          order_id: null,
-          location_id: null,
-          lat: Number(depotLat),
-          lng: Number(depotLng),
-        };
-
-        for (let i = 0; i < nOrders; i++) {
-          const o = selectedOrders[i] as any;
-          const pickupId = 1 + i;
-          const deliveryId = 1 + nOrders + i;
-          mapping_ids[pickupId] = {
-            kind: "pickup",
-            order_id: o.id,
-            location_id: o.pickup_location_id,
-            lat: Number(o.pickup_latitude),
-            lng: Number(o.pickup_longitude),
-          };
-          mapping_ids[deliveryId] = {
-            kind: "delivery",
-            order_id: o.id,
-            location_id: o.delivery_location_id,
-            lat: Number(o.delivery_latitude),
-            lng: Number(o.delivery_longitude),
-          };
-        }
-
         // Helpful for Route Details history / viewing context
         try {
           localStorage.setItem(
@@ -804,17 +765,160 @@ export function DispatchWorkspaceClient() {
           // ignore
         }
 
-        const inputData = { mapping_ids };
+        // Build vehicle states for reoptimization (GPS positions + picked-up orders)
+        console.log("[Dynamic Routing] Building vehicle states for reoptimization...");
+        const vehicleStates = await buildVehicleStatesForRouting(
+          organizationId,
+          Number(depotLat),
+          Number(depotLng),
+          { includeWithoutGps: true }
+        );
 
-        const result = await solverService.solveInstance(
-          instanceText,
+        if (vehicleStates.length === 0) {
+          console.warn("[Dynamic Routing] No vehicle states found, falling back to static solve");
+          // Fallback to static solve if no vehicles available
+          const instanceText = buildSartoriPdptwInstance({
+            name: `wajo-org-${organizationId}-dispatch-dynamic-${new Date().toISOString().slice(0, 10)}`,
+            location: "Vietnam",
+            depot: {
+              name: organization?.depot_name ?? "Depot",
+              address: organization?.depot_address ?? null,
+              latitude: Number(depotLat),
+              longitude: Number(depotLng),
+            },
+            orders: selectedOrders,
+          });
+
+          const nOrders = selectedOrders.length;
+          const size = 1 + nOrders * 2;
+          const mapping_ids: any[] = Array.from({ length: size }, () => null);
+          mapping_ids[0] = {
+            kind: "depot",
+            order_id: null,
+            location_id: null,
+            lat: Number(depotLat),
+            lng: Number(depotLng),
+          };
+
+          for (let i = 0; i < nOrders; i++) {
+            const o = selectedOrders[i] as any;
+            const pickupId = 1 + i;
+            const deliveryId = 1 + nOrders + i;
+            mapping_ids[pickupId] = {
+              kind: "pickup",
+              order_id: o.id,
+              location_id: o.pickup_location_id,
+              lat: Number(o.pickup_latitude),
+              lng: Number(o.pickup_longitude),
+            };
+            mapping_ids[deliveryId] = {
+              kind: "delivery",
+              order_id: o.id,
+              location_id: o.delivery_location_id,
+              lat: Number(o.delivery_latitude),
+              lng: Number(o.delivery_longitude),
+            };
+          }
+
+          const inputData = { mapping_ids };
+          const result = await solverService.solveInstance(
+            instanceText,
+            solverParams,
+            undefined,
+            {
+              organizationId,
+              createdBy: userId,
+              inputData,
+            }
+          );
+
+          // Handle fallback result (same as before)
+          const sid = result.solutionId ?? null;
+          if (sid) {
+            setLatestSolutionId(sid);
+            try {
+              localStorage.setItem("lastSolutionId", sid);
+            } catch {
+              // ignore
+            }
+
+            if (result.persisted) {
+              try {
+                const nowIso = new Date().toISOString();
+                await Promise.all(
+                  selectedOrders
+                    .filter((o) => o.status === "pending")
+                    .map((o) => updateOrder({ id: o.id, status: "assigned", assigned_at: nowIso }).unwrap())
+                );
+              } catch (e) {
+                console.warn("Failed to update orders to assigned:", e);
+              }
+            }
+
+            await persistOptimizationEventsToDb({
+              solutionId: sid,
+              organizationId,
+              reportedByAuthUserId: userId,
+              reason,
+              persisted: !!result.persisted,
+              depotLat: Number(depotLat),
+              depotLng: Number(depotLng),
+              orderCount: selectedOrders.length,
+            });
+
+            await loadRouteEventsFromDb({ solutionId: sid, organizationId });
+
+            if (reason === "MANUAL" || reason === "START") {
+              try {
+                if (typeof window !== "undefined") {
+                  window.open(`/route-details?solutionId=${encodeURIComponent(String(sid))}`, "_blank");
+                }
+              } catch {
+                // ignore
+              }
+            }
+          }
+
+          toast.success(sid ? "Đã lưu solution vào database (fallback)" : "Đã chạy solver (fallback)");
+          return; // Exit early for fallback case
+        }
+
+        // Build reoptimization context for dynamic routing
+        const orderIds = selectedOrders.map((o) => o.id);
+
+        console.log(`[DynamicSolve] selectedOrders count: ${selectedOrders.length}, unique IDs: ${new Set(orderIds).size}`);
+        console.log(`[DynamicSolve] Order IDs:`, orderIds.slice(0, 5), '...');
+
+        // Determine new orders (orders not yet in any active route)
+        // For now, treat all selected orders as potentially new
+        const newOrderIds = orderIds;
+
+        // Don't send previous_solution_id for fresh routing
+        // This prevents backend from fetching all active orders from previous solution
+        // Only send previous_solution_id when explicitly reoptimizing an existing solution
+        const reoptimizationContext: ReoptimizationContext = {
+          previous_solution_id: undefined, // Fresh routing - no previous solution
+          vehicle_states: vehicleStates,
+          order_delta: {
+            new_order_ids: newOrderIds,
+            cancelled_order_ids: [],
+          },
+          organization_id: organizationId,
+          require_depot_return: true,
+        };
+
+        console.log("[Dynamic Routing] Submitting reoptimization job:", {
+          vehicleCount: vehicleStates.length,
+          orderCount: orderIds.length,
+          previousSolutionId: latestSolutionId,
+        });
+
+        // Use reoptimization API for dynamic routing
+        const result = await solverService.reoptimizeRoutes(
+          reoptimizationContext,
           solverParams,
           undefined,
-          {
-            organizationId,
-            createdBy: userId,
-            inputData,
-          }
+          userId
         );
 
         const sid = result.solutionId ?? null;
@@ -922,6 +1026,7 @@ export function DispatchWorkspaceClient() {
       loadRouteEventsFromDb,
       setLastSolveAtMs,
       solverParams,
+      latestSolutionId,
     ]
   );
 

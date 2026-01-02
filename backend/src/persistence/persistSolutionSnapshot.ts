@@ -124,19 +124,33 @@ export async function persistSolutionSnapshot(opts: {
         totalDistanceMeters += metrics.distance_meters;
         totalDurationSeconds += metrics.duration_seconds;
 
-        const stops = r.sequence.map((nodeIndex: number, idx: number) => {
+        const stopsRaw = r.sequence.map((nodeIndex: number) => {
             const m = mappingIds[nodeIndex];
-            if (!m || !m.order_id || !m.location_id) {
+            if (!m) {
+                throw new Error(`mapping_ids[${nodeIndex}] missing`);
+            }
+            
+            // Skip dummy nodes (dummy_start, ghost_pickup) - they don't have order_id/location_id
+            if (m.kind === 'dummy_start' || m.kind === 'ghost_pickup') {
+                return null; // Will be filtered out
+            }
+            
+            if (!m.order_id || !m.location_id) {
                 throw new Error(`mapping_ids[${nodeIndex}] missing order_id/location_id`);
             }
 
             return {
                 order_id: m.order_id,
                 location_id: m.location_id,
-                stop_sequence: idx + 1,
                 stop_type: m.kind === 'pickup' ? 'pickup' : 'delivery',
             };
-        });
+        }).filter((stop): stop is NonNullable<typeof stop> => stop !== null);
+        
+        // Re-number stop_sequence after filtering
+        const stops = stopsRaw.map((stop, idx) => ({
+            ...stop,
+            stop_sequence: idx + 1,
+        }));
 
         routesPayload.push({
             route_number: r.routeNumber,
@@ -173,6 +187,16 @@ export async function persistSolutionSnapshot(opts: {
         edges_available: !!edges,
         is_reoptimization: !!opts.cleanedRoutes, // Flag to indicate this was a reoptimization
     };
+
+    // DEBUG: Log mapping_ids being persisted
+    console.log(`[persistSolutionSnapshot DEBUG] mapping_ids count: ${mappingIds.length}`);
+    console.log(`[persistSolutionSnapshot DEBUG] Sample mapping_ids[1]:`, JSON.stringify(mappingIds[1], null, 2));
+    
+    // DEBUG: Log route sequences being persisted
+    routesPayload.forEach((rp, idx) => {
+        console.log(`[persistSolutionSnapshot DEBUG] Route ${idx + 1} sequence:`, rp.route_data.route_sequence);
+        console.log(`[persistSolutionSnapshot DEBUG] Route ${idx + 1} sequence range: min=${Math.min(...rp.route_data.route_sequence)}, max=${Math.max(...rp.route_data.route_sequence)}`);
+    });
 
     const payload = {
         job_id: opts.jobId,

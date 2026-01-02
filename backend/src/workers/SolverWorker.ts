@@ -76,8 +76,10 @@ export class SolverWorker {
         } catch (error) {
             console.error(`[SolverWorker] Job ${job.id}: Error:`, error instanceof Error ? error.message : String(error));
 
+            // DEBUG: Don't cleanup on failure to inspect instance file
             if (workDir) {
-                this.cleanup(workDir);
+                console.log(`[SolverWorker] DEBUG: Keeping work dir for inspection: ${workDir}`);
+                // this.cleanup(workDir);
             }
 
             onFail(error instanceof Error ? error.message : String(error));

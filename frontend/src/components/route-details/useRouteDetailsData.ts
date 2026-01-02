@@ -26,6 +26,12 @@ function buildMinimalInstanceFromSolutionData(solutionData: any): Instance {
     const inst = createInstance();
     const mapping = Array.isArray(solutionData?.mapping_ids) ? solutionData.mapping_ids : [];
 
+    // DEBUG: Log raw mapping_ids from DB
+    console.log('[useRouteDetailsData DEBUG] mapping_ids count:', mapping.length);
+    if (mapping.length > 1) {
+        console.log('[useRouteDetailsData DEBUG] Sample mapping[1]:', JSON.stringify(mapping[1], null, 2));
+    }
+
     inst.name = String(solutionData?.instance_name || 'Persisted Solution');
     inst.type = 'persisted';
     inst.capacity = Number(solutionData?.capacity ?? 100);
@@ -37,15 +43,35 @@ function buildMinimalInstanceFromSolutionData(solutionData: any): Instance {
         const kind = String(m?.kind || '');
         const isPickup = kind === 'pickup';
         const isDelivery = kind === 'delivery';
-        return createNode(
+        
+        // Use order details from mapping if available, otherwise defaults
+        const demand = Number(m?.demand ?? 0);
+        const twStart = Number(m?.time_window_start ?? 0);
+        const twEnd = Number(m?.time_window_end ?? 480); // 8 hours default
+        const serviceTime = Number(m?.service_time ?? 5);
+        
+        // DEBUG: Log first few non-depot nodes
+        if (idx > 0 && idx <= 3) {
+            console.log(`[useRouteDetailsData DEBUG] Node ${idx}: kind=${kind}, demand=${demand}, tw=[${twStart}, ${twEnd}], serviceTime=${serviceTime}`);
+            console.log(`[useRouteDetailsData DEBUG] Raw m.demand=${m?.demand}, m.time_window_start=${m?.time_window_start}, m.time_window_end=${m?.time_window_end}`);
+        }
+        
+        const node = createNode(
             idx,
             [Number.isFinite(lat) ? lat : 0, Number.isFinite(lng) ? lng : 0],
-            0,
-            [0, 1_000_000],
-            0,
+            demand,
+            [twStart, twEnd],
+            serviceTime,
             isPickup,
             isDelivery,
         );
+        
+        // Attach extra metadata for display
+        (node as any).order_id = m?.order_id || null;
+        (node as any).location_id = m?.location_id || null;
+        (node as any).kind = kind;
+        
+        return node;
     });
 
     inst.all_coords = inst.nodes.map((n) => n.coords);
@@ -58,6 +84,9 @@ function buildRoutesFromDb(dbRoutes: any[], instance: Instance): Route[] {
     const palette = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#f97316'];
     const routes: Route[] = [];
 
+    // DEBUG: Log instance nodes count
+    console.log(`[buildRoutesFromDb DEBUG] Instance has ${instance.nodes.length} nodes`);
+
     dbRoutes.forEach((r: any, idx: number) => {
         const routeNumber = Number(r?.route_number);
         const id = Number.isFinite(routeNumber) ? routeNumber : idx + 1;
@@ -69,11 +98,24 @@ function buildRoutesFromDb(dbRoutes: any[], instance: Instance): Route[] {
             ? r.route_data.route_sequence.map((n: any) => Number(n)).filter((n: number) => Number.isFinite(n))
             : [];
 
+        // DEBUG: Log route sequence
+        console.log(`[buildRoutesFromDb DEBUG] Route ${id} raw sequence:`, seq);
+        console.log(`[buildRoutesFromDb DEBUG] Route ${id} sequence range: min=${Math.min(...seq)}, max=${Math.max(...seq)}`);
+
         // Include depot at start/end for map rendering.
         route.sequence = [0, ...seq, 0];
         route.path = route.sequence
-            .map((nodeId) => instance.nodes.find((n) => n.id === nodeId)?.coords)
+            .map((nodeId) => {
+                const node = instance.nodes.find((n) => n.id === nodeId);
+                if (!node) {
+                    console.warn(`[buildRoutesFromDb DEBUG] Node ${nodeId} not found in instance!`);
+                }
+                return node?.coords;
+            })
             .filter(Boolean) as [number, number][];
+
+        // DEBUG: Log path
+        console.log(`[buildRoutesFromDb DEBUG] Route ${id} path length: ${route.path.length}, sequence length: ${route.sequence.length}`);
 
         // Keep DB ids accessible if needed by downstream components.
         (route as any).db_route_id = r?.id;

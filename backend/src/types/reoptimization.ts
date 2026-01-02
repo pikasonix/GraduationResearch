@@ -47,6 +47,13 @@ export interface MappingIdExtended {
   is_dummy?: boolean;
   vehicle_id?: string;
   original_order_ids?: string[]; // For ghost pickups tracking which orders are on vehicle
+  
+  // Order details for frontend display
+  order_code?: string;
+  demand?: number;
+  time_window_start?: number; // Minutes from reference
+  time_window_end?: number;
+  service_time?: number;
 }
 
 export interface AugmentedPDPTWInstance {
