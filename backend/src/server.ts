@@ -84,6 +84,7 @@ jobQueue.on('processJob', (job, callbacks) => {
                 try {
                     if (job.organizationId && job.createdBy && job.inputData) {
                         const isReoptimization = !!job.inputData.is_reoptimization;
+                        const previousSolutionId = job.inputData.previous_solution_id;
                         
                         let persistOpts: Parameters<typeof persistSolutionSnapshot>[0] = {
                             jobId: job.id,
@@ -91,6 +92,7 @@ jobQueue.on('processJob', (job, callbacks) => {
                             solutionText: result.solution,
                             solverFilename: result.filename,
                             inputData: job.inputData,
+                            parentSolutionId: previousSolutionId, // NEW: Pass parent solution ID for re-optimization
                         };
                         
                         // Handle reoptimization: clean dummy nodes and re-index

@@ -5,9 +5,11 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.pikasonix.wayo.ui.screens.AssignedRoutesScreen
 import com.pikasonix.wayo.ui.screens.LoginScreen
 import com.pikasonix.wayo.ui.screens.RoutingScreen
 import com.pikasonix.wayo.ui.screens.SignUpScreen
+import com.pikasonix.wayo.ui.screens.VehicleSelectionScreen
 
 /**
  * Navigation routes for the app
@@ -17,6 +19,8 @@ sealed class Screen(val route: String) {
     data object Routing : Screen("routing")
     data object SignUp : Screen("signup")
     data object ForgotPassword : Screen("forgot_password")
+    data object VehicleSelection : Screen("vehicle_selection/{driverId}/{organizationId}")
+    data object AssignedRoutes : Screen("assigned_routes/{driverId}")
 }
 
 /**
@@ -84,6 +88,35 @@ fun WayoNavGraph(
                     navController.navigate(Screen.SignUp.route)
                 },
                 onNavigateToForgotPassword = { }
+            )
+        }
+
+        // Vehicle Selection Screen
+        composable(route = "vehicle_selection/{driverId}/{organizationId}") { backStackEntry ->
+            val driverId = backStackEntry.arguments?.getString("driverId") ?: ""
+            val organizationId = backStackEntry.arguments?.getString("organizationId") ?: ""
+            
+            VehicleSelectionScreen(
+                driverId = driverId,
+                organizationId = organizationId,
+                onNavigateBack = {
+                    navController.popBackStack()
+                }
+            )
+        }
+
+        // Assigned Routes Screen
+        composable(route = "assigned_routes/{driverId}") { backStackEntry ->
+            val driverId = backStackEntry.arguments?.getString("driverId") ?: ""
+            
+            AssignedRoutesScreen(
+                driverId = driverId,
+                onRouteSelected = { routeId ->
+                    // TODO: Navigate to route details
+                },
+                onNavigateBack = {
+                    navController.popBackStack()
+                }
             )
         }
     }

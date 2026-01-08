@@ -59,6 +59,7 @@ export async function persistSolutionSnapshot(opts: {
     solverFilename?: string;
     inputData: any;
     cleanedRoutes?: CleanedRoute[]; // For reoptimization with cleaned dummy nodes
+    parentSolutionId?: string; // For re-optimization: link to previous solution
 }): Promise<{ solutionId: string } | null> {
     if (!isSupabaseEnabled()) return null;
 
@@ -208,6 +209,7 @@ export async function persistSolutionSnapshot(opts: {
         total_cost: totalCost,
         solution_data: solutionData,
         routes: routesPayload,
+        parent_solution_id: opts.parentSolutionId || null, // NEW: Link to parent solution
     };
 
     const supabase = createSupabaseAdminClient();
@@ -220,5 +222,26 @@ export async function persistSolutionSnapshot(opts: {
         throw new Error('persist_solution_snapshot did not return a solution id');
     }
 
-    return { solutionId: data };
+    const solutionId = data;
+    console.log(`✓ Created solution ${solutionId}${opts.parentSolutionId ? ` (child of ${opts.parentSolutionId})` : ''}`);
+
+    // NEW: Copy driver assignments from parent solution if exists
+    if (opts.parentSolutionId) {
+        console.log(`Copying driver assignments from parent solution ${opts.parentSolutionId}...`);
+        
+        const { data: affectedCount, error: copyError } = await supabase.rpc('copy_driver_assignments', {
+            p_parent_solution_id: opts.parentSolutionId,
+            p_new_solution_id: solutionId
+        });
+        
+        if (copyError) {
+            // CRITICAL but don't throw - solution is still valid, just missing assignments
+            console.error('⚠️  CRITICAL: Failed to preserve driver assignments:', copyError);
+            console.error('⚠️  Dispatchers will need to manually re-assign drivers');
+        } else {
+            console.log(`✓ Preserved driver assignments for ${affectedCount || 0} routes`);
+        }
+    }
+
+    return { solutionId };
 }

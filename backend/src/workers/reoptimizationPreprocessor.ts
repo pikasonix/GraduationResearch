@@ -137,27 +137,15 @@ function dateToRelativeMinutes(date: Date | string | undefined, referenceStart: 
 }
 
 /**
- * Calculate reference start time from orders (earliest time window start or current time)
+ * Calculate reference start time for relative time windows.
+ *
+ * We intentionally anchor to the current timestamp so that relative minutes stay within
+ * the solver horizon (e.g. 480 minutes). If we anchored to an old earliest order time,
+ * "now" would become a huge number of minutes and then get clamped to the horizon,
+ * causing infeasible tight windows (especially for dummy nodes).
  */
-function calculateReferenceStart(orders: Order[], currentTimestamp: Date): Date {
-    const times: Date[] = [];
-    
-    for (const o of orders) {
-        if (o.pickup_time_window_start) {
-            const t = new Date(o.pickup_time_window_start);
-            if (!isNaN(t.getTime())) times.push(t);
-        }
-        if (o.delivery_time_window_start) {
-            const t = new Date(o.delivery_time_window_start);
-            if (!isNaN(t.getTime())) times.push(t);
-        }
-    }
-    
-    if (times.length === 0) return currentTimestamp;
-    
-    const earliest = new Date(Math.min(...times.map(t => t.getTime())));
-    // Use earlier of current time or earliest time window
-    return earliest < currentTimestamp ? earliest : currentTimestamp;
+function calculateReferenceStart(_orders: Order[], currentTimestamp: Date): Date {
+    return currentTimestamp;
 }
 
 /**
@@ -205,7 +193,13 @@ export async function preprocessReoptimization(
     console.log(`[PreprocessReopt] After filtering cancelled: ${allOrders.length} orders, vehicles: ${context.vehicle_states.length}`);
 
     const currentTimeMinutes = dateToTimeWindow(current_timestamp, 0);
-    const endOfShiftMinutes = dateToTimeWindow(end_of_shift, currentTimeMinutes + 480); // Default 8 hour shift
+    const rawEndOfShiftMinutes = dateToTimeWindow(end_of_shift, currentTimeMinutes + 480); // Default 8 hour shift
+    
+    // Ensure end_of_shift is at least 8 hours (480 minutes) after current time
+    // This prevents infeasible time windows when end_of_shift is undefined or too close
+    const endOfShiftMinutes = Math.max(rawEndOfShiftMinutes, currentTimeMinutes + 480);
+    
+    console.log(`[PreprocessReopt] Time windows: current=${currentTimeMinutes}, endOfShift=${endOfShiftMinutes} (buffer: ${endOfShiftMinutes - currentTimeMinutes} minutes)`);
 
     // Build mapping_ids starting with depot
     const mapping_ids: MappingIdExtended[] = [
@@ -456,7 +450,7 @@ async function buildSartoriInstanceText(params: {
     vehicle_capacity_dimensions: Map<string, number>;
     current_timestamp: Date;
 }): Promise<string> {
-    const { depot, mapping_ids, allOrders, current_timestamp } = params;
+    const { depot, mapping_ids, dummy_nodes, allOrders, current_timestamp } = params;
 
     const maxCapacity = Math.max(...params.vehicles.map(v => v.capacity_weight || 100), 100);
     const horizonMinutes = 480; // 8 hours default
@@ -464,8 +458,12 @@ async function buildSartoriInstanceText(params: {
 
     // Calculate reference start time for time windows
     const referenceStart = calculateReferenceStart(allOrders, current_timestamp);
+    const referenceStartMinutes = Math.floor(referenceStart.getTime() / 1000 / 60);
+    const currentTimeMinutes = Math.floor(current_timestamp.getTime() / 1000 / 60);
+    
+    console.log(`[buildSartoriInstanceText DEBUG] referenceStart: ${referenceStart.toISOString()}, referenceStartMinutes: ${referenceStartMinutes}, currentTimeMinutes: ${currentTimeMinutes}, diff: ${currentTimeMinutes - referenceStartMinutes} minutes`);
 
-    // Separate pickups and deliveries from mapping_ids
+    // Separate pickups and deliveries from mapping_ids (excluding dummy nodes)
     const pickupMappings = mapping_ids.filter(m => m.kind === 'pickup' && !m.is_dummy);
     const deliveryMappings = mapping_ids.filter(m => m.kind === 'delivery' && !m.is_dummy);
     
@@ -477,6 +475,56 @@ async function buildSartoriInstanceText(params: {
     }
     
     const pairs: PickupDeliveryPair[] = [];
+    
+    // HACK: Add dummy_start nodes as fake pickup-delivery pairs
+    // This allows vehicles to start at their current positions
+    for (const dummy of dummy_nodes) {
+        if (dummy.node_type === 'dummy_start') {
+            // Convert absolute timestamps to relative minutes
+            const pickupReady = Math.max(0, Math.floor(dummy.ready_time - referenceStartMinutes));
+            const pickupDue = Math.max(pickupReady + 5, Math.floor(dummy.ready_time - referenceStartMinutes + 30)); // Wider window
+            const deliveryReady = pickupReady + 1; // After pickup
+            const deliveryDue = Math.max(deliveryReady + 10, Math.floor(dummy.due_time - referenceStartMinutes));
+            
+            const dummyPickup: MappingIdExtended = {
+                kind: 'pickup',
+                order_id: `DUMMY_${dummy.vehicle_id}`,
+                location_id: null,
+                lat: dummy.lat,
+                lng: dummy.lng,
+                is_dummy: true,
+                vehicle_id: dummy.vehicle_id,
+                demand: 0, // No capacity usage
+                time_window_start: pickupReady,
+                time_window_end: pickupDue,
+                service_time: 0,
+            };
+            
+            const dummyDelivery: MappingIdExtended = {
+                kind: 'delivery',
+                order_id: `DUMMY_${dummy.vehicle_id}`,
+                location_id: null,
+                lat: depot.latitude,
+                lng: depot.longitude,
+                is_dummy: true,
+                vehicle_id: dummy.vehicle_id,
+                demand: 0,
+                time_window_start: deliveryReady,
+                time_window_end: deliveryDue,
+                service_time: 0,
+            };
+            
+            pairs.push({
+                orderId: `DUMMY_${dummy.vehicle_id}`,
+                pickup: dummyPickup,
+                delivery: dummyDelivery,
+            });
+            
+            console.log(`[buildSartoriInstanceText DEBUG] Dummy pair for vehicle ${dummy.vehicle_id}: pickup at (${dummy.lat}, ${dummy.lng}), TW [${pickupReady}, ${pickupDue}]`);
+        }
+    }
+    
+    // Add real order pairs
     for (const pickup of pickupMappings) {
         const delivery = deliveryMappings.find(d => d.order_id === pickup.order_id);
         if (delivery) {

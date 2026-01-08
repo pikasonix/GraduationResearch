@@ -7,7 +7,7 @@ import DispatchSidebarLeft from '@/components/dispatch/DispatchSidebarLeft';
 import DispatchSidebarRight from '@/components/dispatch/DispatchSidebarRight';
 import DispatchMap from '@/components/dispatch/DispatchMap';
 import { Route, Instance, Node, createInstance, createNode, createRoute } from '@/utils/dataModels';
-import { getDrivers, getVehicles, assignExistingRouteToVehicle, assignRouteToVehicle, getUnassignedRoutes, getActiveRouteAssignments, Driver, Vehicle } from '@/services/driverService';
+import { getDrivers, getVehicles, assignExistingRouteToVehicle, getUnassignedRoutes, getActiveRouteAssignments, Driver, Vehicle } from '@/services/driverService';
 import { useGetSessionQuery } from '@/lib/redux/services/auth';
 import { useGetUserProfileOverviewQuery } from '@/lib/redux/services/userApi';
 import { toast } from 'sonner';
@@ -165,6 +165,13 @@ export default function DispatchClient() {
 
                 const allDbRoutes: any[] = Array.isArray(dbRoutes) ? dbRoutes : [];
 
+                if (scopedSolutionId && allDbRoutes.length === 0) {
+                    // In solution-scoped mode, never fall back to localStorage/unscoped data.
+                    setInstance(null);
+                    setRoutes([]);
+                    toast.error('Không tìm thấy solution hoặc solution chưa được lưu. Vui lòng mở lại từ kết quả tối ưu (có solutionId).');
+                }
+
                 // Extract instance and routes from persisted DB format.
                 // - optimization_solutions.solution_data commonly has mapping_ids (not full instance/routes)
                 // - routes.route_data commonly has route_sequence
@@ -204,7 +211,8 @@ export default function DispatchClient() {
                 }
 
                 // Fallback to localStorage if no database routes found
-                if (!parsedInstance || routeMap.size === 0) {
+                // NOTE: Only allow this in non-solution-scoped mode.
+                if (!scopedSolutionId && (!parsedInstance || routeMap.size === 0)) {
                     const lsRoutes = localStorage.getItem('allRoutes');
                     const lsInstance = localStorage.getItem('currentInstance');
 
@@ -343,27 +351,19 @@ export default function DispatchClient() {
 
         try {
             const dbRouteId = route.dbRouteId;
-            const canUpdateExisting = isUuid(dbRouteId);
-            if (canUpdateExisting) {
-                await assignExistingRouteToVehicle({
-                    organizationId,
-                    routeId: dbRouteId as string,
-                    vehicleId: vehicle.id,
-                    driverId: vehicle.driverId || null,
-                });
-            } else {
-                await assignRouteToVehicle({
-                    organizationId: organizationId,
-                    vehicleId: vehicle.id,
-                    driverId: vehicle.driverId || null, // Optional driver
-                    solutionData: {
-                        route: route.originalRoute,
-                        instance: instance
-                    },
-                    totalDistanceKm: route.distance / 1000,
-                    totalDurationHours: route.duration / 60
-                });
+            if (!isUuid(dbRouteId)) {
+                // Dispatch console should only assign routes that already exist in DB.
+                // Creating a new optimization_solution/route here can lead to duplicated routes and wrong "final solution".
+                toast.error('Route chưa được lưu trong hệ thống (không có DB id). Vui lòng reload và mở /dispatch với solutionId hợp lệ.');
+                return;
             }
+
+            await assignExistingRouteToVehicle({
+                organizationId,
+                routeId: dbRouteId,
+                vehicleId: vehicle.id,
+                driverId: vehicle.driverId || null,
+            });
 
             // Update UI - mark route as assigned (instead of removing)
             setRoutes(prev => prev.map(r =>

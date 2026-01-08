@@ -1080,7 +1080,7 @@ export function DispatchWorkspaceClient() {
     });
   }, [isPaused, isRunning, lastSolveAtMs, mode, ordersBeingRouted.length, runDynamicSolve]);
 
-  const handleRunOptimization = useCallback(() => {
+  const handleRunOptimization = useCallback(async () => {
     const ordersToOptimize = mode === "static" ? allEligibleOrders : ordersBeingRouted;
 
     if (mode === "static") {
@@ -1217,28 +1217,112 @@ export function DispatchWorkspaceClient() {
           })
         );
 
-        toast.success("Đã tạo instance, chuyển sang Route Details...");
-        router.push("/route-details");
+        // Run solver directly like dynamic mode
+        toast.info("Đang chạy solver cho static routing...");
+        
+        const inputData = { mapping_ids };
+        
+        try {
+          setIsRunning(true);
+          const result = await solverService.solveInstance(
+            instanceText,
+            solverParams,
+            undefined,
+            {
+              organizationId,
+              createdBy: userId,
+              inputData,
+            }
+          );
+
+          const sid = result.solutionId ?? null;
+          if (sid) {
+            setLatestSolutionId(sid);
+            try {
+              localStorage.setItem("lastSolutionId", sid);
+            } catch {
+              // ignore
+            }
+
+            if (result.persisted) {
+              try {
+                const nowIso = new Date().toISOString();
+                await Promise.all(
+                  selectedOrders
+                    .filter((o) => o.status === "pending")
+                    .map((o) => updateOrder({ id: o.id, status: "assigned", assigned_at: nowIso }).unwrap())
+                );
+              } catch (e) {
+                console.warn("Failed to update orders to assigned:", e);
+              }
+            }
+
+            await persistOptimizationEventsToDb({
+              solutionId: sid,
+              organizationId,
+              reportedByAuthUserId: userId!,
+              reason: "MANUAL",
+              persisted: !!result.persisted,
+              depotLat: Number(depotLat),
+              depotLng: Number(depotLng),
+              orderCount: selectedOrders.length,
+            });
+
+            await loadRouteEventsFromDb({ solutionId: sid, organizationId });
+
+            const solveEvent: RoutingEvent = {
+              id: crypto.randomUUID(),
+              timestamp: new Date(),
+              type: "OPTIMIZATION_RUN",
+              trigger: "STATIC_SOLVE",
+              summary: `Static routing hoàn thành: ${selectedOrders.length} đơn hàng`,
+            };
+            setLocalEvents((prev) => [solveEvent, ...prev]);
+
+            toast.success(`Tối ưu hóa thành công! Solution ID: ${sid}`);
+            
+            // Open route details in new tab
+            try {
+              if (typeof window !== "undefined") {
+                window.open(`/route-details?solutionId=${encodeURIComponent(String(sid))}`, "_blank");
+              }
+            } catch {
+              // ignore
+            }
+          } else {
+            toast.warning("Solver chạy xong nhưng không có solution");
+          }
+        } catch (error: any) {
+          console.error("Static solve failed:", error);
+          toast.error(`Lỗi khi chạy solver: ${error.message || "Unknown error"}`);
+        } finally {
+          setIsRunning(false);
+        }
       } catch (e: unknown) {
         console.error("Failed to build Sartori instance:", e);
         toast.error("Không thể tạo instance PDPTW");
       }
 
-      // Still log the event (optional), but navigation is the primary action.
-      const navEvent: RoutingEvent = {
-        id: crypto.randomUUID(),
-        timestamp: new Date(),
-        type: "OPTIMIZATION_RUN",
-        trigger: "STATIC_TO_ROUTE_DETAILS",
-        summary: `Chuyển sang Route Details để tối ưu hóa ${ordersToOptimize.length} đơn.`,
-      };
-      setLocalEvents((prev) => [navEvent, ...prev]);
       return;
     }
 
     // Dynamic: run solver now (persist to DB)
     runDynamicSolve("MANUAL");
-  }, [allEligibleOrders, ordersBeingRouted, mode, organization, organizationId, orders, router, runDynamicSolve]);
+  }, [
+    allEligibleOrders, 
+    ordersBeingRouted, 
+    mode, 
+    organization, 
+    organizationId, 
+    orders, 
+    router, 
+    runDynamicSolve,
+    solverParams,
+    userId,
+    updateOrder,
+    localEvents,
+    loadRouteEventsFromDb,
+  ]);
 
   const handleStartDynamic = useCallback(async () => {
     if (ordersBeingRouted.length === 0) {

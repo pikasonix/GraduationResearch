@@ -26,8 +26,14 @@ export interface Vehicle {
     fixed_cost: number | null;
     is_active: boolean;
     notes: string | null;
+    default_driver_id: string | null;
     created_at: string;
     updated_at: string;
+}
+
+export interface VehicleWithDriver extends Vehicle {
+    driver?: Driver;
+    routes?: RouteAssignment[];
 }
 
 export interface DriverWithVehicle extends Driver {
@@ -43,6 +49,15 @@ export interface RouteAssignment {
     solution_id: string | null;
     total_distance_km: number | null;
     total_duration_hours: number | null;
+    planned_distance_km?: number | null;
+    planned_duration_hours?: number | null;
+    route_data?: {
+        route_sequence?: number[];
+        metrics_meters_seconds?: any;
+        used_edges_matrix?: boolean;
+        start_time?: number;
+        initial_load?: number;
+    };
     created_at: string;
 }
 
@@ -318,7 +333,8 @@ export async function getUnassignedRoutes(organizationId: string): Promise<Array
             )
         `)
         .eq('organization_id', organizationId)
-        .or('vehicle_id.is.null,status.eq.planned')
+        .is('vehicle_id', null)
+        .eq('status', 'planned')
         .order('created_at', { ascending: false });
 
     if (error) {
@@ -346,6 +362,246 @@ export async function getActiveRouteAssignments(organizationId: string): Promise
     }
 
     return data || [];
+}
+
+/**
+ * Get vehicles that have active routes assigned (for driver to claim)
+ */
+export async function getVehiclesWithActiveRoutes(organizationId: string): Promise<VehicleWithDriver[]> {
+    // First, get the most recent solution for this organization
+    const { data: latestSolution, error: solutionError } = await supabase
+        .from('optimization_solutions')
+        .select('id')
+        .eq('organization_id', organizationId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+    if (solutionError) {
+        console.error('Error fetching latest solution:', solutionError);
+        throw solutionError;
+    }
+
+    if (!latestSolution) {
+        // No solution exists yet
+        return [];
+    }
+
+    // Get routes from the latest solution with vehicles but no driver assigned yet
+    const { data: routesData, error: routesError } = await supabase
+        .from('routes')
+        .select(`
+            id,
+            vehicle_id,
+            driver_id,
+            status,
+            route_number,
+            planned_distance_km,
+            planned_duration_hours,
+            planned_cost,
+            route_data,
+            solution_id
+        `)
+        .eq('organization_id', organizationId)
+        .eq('solution_id', latestSolution.id)
+        .in('status', ['planned', 'assigned'])
+        .not('vehicle_id', 'is', null);
+
+    if (routesError) {
+        console.error('Error fetching routes:', routesError);
+        throw routesError;
+    }
+
+    if (!routesData || routesData.length === 0) {
+        return [];
+    }
+
+    // Get unique vehicle IDs
+    const vehicleIds = [...new Set(routesData.map(r => r.vehicle_id).filter(Boolean))] as string[];
+
+    // Get vehicle details
+    const { data: vehiclesData, error: vehiclesError } = await supabase
+        .from('vehicles')
+        .select('*')
+        .in('id', vehicleIds)
+        .eq('is_active', true);
+
+    if (vehiclesError) {
+        console.error('Error fetching vehicles:', vehiclesError);
+        throw vehiclesError;
+    }
+
+    if (!vehiclesData || vehiclesData.length === 0) {
+        return [];
+    }
+
+    // Get drivers for vehicles that already have driver_id in routes
+    const driverIds = [...new Set(routesData.map(r => r.driver_id).filter(Boolean))] as string[];
+    let driversMap = new Map();
+
+    if (driverIds.length > 0) {
+        const { data: driversData } = await supabase
+            .from('drivers')
+            .select('id, driver_code, full_name, phone')
+            .in('id', driverIds);
+
+        driversMap = new Map(driversData?.map(d => [d.id, d]) || []);
+    }
+
+    // Map vehicles with their route info from latest solution only
+    const vehiclesMap = new Map(vehiclesData.map(v => [v.id, v]));
+
+    return vehiclesData.map(v => {
+        const vehicleRoutes = routesData.filter(r => r.vehicle_id === v.id);
+        const hasDriver = vehicleRoutes.some(r => r.driver_id !== null);
+        const assignedDriverId = vehicleRoutes.find(r => r.driver_id)?.driver_id;
+
+        return {
+            ...v,
+            driver: assignedDriverId ? driversMap.get(assignedDriverId) : undefined,
+            // Attach route info for display (only from latest solution)
+            routes: vehicleRoutes,
+            isOccupied: hasDriver
+        };
+    });
+}
+
+/**
+ * Get the vehicle assigned to a specific driver
+ */
+export async function getDriverVehicle(driverId: string): Promise<VehicleWithDriver | null> {
+    // Get vehicle assigned to this driver
+    const { data: vehicleData, error: vehicleError } = await supabase
+        .from('vehicles')
+        .select('*')
+        .eq('default_driver_id', driverId)
+        .eq('is_active', true)
+        .maybeSingle();
+
+    if (vehicleError) {
+        console.error('Error fetching driver vehicle:', vehicleError);
+        throw vehicleError;
+    }
+
+    if (!vehicleData) return null;
+
+    // Get driver details
+    const { data: driverData, error: driverError } = await supabase
+        .from('drivers')
+        .select('id, driver_code, full_name, phone')
+        .eq('id', driverId)
+        .single();
+
+    if (driverError) {
+        console.error('Error fetching driver details:', driverError);
+        // Return vehicle without driver info
+        return { ...vehicleData, driver: undefined };
+    }
+
+    return {
+        ...vehicleData,
+        driver: driverData
+    };
+}
+
+/**
+ * Assign a driver to a vehicle as default
+ */
+export async function assignDriverToVehicle(params: {
+    vehicleId: string;
+    driverId: string;
+    organizationId: string;
+}): Promise<Vehicle> {
+    // First, unassign driver from any other vehicle
+    await supabase
+        .from('vehicles')
+        .update({ default_driver_id: null })
+        .eq('default_driver_id', params.driverId)
+        .eq('organization_id', params.organizationId);
+
+    // Then assign to new vehicle
+    const { data, error } = await supabase
+        .from('vehicles')
+        .update({ default_driver_id: params.driverId })
+        .eq('id', params.vehicleId)
+        .eq('organization_id', params.organizationId)
+        .select()
+        .single();
+
+    if (error) {
+        console.error('Error assigning driver to vehicle:', error);
+        throw error;
+    }
+
+    return data;
+}
+
+/**
+ * Unassign a driver from their vehicle
+ */
+export async function unassignDriverFromVehicle(params: {
+    driverId: string;
+    organizationId: string;
+}): Promise<void> {
+    const { error } = await supabase
+        .from('vehicles')
+        .update({ default_driver_id: null })
+        .eq('default_driver_id', params.driverId)
+        .eq('organization_id', params.organizationId);
+
+    if (error) {
+        console.error('Error unassigning driver from vehicle:', error);
+        throw error;
+    }
+}
+
+/**
+ * Claim a route (assign driver to all routes of a vehicle)
+ */
+export async function claimVehicleRoutes(params: {
+    vehicleId: string;
+    driverId: string;
+    organizationId: string;
+}): Promise<void> {
+    // Update all planned/assigned routes for this vehicle to have this driver
+    const { error } = await supabase
+        .from('routes')
+        .update({ 
+            driver_id: params.driverId,
+            status: 'assigned'
+        })
+        .eq('vehicle_id', params.vehicleId)
+        .eq('organization_id', params.organizationId)
+        .in('status', ['planned', 'assigned'])
+        .is('driver_id', null); // Only claim routes without driver
+
+    if (error) {
+        console.error('Error claiming vehicle routes:', error);
+        throw error;
+    }
+}
+
+/**
+ * Unclaim routes (remove driver from routes)
+ */
+export async function unclaimVehicleRoutes(params: {
+    driverId: string;
+    organizationId: string;
+}): Promise<void> {
+    const { error } = await supabase
+        .from('routes')
+        .update({ 
+            driver_id: null,
+            status: 'planned'
+        })
+        .eq('driver_id', params.driverId)
+        .eq('organization_id', params.organizationId)
+        .in('status', ['assigned']);
+
+    if (error) {
+        console.error('Error unclaiming routes:', error);
+        throw error;
+    }
 }
 
 /**

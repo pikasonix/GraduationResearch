@@ -18,6 +18,7 @@ DECLARE
     v_total_cost numeric(15,2) := COALESCE(NULLIF(payload->>'total_cost', '')::numeric(15,2), 0);
     v_solution_data jsonb := COALESCE(payload->'solution_data', '{}'::jsonb);
     v_routes jsonb := COALESCE(payload->'routes', '[]'::jsonb);
+    v_parent_solution_id uuid := NULLIF((payload->>'parent_solution_id'), '')::uuid;
 
     v_route jsonb;
     v_stop jsonb;
@@ -35,7 +36,8 @@ BEGIN
         total_distance_km,
         total_time_hours,
         total_cost,
-        solution_data
+        solution_data,
+        parent_solution_id
     ) VALUES (
         v_job_id,
         v_org_id,
@@ -44,7 +46,8 @@ BEGIN
         v_total_distance_km,
         v_total_time_hours,
         v_total_cost,
-        v_solution_data
+        v_solution_data,
+        v_parent_solution_id
     )
     RETURNING id INTO v_solution_id;
 

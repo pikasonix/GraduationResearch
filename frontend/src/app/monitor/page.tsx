@@ -9,6 +9,8 @@ import { getDrivers, getVehicles, getActiveRouteAssignments, RouteAssignment } f
 import { toast } from 'sonner';
 import { useSearchParams } from 'next/navigation';
 import { supabase } from '@/supabase/client';
+import { useGetSessionQuery } from '@/lib/redux/services/auth';
+import { useGetUserProfileOverviewQuery } from '@/lib/redux/services/userApi';
 
 // Types
 export interface DispatchDriver {
@@ -224,6 +226,12 @@ import { RoutePosition } from '@/components/monitor/MonitorMap';
 export default function MonitorPage() {
     const searchParams = useSearchParams();
     const searchKey = useMemo(() => searchParams?.toString() || '', [searchParams]);
+
+    // Get user session and organization
+    const { data: sessionData } = useGetSessionQuery();
+    const userId = sessionData?.session?.user?.id;
+    const { data: userProfile } = useGetUserProfileOverviewQuery(userId ?? "", { skip: !userId });
+    const organization = userProfile?.organization ?? null;
 
     const [drivers, setDrivers] = useState<DispatchDriver[]>([]);
     const [routes, setRoutes] = useState<DispatchRoute[]>([]);
@@ -497,8 +505,20 @@ export default function MonitorPage() {
                     }
                 }
 
-                // Depot fallback
-                const depotNode = solutionNodes[0] ? { lat: solutionNodes[0].lat, lng: solutionNodes[0].lng } : { lat: 21.0285, lng: 105.85 };
+                // Depot from organization (prioritize user's organization depot)
+                let depotNode: { lat: number; lng: number };
+                if (organization?.depot_latitude != null && organization?.depot_longitude != null) {
+                    depotNode = {
+                        lat: Number(organization.depot_latitude),
+                        lng: Number(organization.depot_longitude)
+                    };
+                } else if (solutionNodes[0]) {
+                    // Fallback to solution data if organization depot not set
+                    depotNode = { lat: solutionNodes[0].lat, lng: solutionNodes[0].lng };
+                } else {
+                    // Final fallback to Hanoi center
+                    depotNode = { lat: 21.0285, lng: 105.85 };
+                }
                 setDepot(depotNode);
 
                 // Compute per-route positions (interpolated based on current time) and per-vehicle timelines
@@ -607,13 +627,15 @@ export default function MonitorPage() {
                     return sum + (Number.isFinite(meters) ? meters / 1000 : 0);
                 }, 0);
 
-                const totalDurationSeconds = effectiveRoutes.reduce((sum, r) => {
+                // Find the longest route duration (max instead of sum)
+                const maxDurationSeconds = effectiveRoutes.reduce((max, r) => {
                     const secs = r.meta?.plannedDurationSeconds;
-                    return sum + (Number.isFinite(secs) ? secs : 0);
+                    const duration = Number.isFinite(secs) ? secs : 0;
+                    return Math.max(max, duration);
                 }, 0);
 
-                const totalHours = Math.floor(totalDurationSeconds / 3600);
-                const totalMinutes = Math.floor((totalDurationSeconds % 3600) / 60);
+                const totalHours = Math.floor(maxDurationSeconds / 3600);
+                const totalMinutes = Math.floor((maxDurationSeconds % 3600) / 60);
 
                 // Update Stats with real data
                 setStats({
