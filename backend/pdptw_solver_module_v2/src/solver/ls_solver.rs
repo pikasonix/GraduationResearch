@@ -35,6 +35,19 @@ fn construct_initial_solution<'a, 'b>(
     sol
 }
 
+/// Public wrapper for construct_initial_solution for dynamic re-optimization
+pub fn construct_initial_solution_pub<'a, 'b>(
+    instance: &'a PDPTWInstance,
+    _args: &SolverArguments,
+    solution: &mut Solution<'b>,
+    rng: &mut Random,
+) where
+    'a: 'b,
+{
+    let init_sol = construct_initial_solution(instance, rng);
+    *solution = init_sol;
+}
+
 pub fn ls_ages_lns(
     instance: &PDPTWInstance,
     args: &SolverArguments,

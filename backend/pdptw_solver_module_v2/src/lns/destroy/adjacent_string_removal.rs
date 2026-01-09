@@ -214,14 +214,17 @@ impl<'a> AdjacentStringRemoval<'a> {
         R
     }
 
-    fn select_random_pickup(&self, _solution: &Solution, rng: &mut Random) -> usize {
-        // let i = rng.gen_range(0..self.instance.num_requests - solution.unassigned_requests.count());
+    fn select_random_pickup(&self, solution: &Solution, rng: &mut Random) -> usize {
+        // Select a random pickup that is not locked
         self.instance
             .iter_pickups()
-            // .filter(|pickup| !solution.unassigned_requests.contains(pickup.id))
+            .filter(|pickup| !solution.is_locked(pickup.id))
             .choose(rng)
-            .unwrap()
-            .id
+            .map(|p| p.id)
+            .unwrap_or_else(|| {
+                // Fallback: if all pickups are locked, just pick any
+                self.instance.iter_pickups().choose(rng).unwrap().id
+            })
         // self.instance.iter_pickups().choose(rng).unwrap().id
         // if solution.number_of_unassigned_requests() > 0 {
         // if rng.gen_range(0..self.instance.num_requests) < solution.unassigned_requests.count() {
@@ -245,11 +248,34 @@ impl<'a> AdjacentStringRemoval<'a> {
     ) -> usize {
         // string procedure - removes a randomly selected string of cardinality l t
         //  in tour t, which includes customer c∗
+        
+        // Skip if initial node is locked (dynamic re-optimization)
+        if solution.is_locked(p_id) {
+            return 0;
+        }
+        
         let mut request_parts_removed = RemovedRequestParts::new(self.instance.num_requests);
         let vn_id = t * 2;
         let mut num_nodes_removed = 0;
         let mut node = p_id;
         let (first, last) = loop {
+            // Skip locked nodes - don't remove them
+            if solution.is_locked(node) {
+                // Move to next unlocked node
+                let (pred, succ) = solution.pred_succ_pair(node);
+                if pred == vn_id {
+                    if succ == vn_id + 1 {
+                        break (pred, succ); // No more nodes to remove
+                    }
+                    node = succ;
+                } else if succ == vn_id + 1 {
+                    node = pred;
+                } else {
+                    node = if rng.gen_range(0..=1) == 0 { pred } else { succ };
+                }
+                continue;
+            }
+            
             request_parts_removed.remove(
                 self.instance.request_id(node),
                 self.instance.node_type(node),

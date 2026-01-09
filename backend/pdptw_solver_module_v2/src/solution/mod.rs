@@ -32,10 +32,17 @@ pub struct Solution<'a> {
     pub blocks: BlockNodes,
     pub empty_route_ids: FixedBitSet,
     pub unassigned_requests: RequestBank<'a>,
+    
+    /// Locked nodes that cannot be removed/moved by LNS destroy operators.
+    /// Used in dynamic re-optimization to protect committed/in-transit requests.
+    pub locked_nodes: FixedBitSet,
 
     objective: Num,
     max_num_vehicles_available: usize,
     num_requests: usize,
+    
+    /// Total lateness across all routes (for soft time windows)
+    total_lateness: Num,
 }
 
 impl<'a> Solution<'a> {
@@ -54,6 +61,8 @@ impl<'a> Solution<'a> {
 
         let mut empty_route_ids = FixedBitSet::with_capacity(instance.num_vehicles);
         empty_route_ids.insert_range(..);
+        
+        let num_nodes = instance.nodes.len();
 
         Self {
             instance,
@@ -66,6 +75,8 @@ impl<'a> Solution<'a> {
             blocks: BlockNodes::with_instance(&instance),
             empty_route_ids,
             unassigned_requests: RequestBank::with_instance(&instance),
+            locked_nodes: FixedBitSet::with_capacity(num_nodes),
+            total_lateness: Num::ZERO,
         }
     }
 
@@ -77,7 +88,54 @@ impl<'a> Solution<'a> {
         let mut objective = self.unassigned_requests.penalty_per_entry
             * Num::from(self.unassigned_requests.count());
         objective += self.total_cost();
+        
+        // Add lateness penalty when soft-time-windows feature is enabled
+        #[cfg(feature = "soft-time-windows")]
+        {
+            objective += self.lateness_penalty();
+        }
+        
         objective
+    }
+    
+    /// Calculate lateness penalty across all routes.
+    /// Penalty = total_lateness_minutes * LATE_PENALTY_PER_MINUTE (1000)
+    #[cfg(feature = "soft-time-windows")]
+    pub fn lateness_penalty(&self) -> Num {
+        const LATE_PENALTY_PER_MINUTE: i64 = 1000;
+        let mut total_lateness = Num::ZERO;
+        for i in 0..self.instance.num_vehicles {
+            total_lateness += self.fw_data[(i * 2) + 1].data.get_lateness();
+        }
+        total_lateness * Num::from(LATE_PENALTY_PER_MINUTE)
+    }
+    
+    /// Get total lateness across all routes (in time units)
+    pub fn compute_total_lateness(&self) -> Num {
+        #[cfg(feature = "soft-time-windows")]
+        {
+            let mut total = Num::ZERO;
+            for i in 0..self.instance.num_vehicles {
+                total += self.fw_data[(i * 2) + 1].data.get_lateness();
+            }
+            total
+        }
+        #[cfg(not(feature = "soft-time-windows"))]
+        { Num::ZERO }
+    }
+    
+    /// Get total violation count across all routes
+    pub fn compute_violation_count(&self) -> usize {
+        #[cfg(feature = "soft-time-windows")]
+        {
+            let mut count = 0;
+            for i in 0..self.instance.num_vehicles {
+                count += self.fw_data[(i * 2) + 1].data.get_violation_count();
+            }
+            count
+        }
+        #[cfg(not(feature = "soft-time-windows"))]
+        { 0 }
     }
 
     pub fn total_cost(&self) -> Num {
@@ -106,6 +164,61 @@ impl<'a> Solution<'a> {
             }
         }
         true
+    }
+    
+    // ========================================================================
+    // Locked Nodes (Dynamic Re-optimization)
+    // ========================================================================
+    
+    /// Check if a node is locked (cannot be removed by LNS)
+    #[inline(always)]
+    pub fn is_locked(&self, node_id: usize) -> bool {
+        self.locked_nodes.contains(node_id)
+    }
+    
+    /// Lock a node (prevent removal by LNS destroy operators)
+    pub fn lock_node(&mut self, node_id: usize) {
+        self.locked_nodes.insert(node_id);
+    }
+    
+    /// Lock a request (both pickup and delivery)
+    pub fn lock_request(&mut self, pickup_id: usize) {
+        self.locked_nodes.insert(pickup_id);
+        self.locked_nodes.insert(pickup_id + 1); // delivery
+    }
+    
+    /// Unlock a node
+    pub fn unlock_node(&mut self, node_id: usize) {
+        self.locked_nodes.set(node_id, false);
+    }
+    
+    /// Unlock all nodes
+    pub fn unlock_all(&mut self) {
+        self.locked_nodes.clear();
+    }
+    
+    /// Get count of locked nodes
+    pub fn locked_count(&self) -> usize {
+        self.locked_nodes.count_ones(..)
+    }
+    
+    /// Iterate over locked node IDs
+    pub fn iter_locked(&self) -> impl Iterator<Item = usize> + '_ {
+        self.locked_nodes.ones()
+    }
+    
+    // ========================================================================
+    // Lateness Tracking (Soft Time Windows)
+    // ========================================================================
+    
+    /// Get total lateness across all routes
+    pub fn get_total_lateness(&self) -> Num {
+        self.total_lateness
+    }
+    
+    /// Set total lateness (called after route evaluation)
+    pub fn set_total_lateness(&mut self, lateness: Num) {
+        self.total_lateness = lateness;
     }
 }
 

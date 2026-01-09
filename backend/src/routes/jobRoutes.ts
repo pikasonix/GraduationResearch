@@ -517,6 +517,99 @@ export function setupJobRoutes(jobQueue: JobQueue): Router {
     });
 
     /**
+     * POST /api/jobs/reoptimize-native
+     * Submit a reoptimization job using native Rust dynamic mode
+     * This uses the solver's built-in dynamic re-optimization instead of preprocessing
+     */
+    router.post('/reoptimize-native', async (req: Request, res: Response): Promise<void> => {
+        try {
+            const { 
+                instance,
+                vehicle_states,
+                new_requests,
+                params = {},
+                organizationId,
+                createdBy 
+            } = req.body;
+
+            if (!instance) {
+                res.status(400).json({
+                    success: false,
+                    error: 'Missing required field: instance'
+                });
+                return;
+            }
+
+            // Build dynamic params
+            const dynamicParams: SolverParams = {
+                ...params,
+                dynamic: true,
+                vehicle_states: vehicle_states || [],
+                new_requests: new_requests || [],
+            };
+
+            // Set reasonable defaults for dynamic mode
+            if (dynamicParams.time_limit === undefined) {
+                dynamicParams.time_limit = 30; // 30 seconds default for dynamic
+            }
+            if (dynamicParams.late_penalty === undefined) {
+                dynamicParams.late_penalty = 1000;
+            }
+            if (dynamicParams.unassigned_penalty === undefined) {
+                dynamicParams.unassigned_penalty = 10000;
+            }
+
+            console.log(`[reoptimize-native] Submitting dynamic job: ${vehicle_states?.length || 0} vehicles, ${new_requests?.length || 0} new requests`);
+
+            const jobId = jobQueue.createJob(instance, dynamicParams, {
+                organizationId,
+                createdBy,
+                inputData: {
+                    is_dynamic_reoptimization: true,
+                    vehicle_count: vehicle_states?.length || 0,
+                    new_request_count: new_requests?.length || 0,
+                },
+            });
+
+            // Persist to database if available
+            if (supabase && organizationId) {
+                const { error: jobInsertError } = await supabase
+                    .from('optimization_jobs')
+                    .insert({
+                        id: jobId,
+                        organization_id: organizationId,
+                        created_by: createdBy,
+                        status: 'queued',
+                        input_data: {
+                            dynamic_reoptimization: true,
+                            vehicle_count: vehicle_states?.length || 0,
+                            new_request_count: new_requests?.length || 0,
+                        },
+                        config_params: params,
+                    });
+
+                if (jobInsertError) {
+                    console.warn('[reoptimize-native] Failed to persist optimization_jobs:', jobInsertError.message);
+                }
+            }
+
+            res.json({
+                success: true,
+                jobId,
+                message: 'Native dynamic reoptimization job submitted',
+                dynamic_mode: true,
+            });
+
+        } catch (error) {
+            console.error('Error submitting native reoptimization job:', error);
+            res.status(500).json({
+                success: false,
+                error: error instanceof Error ? error.message : String(error)
+            });
+        }
+    });
+
+    /**
      * GET /api/jobs/stats
      * Get queue statistics
      */

@@ -1,0 +1,18 @@
+[
+  {
+    "vehicle_id": 0,
+    "current_position": [45.0, 55.0],
+    "current_time": 500.0,
+    "current_load": 2,
+    "in_transit_deliveries": [111, 147],
+    "committed_requests": [14, 17]
+  },
+  {
+    "vehicle_id": 1,
+    "current_position": [35.0, 65.0],
+    "current_time": 400.0,
+    "current_load": 1,
+    "in_transit_deliveries": [131],
+    "committed_requests": []
+  }
+]

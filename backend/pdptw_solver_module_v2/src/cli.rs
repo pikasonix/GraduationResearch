@@ -400,6 +400,55 @@ pub struct SolverArguments {
         conflicts_with_all(["pooling_cache_directory", "pooling_cache_prefix"])
     )]
     pub pooling_cache_filepath: Option<String>,
+
+    // Dynamic re-optimization parameters
+    #[arg(
+        long,
+        help = "Enable dynamic re-optimization mode (vehicles mid-route)",
+        default_value = "false"
+    )]
+    pub dynamic: bool,
+
+    #[arg(
+        long,
+        help = "Path to vehicle states JSON file for dynamic mode",
+        requires = "dynamic"
+    )]
+    pub vehicle_states: Option<String>,
+
+    #[arg(
+        long,
+        help = "Path to new requests JSON file for dynamic mode",
+        requires = "dynamic"
+    )]
+    pub new_requests: Option<String>,
+
+    #[arg(
+        long,
+        help = "Penalty per minute of lateness",
+        default_value = "1000"
+    )]
+    pub late_penalty: f64,
+
+    #[arg(
+        long,
+        help = "Penalty per unassigned request",
+        default_value = "10000"
+    )]
+    pub unassigned_penalty: f64,
+
+    #[arg(
+        long,
+        help = "Lock committed requests (not yet picked up)",
+        default_value = "false"
+    )]
+    pub lock_committed: bool,
+
+    #[arg(
+        long,
+        help = "Lock requests starting within this many seconds"
+    )]
+    pub lock_time_threshold: Option<f64>,
 }
 
 impl SolverArguments {

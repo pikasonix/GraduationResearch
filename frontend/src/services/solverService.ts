@@ -27,6 +27,73 @@ export interface SolverParams {
     
     // Instance format
     format?: 'lilim' | 'sartori';
+    
+    // Dynamic re-optimization parameters
+    dynamic?: boolean;
+    vehicle_states?: VehicleStateInput[];
+    new_requests?: NewRequestInput[];
+    late_penalty?: number;
+    unassigned_penalty?: number;
+    lock_committed?: boolean;
+    lock_time_threshold?: number;
+}
+
+/**
+ * Vehicle state input for native dynamic re-optimization
+ */
+export interface VehicleStateInput {
+    vehicle_id: number;
+    current_position: [number, number];
+    current_time: number;
+    current_load: number;
+    in_transit_deliveries: number[];
+    committed_requests: number[];
+}
+
+/**
+ * New request input for native dynamic re-optimization
+ */
+export interface NewRequestInput {
+    request_id: number;
+    original_order_id: number;
+    pickup_coords: [number, number];
+    delivery_coords: [number, number];
+    pickup_tw: [number, number];
+    delivery_tw: [number, number];
+    demand: number;
+    pickup_service_time?: number;
+    delivery_service_time?: number;
+}
+
+/**
+ * Dynamic solver result
+ */
+export interface DynamicSolverResult {
+    routes: DynamicRoute[];
+    violations: DynamicViolation[];
+    vehicles_used: number;
+    unassigned_count: number;
+    total_cost: number;
+    computation_time_ms: number;
+}
+
+export interface DynamicRoute {
+    vehicle_id: number;
+    nodes: number[];
+    order_ids: number[];
+}
+
+export interface DynamicViolation {
+    node_id: number;
+    request_id: number;
+    original_order_id: number;
+    violation_type: 'late_arrival' | 'unassigned';
+    details: {
+        expected?: number;
+        actual?: number;
+        late_by_minutes?: number;
+        reason?: string;
+    };
 }
 
 export interface VehicleState {
@@ -274,6 +341,69 @@ class SolverService {
         }
 
         return { solutionText: job.result, solutionId: job.solutionId, persisted: job.persisted };
+    }
+
+    /**
+     * Submit a native dynamic reoptimization job
+     * Uses the Rust solver's built-in dynamic mode instead of preprocessing
+     */
+    async submitNativeDynamicJob(
+        instance: string,
+        vehicleStates: VehicleStateInput[],
+        newRequests: NewRequestInput[] = [],
+        params: SolverParams = {},
+        meta?: { organizationId?: string; createdBy?: string }
+    ): Promise<string> {
+        const response = await fetch(`${this.baseURL}/jobs/reoptimize-native`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                instance,
+                vehicle_states: vehicleStates,
+                new_requests: newRequests,
+                params,
+                organizationId: meta?.organizationId,
+                createdBy: meta?.createdBy,
+            }),
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.error || `Failed to submit native dynamic job: ${response.status}`);
+        }
+
+        const data = await response.json();
+        console.log('[NativeDynamic] Job submitted:', data.jobId, data.dynamic_mode ? '(dynamic mode)' : '');
+        return data.jobId;
+    }
+
+    /**
+     * Submit and wait for native dynamic reoptimization (convenience method)
+     * Returns structured DynamicSolverResult instead of raw solution text
+     */
+    async reoptimizeNative(
+        instance: string,
+        vehicleStates: VehicleStateInput[],
+        newRequests: NewRequestInput[] = [],
+        params: SolverParams = {},
+        onProgress?: JobProgressCallback,
+        meta?: { organizationId?: string; createdBy?: string }
+    ): Promise<DynamicSolverResult> {
+        console.log('[NativeDynamic] Submitting native dynamic job...');
+        const jobId = await this.submitNativeDynamicJob(instance, vehicleStates, newRequests, params, meta);
+        
+        const job = await this.pollJob(jobId, onProgress);
+        
+        if (!job.result) {
+            throw new Error('Native dynamic job completed but no result returned');
+        }
+
+        // Parse the JSON result
+        try {
+            return JSON.parse(job.result) as DynamicSolverResult;
+        } catch {
+            throw new Error('Failed to parse dynamic solver result');
+        }
     }
 
     /**

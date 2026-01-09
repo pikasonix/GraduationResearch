@@ -32,6 +32,15 @@ pub struct REFData {
     pub earliest_completion: Num,
     pub latest_start: Num,
     pub tw_feasible: bool,
+    
+    /// Total lateness accumulated in this segment (for soft time windows).
+    /// Only used when `soft-time-windows` feature is enabled.
+    #[cfg(feature = "soft-time-windows")]
+    pub total_lateness: Num,
+    
+    /// Number of time window violations in this segment.
+    #[cfg(feature = "soft-time-windows")]
+    pub violation_count: usize,
 
     #[cfg(feature = "trace-refdata")]
     pub trace: Vec<usize>,
@@ -65,6 +74,10 @@ impl REFData {
             earliest_completion: node.ready + node.servicetime,
             latest_start: node.due,
             tw_feasible: true,
+            #[cfg(feature = "soft-time-windows")]
+            total_lateness: Num::ZERO,
+            #[cfg(feature = "soft-time-windows")]
+            violation_count: 0,
             #[cfg(feature = "trace-refdata")]
             trace: vec![node.id],
         };
@@ -72,6 +85,24 @@ impl REFData {
 
     pub fn reset_with_node(&mut self, node: &REFNode) {
         *self = Self::with_node(node);
+    }
+    
+    /// Get total lateness (returns 0 if soft-time-windows feature is not enabled)
+    #[inline]
+    pub fn get_lateness(&self) -> Num {
+        #[cfg(feature = "soft-time-windows")]
+        { self.total_lateness }
+        #[cfg(not(feature = "soft-time-windows"))]
+        { Num::ZERO }
+    }
+    
+    /// Get violation count (returns 0 if soft-time-windows feature is not enabled)
+    #[inline]
+    pub fn get_violation_count(&self) -> usize {
+        #[cfg(feature = "soft-time-windows")]
+        { self.violation_count }
+        #[cfg(not(feature = "soft-time-windows"))]
+        { 0 }
     }
 }
 
@@ -96,11 +127,29 @@ impl<'a> ForwardREF<'a, REFNode> for REFData {
         into.current_load = self.current_load + node.demand;
 
         let DistanceAndTime { distance, time } = param;
+        
+        let arrival_time = self.earliest_completion + time;
 
-        into.tw_feasible = self.tw_feasible && self.earliest_completion + time <= node.due;
+        // Hard time window check (original behavior)
+        into.tw_feasible = self.tw_feasible && arrival_time <= node.due;
+        
+        // Soft time window tracking
+        #[cfg(feature = "soft-time-windows")]
+        {
+            let lateness = if arrival_time > node.due {
+                arrival_time - node.due
+            } else {
+                Num::ZERO
+            };
+            into.total_lateness = self.total_lateness + lateness;
+            into.violation_count = self.violation_count + if lateness > Num::ZERO { 1 } else { 0 };
+            
+            // With soft TW, we always consider feasible (penalty handles violations)
+            // Uncomment next line to enable fully soft time windows:
+            // into.tw_feasible = true;
+        }
 
-        into.earliest_completion =
-            (self.earliest_completion + time).max(node.ready) + node.servicetime;
+        into.earliest_completion = arrival_time.max(node.ready) + node.servicetime;
         into.latest_start = self.latest_start.min(node.due - self.time - time);
 
         into.distance = self.distance + distance;

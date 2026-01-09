@@ -893,11 +893,11 @@ export function DispatchWorkspaceClient() {
         // For now, treat all selected orders as potentially new
         const newOrderIds = orderIds;
 
-        // Don't send previous_solution_id for fresh routing
-        // This prevents backend from fetching all active orders from previous solution
-        // Only send previous_solution_id when explicitly reoptimizing an existing solution
+        // Use previous_solution_id for re-optimization if available
+        // - First time (no latestSolutionId): fresh routing with only new orders
+        // - Subsequent times: re-optimization with orders from previous solution + new orders
         const reoptimizationContext: ReoptimizationContext = {
-          previous_solution_id: undefined, // Fresh routing - no previous solution
+          previous_solution_id: latestSolutionId || undefined,
           vehicle_states: vehicleStates,
           order_delta: {
             new_order_ids: newOrderIds,

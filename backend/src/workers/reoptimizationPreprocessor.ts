@@ -389,7 +389,7 @@ export async function preprocessReoptimization(
     console.log(`[PreprocessReopt DEBUG] Sample delivery mapping:`, JSON.stringify(sampleDelivery, null, 2));
 
     // Generate Sartori PDPTW instance text
-    const instance_text = await buildSartoriInstanceText({
+    const { instance_text, updated_mapping_ids, updated_dummy_nodes } = await buildSartoriInstanceText({
         depot,
         mapping_ids,
         dummy_nodes,
@@ -399,12 +399,12 @@ export async function preprocessReoptimization(
         current_timestamp,
     });
 
-    console.log(`[PreprocessReopt] Generated instance with ${mapping_ids.length} nodes (expected: 1 depot + ${context.vehicle_states.length} vehicles * 2 dummy + ${allOrders.length} orders * 2 = ${1 + context.vehicle_states.length * 2 + allOrders.length * 2})`);
+    console.log(`[PreprocessReopt] Generated instance with ${updated_mapping_ids.length} nodes (expected: 1 depot + ${context.vehicle_states.length} vehicles * 2 dummy + ${allOrders.length} orders * 2 = ${1 + context.vehicle_states.length * 2 + allOrders.length * 2})`);
 
     return {
         instance_text,
-        mapping_ids,
-        dummy_nodes,
+        mapping_ids: updated_mapping_ids, // Use updated mapping_ids from buildSartoriInstanceText
+        dummy_nodes: updated_dummy_nodes, // Use updated dummy_nodes with correct node indices
         vehicle_capacity_dimensions,
         initial_routes,
     };
@@ -449,7 +449,7 @@ async function buildSartoriInstanceText(params: {
     vehicles: Vehicle[];
     vehicle_capacity_dimensions: Map<string, number>;
     current_timestamp: Date;
-}): Promise<string> {
+}): Promise<{ instance_text: string; updated_mapping_ids: MappingIdExtended[]; updated_dummy_nodes: DummyNode[] }> {
     const { depot, mapping_ids, dummy_nodes, allOrders, current_timestamp } = params;
 
     const maxCapacity = Math.max(...params.vehicles.map(v => v.capacity_weight || 100), 100);
@@ -720,6 +720,65 @@ async function buildSartoriInstanceText(params: {
     
     console.log(`[buildSartoriInstanceText] Built ${nodes.length} nodes: 1 depot + ${numRequests} pickups + ${numRequests} deliveries`);
 
+    // Build updated_mapping_ids to match nodes array order
+    const updated_mapping_ids: MappingIdExtended[] = [];
+    const updated_dummy_nodes: DummyNode[] = [];
+    
+    // Node 0: Depot (must be kind='depot' for persistSolutionSnapshot validation)
+    updated_mapping_ids.push({
+        kind: 'depot',
+        order_id: null,
+        location_id: null,
+        lat: depot.latitude,
+        lng: depot.longitude,
+        is_dummy: false,
+        demand: 0,
+        time_window_start: 0,
+        time_window_end: horizonMinutes,
+        service_time: 0,
+    });
+    
+    // Nodes 1..numRequests: Pickups (match pairs order)
+    for (let i = 0; i < numRequests; i++) {
+        const pair = pairs[i];
+        const nodeIndex = 1 + i;
+        
+        updated_mapping_ids.push({
+            ...pair.pickup,
+            time_window_start: nodes[nodeIndex].etw,
+            time_window_end: nodes[nodeIndex].ltw,
+        });
+        
+        // If this is a dummy pickup, create corresponding dummy_node entry
+        if (pair.pickup.is_dummy && pair.pickup.order_id?.startsWith('DUMMY_')) {
+            updated_dummy_nodes.push({
+                node_index: nodeIndex,
+                node_type: 'dummy_start',
+                vehicle_id: pair.pickup.vehicle_id!,
+                lat: pair.pickup.lat,
+                lng: pair.pickup.lng,
+                demand: 0,
+                ready_time: Math.floor(referenceStartMinutes + nodes[nodeIndex].etw),
+                due_time: Math.floor(referenceStartMinutes + nodes[nodeIndex].ltw),
+                service_time: 0,
+            });
+        }
+    }
+    
+    // Nodes numRequests+1..2*numRequests: Deliveries (match pairs order)
+    for (let i = 0; i < numRequests; i++) {
+        const pair = pairs[i];
+        const nodeIndex = 1 + numRequests + i;
+        
+        updated_mapping_ids.push({
+            ...pair.delivery,
+            time_window_start: nodes[nodeIndex].etw,
+            time_window_end: nodes[nodeIndex].ltw,
+        });
+        
+        // Dummy deliveries don't need dummy_node entries (only pickups matter for vehicle tracking)
+    }
+
     // Build time matrix (minutes based on haversine distance)
     const times: number[][] = Array.from({ length: size }, () => Array.from({ length: size }, () => 0));
     for (let i = 0; i < size; i++) {
@@ -771,5 +830,9 @@ async function buildSartoriInstanceText(params: {
 
     lines.push(`EOF`);
 
-    return lines.join('\n').trimEnd();
+    return {
+        instance_text: lines.join('\n').trimEnd(),
+        updated_mapping_ids,
+        updated_dummy_nodes,
+    };
 }

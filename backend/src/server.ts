@@ -106,6 +106,12 @@ jobQueue.on('processJob', (job, callbacks) => {
                             // Parse solver output
                             const rawRoutes = parseSolverOutput(result.solution);
                             
+                            // DEBUG: Log raw solver output before cleaning
+                            console.log(`[Server DEBUG] Raw solver routes count: ${rawRoutes.length}`);
+                            rawRoutes.forEach((route) => {
+                                console.log(`[Server DEBUG] Raw route ${route.route_number} sequence:`, route.node_sequence.slice(0, 10));
+                            });
+                            
                             // Clean dummy nodes from routes
                             const cleanResult = cleanDummyNodes(
                                 rawRoutes,

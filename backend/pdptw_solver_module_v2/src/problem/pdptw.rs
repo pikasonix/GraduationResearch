@@ -24,6 +24,65 @@ impl Vehicle {
     }
 }
 
+// ============================================================================
+// Dynamic PDPTW Support
+// ============================================================================
+
+/// State of a vehicle at a point in time for dynamic re-optimization.
+/// Used when re-optimizing routes with vehicles already in progress.
+#[derive(Debug, Clone)]
+pub struct VehicleState {
+    /// Vehicle ID (index into vehicles array)
+    pub vehicle_id: usize,
+    /// Current GPS coordinates (longitude, latitude)
+    pub current_position: (f64, f64),
+    /// Current timestamp (seconds from planning horizon start)
+    pub current_time: Num,
+    /// Current load on vehicle (items/passengers on board)
+    pub current_load: Capacity,
+    /// Delivery node IDs for requests already picked up but not yet delivered.
+    /// These need ghost pickups at vehicle's current position.
+    pub in_transit_deliveries: Vec<usize>,
+    /// Request IDs that are committed (assigned) but pickup not yet done.
+    /// These can be locked or unlocked depending on policy.
+    pub committed_requests: Vec<usize>,
+}
+
+impl VehicleState {
+    pub fn new(vehicle_id: usize) -> Self {
+        Self {
+            vehicle_id,
+            current_position: (0.0, 0.0),
+            current_time: Num::ZERO,
+            current_load: 0,
+            in_transit_deliveries: Vec::new(),
+            committed_requests: Vec::new(),
+        }
+    }
+
+    /// Create a VehicleState at depot (for static problems or idle vehicles)
+    pub fn at_depot(vehicle_id: usize, depot_x: f64, depot_y: f64, depot_ready: Num) -> Self {
+        Self {
+            vehicle_id,
+            current_position: (depot_x, depot_y),
+            current_time: depot_ready,
+            current_load: 0,
+            in_transit_deliveries: Vec::new(),
+            committed_requests: Vec::new(),
+        }
+    }
+
+    /// Check if vehicle has any in-transit deliveries
+    pub fn has_in_transit(&self) -> bool {
+        !self.in_transit_deliveries.is_empty()
+    }
+
+    /// Check if vehicle has any committed requests
+    pub fn has_committed(&self) -> bool {
+        !self.committed_requests.is_empty()
+    }
+}
+
 #[derive(Clone, Debug)]
 pub enum NodeType {
     Depot,

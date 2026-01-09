@@ -18,6 +18,74 @@ export interface SolverParams {
     
     // Instance format
     format?: 'lilim' | 'sartori';           // --format (default: lilim)
+    
+    // Dynamic re-optimization parameters
+    dynamic?: boolean;                      // --dynamic (enable dynamic re-optimization mode)
+    vehicle_states?: VehicleStateInput[];   // --vehicle-states (JSON file path, written by backend)
+    new_requests?: NewRequestInput[];       // --new-requests (JSON file path, written by backend)
+    late_penalty?: number;                  // --late-penalty (default: 1000)
+    unassigned_penalty?: number;            // --unassigned-penalty (default: 10000)
+    lock_committed?: boolean;               // --lock-committed (lock committed requests)
+    lock_time_threshold?: number;           // --lock-time-threshold (seconds)
+}
+
+/**
+ * Vehicle state for dynamic re-optimization
+ * Represents the current state of a vehicle mid-route
+ */
+export interface VehicleStateInput {
+    vehicle_id: number;                     // 0-indexed vehicle ID
+    current_position: [number, number];     // [x, y] or [lat, lon] coordinates
+    current_time: number;                   // seconds from start of day
+    current_load: number;                   // items currently on board
+    in_transit_deliveries: number[];        // delivery node IDs (picked up, not yet delivered)
+    committed_requests: number[];           // request IDs that are committed but not yet picked up
+}
+
+/**
+ * New request for dynamic re-optimization
+ */
+export interface NewRequestInput {
+    request_id: number;                     // unique request ID
+    original_order_id: number;              // original order ID for tracking
+    pickup_coords: [number, number];        // [x, y] pickup coordinates
+    delivery_coords: [number, number];      // [x, y] delivery coordinates
+    pickup_tw: [number, number];            // [ready, due] pickup time window in seconds
+    delivery_tw: [number, number];          // [ready, due] delivery time window in seconds
+    demand: number;                         // number of items/passengers
+    pickup_service_time?: number;           // service time at pickup (default: 0)
+    delivery_service_time?: number;         // service time at delivery (default: 0)
+}
+
+/**
+ * Dynamic solver result (JSON output from solver)
+ */
+export interface DynamicSolverResult {
+    routes: DynamicRoute[];
+    violations: DynamicViolation[];
+    vehicles_used: number;
+    unassigned_count: number;
+    total_cost: number;
+    computation_time_ms: number;
+}
+
+export interface DynamicRoute {
+    vehicle_id: number;
+    nodes: number[];
+    order_ids: number[];
+}
+
+export interface DynamicViolation {
+    node_id: number;
+    request_id: number;
+    original_order_id: number;
+    violation_type: 'late_arrival' | 'unassigned';
+    details: {
+        expected?: number;
+        actual?: number;
+        late_by_minutes?: number;
+        reason?: string;
+    };
 }
 
 export type JobStatus = 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled';
@@ -46,6 +114,7 @@ export interface SolutionResult {
     workDir: string;
     persisted?: boolean;
     solutionId?: string;
+    dynamicResult?: DynamicSolverResult;  // Populated when params.dynamic = true
 }
 
 export interface JobQueueStats {

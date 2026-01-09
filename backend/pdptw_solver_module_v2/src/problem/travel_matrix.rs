@@ -260,3 +260,206 @@ impl TravelMatrixProxy {
         }
     }
 }
+
+// ============================================================================
+// Dynamic Travel Matrix - Supports virtual start nodes for re-optimization
+// ============================================================================
+
+use std::collections::HashMap;
+
+/// Virtual node representing a vehicle's current position (not at depot).
+/// Used during dynamic re-optimization when vehicles are already on route.
+#[derive(Debug, Clone)]
+pub struct VirtualNode {
+    pub node_id: usize,           // Virtual node ID (>= first_virtual_id)
+    pub vehicle_id: usize,        // Which vehicle this represents
+    pub position: (f64, f64),     // GPS coordinates
+}
+
+/// Dynamic travel matrix that wraps a base matrix and adds support for
+/// virtual start nodes (vehicle current positions).
+/// 
+/// Strategy: Compute Row Once - when reoptimize() starts, compute distances
+/// from each virtual node to all static nodes and cache them.
+#[derive(Debug)]
+pub struct DynamicTravelMatrix<'a> {
+    /// Base travel matrix for static nodes
+    base_matrix: &'a TravelMatrixProxy,
+    
+    /// Cached distance/time rows for virtual nodes
+    /// Key: virtual_node_id, Value: Vec of ArcValues to all nodes (including other virtuals)
+    virtual_rows: HashMap<usize, Vec<ArcValues>>,
+    
+    /// Virtual nodes info
+    virtual_nodes: Vec<VirtualNode>,
+    
+    /// First virtual node ID (= num_static_nodes)
+    first_virtual_id: usize,
+    
+    /// Total nodes (static + virtual)
+    total_nodes: usize,
+    
+    /// Coordinates of all static nodes for distance calculation
+    static_coords: Vec<(f64, f64)>,
+    
+    /// Speed factor for time calculation (distance / speed = time)
+    /// Default: 1.0 (time = distance for euclidean)
+    speed_factor: f64,
+}
+
+impl<'a> DynamicTravelMatrix<'a> {
+    /// Create a new DynamicTravelMatrix wrapping a base matrix.
+    /// 
+    /// # Arguments
+    /// * `base_matrix` - The static travel matrix
+    /// * `static_coords` - Coordinates of all static nodes for computing virtual distances
+    /// * `num_static_nodes` - Number of nodes in base matrix
+    pub fn new(
+        base_matrix: &'a TravelMatrixProxy,
+        static_coords: Vec<(f64, f64)>,
+        num_static_nodes: usize,
+    ) -> Self {
+        Self {
+            base_matrix,
+            virtual_rows: HashMap::new(),
+            virtual_nodes: Vec::new(),
+            first_virtual_id: num_static_nodes,
+            total_nodes: num_static_nodes,
+            static_coords,
+            speed_factor: 1.0,
+        }
+    }
+
+    /// Set speed factor for time calculation
+    pub fn with_speed_factor(mut self, speed: f64) -> Self {
+        self.speed_factor = speed;
+        self
+    }
+
+    /// Add a virtual node for a vehicle's current position.
+    /// Returns the virtual node ID.
+    pub fn add_virtual_node(&mut self, vehicle_id: usize, position: (f64, f64)) -> usize {
+        let virtual_id = self.total_nodes;
+        
+        self.virtual_nodes.push(VirtualNode {
+            node_id: virtual_id,
+            vehicle_id,
+            position,
+        });
+        
+        // Compute distances from this virtual node to all static nodes
+        let mut row = Vec::with_capacity(self.total_nodes + 1);
+        
+        for i in 0..self.first_virtual_id {
+            let (sx, sy) = self.static_coords[i];
+            let arc = self.compute_arc(position, (sx, sy));
+            row.push(arc);
+        }
+        
+        // Distance to other virtual nodes (if any)
+        for vn in &self.virtual_nodes {
+            if vn.node_id != virtual_id {
+                let arc = self.compute_arc(position, vn.position);
+                row.push(arc);
+            }
+        }
+        
+        // Distance to self = 0
+        row.push(ArcValues {
+            distance: DistanceNumType::ZERO,
+            time: TimeNumType::ZERO,
+        });
+        
+        self.virtual_rows.insert(virtual_id, row);
+        self.total_nodes += 1;
+        
+        virtual_id
+    }
+
+    /// Compute arc values (distance and time) between two positions
+    fn compute_arc(&self, from: (f64, f64), to: (f64, f64)) -> ArcValues {
+        let dx = from.0 - to.0;
+        let dy = from.1 - to.1;
+        let euclidean = (dx * dx + dy * dy).sqrt();
+        
+        ArcValues {
+            distance: (euclidean as f64).into(),
+            time: (euclidean / self.speed_factor).into(),
+        }
+    }
+
+    /// Check if a node ID is a virtual node
+    #[inline(always)]
+    pub fn is_virtual(&self, node_id: usize) -> bool {
+        node_id >= self.first_virtual_id
+    }
+
+    /// Get virtual node info by ID
+    pub fn get_virtual_node(&self, node_id: usize) -> Option<&VirtualNode> {
+        if self.is_virtual(node_id) {
+            let idx = node_id - self.first_virtual_id;
+            self.virtual_nodes.get(idx)
+        } else {
+            None
+        }
+    }
+
+    /// Get virtual node ID for a vehicle (if exists)
+    pub fn virtual_node_for_vehicle(&self, vehicle_id: usize) -> Option<usize> {
+        self.virtual_nodes
+            .iter()
+            .find(|vn| vn.vehicle_id == vehicle_id)
+            .map(|vn| vn.node_id)
+    }
+}
+
+impl<'a> TravelMatrix for DynamicTravelMatrix<'a> {
+    #[inline(always)]
+    fn distance(&self, from: usize, to: usize) -> DistanceNumType {
+        self.arc(from, to).distance
+    }
+
+    #[inline(always)]
+    fn time(&self, from: usize, to: usize) -> TimeNumType {
+        self.arc(from, to).time
+    }
+
+    #[inline(always)]
+    fn arc(&self, from: usize, to: usize) -> &ArcValues {
+        if from >= self.first_virtual_id {
+            // From is virtual node - lookup cached row
+            if let Some(row) = self.virtual_rows.get(&from) {
+                if to < row.len() {
+                    return &row[to];
+                }
+            }
+            // Fallback to zero (shouldn't happen in correct usage)
+            &ZERO_ARC_VALUES
+        } else if to >= self.first_virtual_id {
+            // To is virtual node - this is rare (vehicles don't return to current position)
+            // For now, return MAX to discourage this
+            &ZERO_ARC_VALUES
+        } else {
+            // Both static - use base matrix
+            self.base_matrix.arc(from, to)
+        }
+    }
+
+    #[inline(always)]
+    fn max_distance(&self) -> DistanceNumType {
+        self.base_matrix.max_distance()
+    }
+
+    #[inline(always)]
+    fn max_time(&self) -> DistanceNumType {
+        self.base_matrix.max_time()
+    }
+}
+
+#[cfg(test)]
+mod dynamic_matrix_tests {
+    use super::*;
+
+    // Tests would go here
+}
+

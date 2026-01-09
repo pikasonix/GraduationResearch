@@ -58,8 +58,14 @@ export function cleanDummyNodes(
                 continue;
             }
 
-            // Handle dummy start node
-            if (mapping.kind === 'dummy_start') {
+            // Handle depot (skip depot nodes in route)
+            if (mapping.kind === 'depot') {
+                // Skip depot nodes (typically at start and end)
+                continue;
+            }
+
+            // Handle dummy nodes (dummy_start or any node with is_dummy=true)
+            if (mapping.kind === 'dummy_start' || (mapping.is_dummy && mapping.order_id?.startsWith('DUMMY_'))) {
                 removed_dummy_count++;
                 vehicle_id = mapping.vehicle_id;
                 
@@ -72,8 +78,8 @@ export function cleanDummyNodes(
                 continue;
             }
 
-            // Handle ghost pickup node
-            if (mapping.kind === 'ghost_pickup') {
+            // Handle ghost pickup node (is_dummy but not DUMMY_ prefix, or explicit ghost_pickup kind)
+            if (mapping.kind === 'ghost_pickup' || (mapping.is_dummy && !mapping.order_id?.startsWith('DUMMY_'))) {
                 removed_ghost_count++;
                 
                 if (dummyNode) {
@@ -82,12 +88,6 @@ export function cleanDummyNodes(
                 }
                 
                 // Skip adding to filtered sequence
-                continue;
-            }
-
-            // Handle depot (skip depot nodes in route)
-            if (mapping.kind === 'depot') {
-                // Skip depot nodes (typically at start and end)
                 continue;
             }
 

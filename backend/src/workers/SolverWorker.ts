@@ -1,7 +1,7 @@
 import { spawn, ChildProcess } from 'child_process';
 import * as path from 'path';
 import * as fs from 'fs';
-import { Job, SolverParams, SolverWorkerOptions, JobCallbacks } from '../types';
+import { Job, SolverParams, SolverWorkerOptions, JobCallbacks, DynamicSolverResult } from '../types';
 
 /**
  * PDPTW Solver Worker
@@ -46,7 +46,10 @@ export class SolverWorker {
             const solutionsDir = path.join(workDir, 'solutions');
             fs.mkdirSync(solutionsDir, { recursive: true });
 
-            const args = this.buildArguments(instancePath, solutionsDir, params);
+            // Write dynamic mode files if needed
+            const dynamicFiles = this.writeDynamicFiles(workDir, params);
+
+            const args = this.buildArguments(instancePath, solutionsDir, params, dynamicFiles);
 
             console.log(`[SolverWorker] Job ${job.id}: Running solver with args:`, args.join(' '));
 
@@ -58,7 +61,21 @@ export class SolverWorker {
 
             onProgress(90);
 
-            const solutionContent = this.readSolution(solutionsDir);
+            // Handle dynamic mode output (JSON to stdout) vs static mode (solution file)
+            let solutionContent: { content: string; filename: string };
+            let dynamicResult: DynamicSolverResult | undefined;
+
+            if (params.dynamic) {
+                // Dynamic mode: parse JSON from stdout
+                dynamicResult = this.parseDynamicResult(result.stdout);
+                solutionContent = {
+                    content: result.stdout,
+                    filename: 'dynamic_result.json'
+                };
+            } else {
+                // Static mode: read solution file
+                solutionContent = this.readSolution(solutionsDir);
+            }
 
             onProgress(100);
 
@@ -70,7 +87,8 @@ export class SolverWorker {
                 solution: solutionContent.content,
                 filename: solutionContent.filename,
                 stdout: result.stdout,
-                workDir: workDir
+                workDir: workDir,
+                dynamicResult
             });
 
         } catch (error) {
@@ -121,7 +139,12 @@ export class SolverWorker {
     /**
      * Build command line arguments
      */
-    private buildArguments(instancePath: string, solutionsDir: string, params: SolverParams): string[] {
+    private buildArguments(
+        instancePath: string, 
+        solutionsDir: string, 
+        params: SolverParams,
+        dynamicFiles?: { vehicleStatesPath?: string; newRequestsPath?: string }
+    ): string[] {
         const args: string[] = [
             '-i', instancePath,
             '-o', solutionsDir
@@ -175,7 +198,76 @@ export class SolverWorker {
             args.push('--format', params.format);
         }
 
+        // Dynamic re-optimization parameters
+        if (params.dynamic) {
+            args.push('--dynamic');
+            
+            if (dynamicFiles?.vehicleStatesPath) {
+                args.push('--vehicle-states', dynamicFiles.vehicleStatesPath);
+            }
+            if (dynamicFiles?.newRequestsPath) {
+                args.push('--new-requests', dynamicFiles.newRequestsPath);
+            }
+            if (params.late_penalty !== undefined) {
+                args.push('--late-penalty', String(params.late_penalty));
+            }
+            if (params.unassigned_penalty !== undefined) {
+                args.push('--unassigned-penalty', String(params.unassigned_penalty));
+            }
+            if (params.lock_committed) {
+                args.push('--lock-committed');
+            }
+            if (params.lock_time_threshold !== undefined) {
+                args.push('--lock-time-threshold', String(params.lock_time_threshold));
+            }
+        }
+
         return args;
+    }
+
+    /**
+     * Write dynamic mode input files (vehicle states and new requests)
+     */
+    private writeDynamicFiles(workDir: string, params: SolverParams): { vehicleStatesPath?: string; newRequestsPath?: string } {
+        const result: { vehicleStatesPath?: string; newRequestsPath?: string } = {};
+
+        if (!params.dynamic) {
+            return result;
+        }
+
+        if (params.vehicle_states && params.vehicle_states.length > 0) {
+            const vehicleStatesPath = path.join(workDir, 'vehicle_states.json');
+            fs.writeFileSync(vehicleStatesPath, JSON.stringify(params.vehicle_states, null, 2), 'utf8');
+            result.vehicleStatesPath = vehicleStatesPath;
+            console.log(`[SolverWorker] Wrote ${params.vehicle_states.length} vehicle states to ${vehicleStatesPath}`);
+        }
+
+        if (params.new_requests && params.new_requests.length > 0) {
+            const newRequestsPath = path.join(workDir, 'new_requests.json');
+            fs.writeFileSync(newRequestsPath, JSON.stringify(params.new_requests, null, 2), 'utf8');
+            result.newRequestsPath = newRequestsPath;
+            console.log(`[SolverWorker] Wrote ${params.new_requests.length} new requests to ${newRequestsPath}`);
+        }
+
+        return result;
+    }
+
+    /**
+     * Parse dynamic solver result from JSON stdout
+     */
+    private parseDynamicResult(stdout: string): DynamicSolverResult {
+        try {
+            // Find JSON in stdout (skip any log lines before the JSON)
+            const jsonStart = stdout.indexOf('{');
+            if (jsonStart === -1) {
+                throw new Error('No JSON found in dynamic solver output');
+            }
+            const jsonStr = stdout.substring(jsonStart);
+            return JSON.parse(jsonStr) as DynamicSolverResult;
+        } catch (err) {
+            console.error('[SolverWorker] Failed to parse dynamic result:', err);
+            throw new Error(`Failed to parse dynamic solver result: ${err instanceof Error ? err.message : String(err)}`);
+        }
     }
 
     /**

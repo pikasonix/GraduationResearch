@@ -26,6 +26,10 @@ use crate::utils::stats::search_progress_stats::SearchProgressTracking;
 #[cfg(feature = "search_assertions")]
 use crate::utils::validator::{assert_valid_solution, assert_valid_solution_description};
 use crate::utils::create_seeded_rng;
+use crate::solver::dynamic::{
+    ReoptimizeConfig, ReoptimizeContext, 
+    load_vehicle_states, load_new_requests, to_result_json
+};
 
 mod clustering;
 mod construction;
@@ -199,6 +203,11 @@ fn main() -> anyhow::Result<()> {
 
         log::info!("instance loaded after {}", load_timer.took());
 
+        // Check for dynamic re-optimization mode
+        if args.solver.dynamic {
+            return run_dynamic_reoptimization(&args, &instance, &mut rng);
+        }
+
         log::info!("starting solver {:?}", &args.solver.variant);
 
         #[cfg(feature = "progress_tracking")]
@@ -299,4 +308,124 @@ fn main() -> anyhow::Result<()> {
         }
         Ok(())
     }
+}
+
+/// Run dynamic re-optimization mode
+#[cfg(feature = "classic-pdptw")]
+fn run_dynamic_reoptimization(
+    args: &cli::ProgramArguments,
+    instance: &problem::pdptw::PDPTWInstance,
+    rng: &mut utils::Random,
+) -> anyhow::Result<()> {
+    use crate::problem::Num;
+    
+    log::info!("Running in DYNAMIC re-optimization mode");
+    
+    // Load vehicle states
+    let vehicle_states_json = if let Some(ref path) = args.solver.vehicle_states {
+        load_vehicle_states(path)?
+    } else {
+        // Default: all vehicles at depot with no load
+        (0..instance.num_vehicles)
+            .map(|v| solver::dynamic::VehicleStateJson {
+                vehicle_id: v,
+                current_position: [instance.nodes[v * 2].x, instance.nodes[v * 2].y],
+                current_time: instance.nodes[v * 2].ready.value() as f64,
+                current_load: 0,
+                in_transit_deliveries: vec![],
+                committed_requests: vec![],
+            })
+            .collect()
+    };
+    
+    let vehicle_states: Vec<_> = vehicle_states_json.iter()
+        .map(|vs| vs.to_vehicle_state())
+        .collect();
+    
+    log::info!("  Loaded {} vehicle states", vehicle_states.len());
+    
+    // Load new requests (if any)
+    let new_requests_json = if let Some(ref path) = args.solver.new_requests {
+        load_new_requests(path)?
+    } else {
+        vec![]
+    };
+    
+    let new_requests: Vec<_> = new_requests_json.iter()
+        .map(|nr| nr.to_new_request())
+        .collect();
+    
+    log::info!("  Loaded {} new requests", new_requests.len());
+    
+    // Create config
+    let config = ReoptimizeConfig {
+        late_penalty_per_minute: Num::from(args.solver.late_penalty),
+        unassigned_penalty: Num::from(args.solver.unassigned_penalty),
+        lock_committed: args.solver.lock_committed,
+        lock_time_threshold: args.solver.lock_time_threshold.map(Num::from),
+    };
+    
+    // Get current solution (warmstart or construct new)
+    let current_solution = if let Some(ref sol_path) = args.solver.warmstart_solution_file {
+        // Load warmstart solution
+        let sintef_sol = io::sintef_solution::load_sintef_solution(sol_path)?;
+        solution::create_solution_from_sintef(sintef_sol, instance).to_description()
+    } else {
+        // Construct initial solution
+        let mut sol = Solution::new(instance);
+        solver::ls_solver::construct_initial_solution_pub(instance, &args.solver, &mut sol, rng);
+        sol.to_description()
+    };
+    
+    log::info!("  Current solution: {}/{}/{}",
+        current_solution.unassigned_requests,
+        current_solution.vehicles_used,
+        current_solution.total_cost.value()
+    );
+    
+    // Create context and run re-optimization
+    let context = ReoptimizeContext {
+        base_instance: instance,
+        current_solution: &current_solution,
+        vehicle_states,
+        new_requests,
+        config,
+    };
+    
+    let result = solver::dynamic::reoptimize(context, &args.solver, rng);
+    
+    // Output result as JSON to stdout
+    let result_json = to_result_json(&result, instance);
+    let json_output = serde_json::to_string_pretty(&result_json)?;
+    println!("{}", json_output);
+    
+    // Also save SINTEF solution if output path specified
+    if let Some(ref solution_path) = args.solution {
+        let instance_name = Path::new(&args.instance)
+            .file_name()
+            .unwrap()
+            .to_str()
+            .unwrap();
+        
+        let mut sintef_solution_builder = SINTEFSolutionBuilder::new();
+        sintef_solution_builder
+            .instance_name(instance_name)
+            .authors(args.authors.join(" "))
+            .reference("Dynamic Re-optimization")
+            .routes_from_solution_description(&result.solution, instance);
+        
+        if let Some(parent) = Path::new(solution_path).parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        
+        io::sintef_solution::write_sintef_solution(
+            solution_path.to_string(),
+            sintef_solution_builder.build(),
+            None,
+        )?;
+        
+        log::info!("Solution saved to: {}", solution_path);
+    }
+    
+    Ok(())
 }

@@ -5,16 +5,74 @@ use crate::cli::SolverArguments;
 use crate::clustering::{extract_promising_blocks, RequestsStats};
 use crate::construction::kdsp::ClusterKDSP;
 use crate::problem::pdptw::PDPTWInstance;
+use crate::problem::Num;
 use crate::solution::SolutionDescription;
 use crate::solver::construction::construct;
 use crate::utils::Random;
 
 pub mod construction;
 pub mod ls_solver;
+pub mod dynamic;
 
 pub struct SolverResult {
     pub solution: SolutionDescription,
     pub time: Took,
+}
+
+// ============================================================================
+// Dynamic Re-optimization Support
+// ============================================================================
+
+/// Result from dynamic re-optimization, includes violations for UI feedback
+pub struct DynamicSolverResult {
+    pub solution: SolutionDescription,
+    pub violations: Vec<Violation>,
+    pub time: Took,
+}
+
+/// A time window violation or unassigned request
+#[derive(Debug, Clone)]
+pub struct Violation {
+    /// Node ID where violation occurs
+    pub node_id: usize,
+    /// Request ID (derived from node)
+    pub request_id: usize,
+    /// Original order ID (from input)
+    pub original_order_id: usize,
+    /// Type of violation
+    pub violation_type: ViolationType,
+}
+
+/// Types of violations that can occur
+#[derive(Debug, Clone)]
+pub enum ViolationType {
+    /// Late arrival at a node
+    LateArrival {
+        /// Expected arrival (due time)
+        expected: Num,
+        /// Actual arrival time
+        actual: Num,
+        /// How many minutes late
+        late_by_minutes: Num,
+    },
+    /// Request could not be assigned to any vehicle
+    Unassigned {
+        /// Reason why request couldn't be assigned
+        reason: UnassignedReason,
+    },
+}
+
+/// Reasons why a request might be unassigned
+#[derive(Debug, Clone)]
+pub enum UnassignedReason {
+    /// No vehicle has enough capacity
+    CapacityExceeded,
+    /// Time window already passed
+    TimeWindowMissed,
+    /// No feasible route exists
+    NoFeasibleRoute,
+    /// Other reason
+    Other(String),
 }
 
 pub fn construction_only(

@@ -57,6 +57,10 @@ impl<'a> WorstRemoval<'a> {
         while let Some(node) = iter.next() {
             let node = node;
             if instance.nodes[node].node_type.is_pickup() {
+                // Skip locked nodes (dynamic re-optimization)
+                if solution.is_locked(node) {
+                    continue;
+                }
                 let gain = solution.calculate_change_on_removing_request_of(node);
                 if gain > max_gain.0 {
                     max_gain = (gain, node)
