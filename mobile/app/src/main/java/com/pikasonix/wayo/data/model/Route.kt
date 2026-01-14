@@ -1,7 +1,7 @@
 package com.pikasonix.wayo.data.model
 
 /**
- * Location point on the map
+ * Điểm vị trí trên bản đồ
  */
 data class LocationPoint(
     val latitude: Double,
@@ -11,28 +11,28 @@ data class LocationPoint(
 )
 
 /**
- * Route step containing navigation instructions
+ * Bước tuyến đường chứa hướng dẫn điều hướng
  */
 data class RouteStep(
     val instruction: String,
-    val distance: Double, // meters
-    val duration: Double, // seconds
+    val distance: Double, // mét
+    val duration: Double, // giây
     val maneuver: String? = null,
-    val name: String? = null, // street/road name
+    val name: String? = null, // tên đường/phố
     val coordinates: List<LocationPoint> = emptyList()
 )
 
 /**
- * Route leg annotation containing traffic/congestion data
+ * Annotation của chặng tuyến đường chứa dữ liệu giao thông/tắc nghẫn
  */
 data class RouteAnnotation(
-    val congestion: List<String> = emptyList(), // low, moderate, heavy, severe, unknown
-    val speed: List<Double> = emptyList(), // speeds in m/s for each segment
-    val duration: List<Double> = emptyList() // duration in seconds for each segment
+    val congestion: List<String> = emptyList(), // thấp, vừa, nặng, nghiêm trọng, không xác định
+    val speed: List<Double> = emptyList(), // tốc độ tính bằng m/s cho từng đoạn
+    val duration: List<Double> = emptyList() // thời lượng tính bằng giây cho từng đoạn
 )
 
 /**
- * Route leg from one waypoint to another
+ * Chặng tuyến đường từ một điểm dừng đến điểm khác
  */
 data class RouteLeg(
     val distance: Double,
@@ -43,14 +43,14 @@ data class RouteLeg(
 )
 
 /**
- * Route information from origin to destination
+ * Thông tin tuyến đường từ điểm xuất phát đến điểm đến
  */
 data class RouteInfo(
     val origin: LocationPoint,
     val destination: LocationPoint,
     val waypoints: List<LocationPoint> = emptyList(),
-    val distance: Double, // meters
-    val duration: Double, // seconds
+    val distance: Double, // mét
+    val duration: Double, // giây
     val geometry: List<LocationPoint> = emptyList(),
     val steps: List<RouteStep> = emptyList(),
     val legs: List<RouteLeg> = emptyList(),
@@ -58,7 +58,7 @@ data class RouteInfo(
 )
 
 /**
- * Route result wrapper
+ * Wrapper kết quả tuyến đường
  */
 sealed class RouteResult {
     data class Success(val routes: List<RouteInfo>) : RouteResult()

@@ -1,26 +1,45 @@
 package com.pikasonix.wayo.data.repository
 
+import com.pikasonix.wayo.core.security.SecureStorage
+import com.pikasonix.wayo.data.local.db.WayoDatabase
 import com.pikasonix.wayo.data.model.AuthResult
 import com.pikasonix.wayo.data.model.User
 import com.pikasonix.wayo.data.remote.SupabaseClientProvider
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.auth.providers.builtin.Email
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Repository for authentication operations using Supabase
+ * Repository cho các thao tác xác thực sử dụng Supabase
  */
 @Singleton
-class AuthRepository @Inject constructor() {
+class AuthRepository @Inject constructor(
+    private val secureStorage: SecureStorage,
+    private val database: WayoDatabase
+) {
     
     private val supabase = SupabaseClientProvider.client
+    
+    /**
+     * Get current auth token for API calls
+     */
+    fun getCurrentToken(): String? {
+        return try {
+            supabase.auth.currentAccessTokenOrNull()
+        } catch (e: Exception) {
+            null
+        }
+    }
     
     /**
      * Login with email and password
@@ -40,8 +59,9 @@ class AuthRepository @Inject constructor() {
                     User(
                         id = supabaseUser.id,
                         email = supabaseUser.email ?: "",
-                        fullName = supabaseUser.userMetadata?.get("full_name")?.toString(),
-                        avatarUrl = supabaseUser.userMetadata?.get("avatar_url")?.toString(),
+                        fullName = supabaseUser.userMetadata?.get("full_name")?.jsonPrimitive?.content,
+                        avatarUrl = supabaseUser.userMetadata?.get("avatar_url")?.jsonPrimitive?.content,
+                        phone = supabaseUser.userMetadata?.get("phone")?.jsonPrimitive?.content,
                         createdAt = supabaseUser.createdAt?.toString()
                     )
                 )
@@ -81,11 +101,21 @@ class AuthRepository @Inject constructor() {
     }
     
     /**
-     * Sign out current user
+     * Đăng xuất người dùng hiện tại
+     * Xóa session Supabase, SecureStorage và Room database
      */
     suspend fun signOut(): Result<Unit> {
         return try {
             supabase.auth.signOut()
+            
+            withContext(Dispatchers.IO) {
+                secureStorage.clearAll()
+            }
+            
+            withContext(Dispatchers.IO) {
+                database.clearAllTables()
+            }
+            
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
@@ -101,8 +131,9 @@ class AuthRepository @Inject constructor() {
             User(
                 id = it.id,
                 email = it.email ?: "",
-                fullName = it.userMetadata?.get("full_name")?.toString(),
-                avatarUrl = it.userMetadata?.get("avatar_url")?.toString(),
+                fullName = it.userMetadata?.get("full_name")?.jsonPrimitive?.content,
+                avatarUrl = it.userMetadata?.get("avatar_url")?.jsonPrimitive?.content,
+                phone = it.userMetadata?.get("phone")?.jsonPrimitive?.content,
                 createdAt = it.createdAt?.toString()
             )
         }

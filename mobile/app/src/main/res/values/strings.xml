@@ -1,3 +1,91 @@
 <resources>
-    <string name="app_name">WAYO</string>
+    <string name="app_name">WAYO Driver</string>
+
+    <!-- Common -->
+    <string name="ok">OK</string>
+    <string name="cancel">Hủy</string>
+    <string name="retry">Thử lại</string>
+    <string name="loading">Đang tải…</string>
+    <string name="error">Lỗi</string>
+    <string name="success">Thành công</string>
+    <string name="offline">Không có kết nối mạng</string>
+    <string name="sync_pending">%d thao tác chưa đồng bộ</string>
+
+    <!-- Titles -->
+    <string name="title_login">Đăng nhập</string>
+    <string name="title_signup">Đăng ký</string>
+    <string name="title_map">Bản đồ</string>
+    <string name="title_routes">Lộ trình</string>
+    <string name="title_assigned_routes">Lộ trình</string>
+    <string name="title_route_details">Chi tiết tuyến</string>
+    <string name="title_profile">Hồ sơ</string>
+
+    <!-- Labels -->
+    <string name="label_email">Email</string>
+    <string name="label_password">Mật khẩu</string>
+    <string name="label_confirm_password">Nhập lại mật khẩu</string>
+    <string name="label_phone">Số điện thoại</string>
+    <string name="label_full_name">Họ và tên</string>
+    <string name="label_agree_terms">Tôi đồng ý với điều khoản dịch vụ</string>
+
+    <!-- Actions -->
+    <string name="action_login">Đăng nhập</string>
+    <string name="action_signup">Đăng ký</string>
+    <string name="action_logout">Đăng xuất</string>
+    <string name="action_go_to_signup">Chưa có tài khoản? Đăng ký</string>
+    <string name="action_back_to_login">Đã có tài khoản? Đăng nhập</string>
+    <string name="action_open_assigned_routes">Xem lộ trình</string>
+    <string name="action_open_profile">Mở hồ sơ</string>
+    <string name="action_refresh">Làm mới</string>
+    <string name="action_start_route">Bắt đầu tuyến</string>
+    <string name="action_complete_route">Hoàn thành tuyến</string>
+    <string name="action_complete_stop">Đã giao</string>
+    <string name="action_sync_now">Đồng bộ ngay</string>
+    <string name="stop_type">Loại điểm dừng</string>
+
+    <!-- Validation -->
+    <string name="error_email_required">Email không được để trống</string>
+    <string name="error_email_invalid">Email không hợp lệ</string>
+    <string name="error_password_required">Mật khẩu không được để trống</string>
+    <string name="error_password_min_length">Mật khẩu phải có ít nhất 6 ký tự</string>
+    <string name="error_fullname_required">Họ tên không được để trống</string>
+
+    <!-- Routes -->
+    <string name="no_routes">Chưa có tuyến đường nào</string>
+    <string name="route_status_assigned">Đã gán</string>
+    <string name="route_status_in_progress">Đang thực hiện</string>
+    <string name="route_status_completed">Hoàn thành</string>
+    <string name="route_status_cancelled">Đã hủy</string>
+    <string name="stops_progress">%1$d/%2$d điểm dừng</string>
+
+    <!-- Stops -->
+    <string name="stop_pending">Chờ xử lý</string>
+    <string name="stop_completed">Đã hoàn thành</string>
+    <string name="stop_failed">Thất bại</string>
+
+    <!-- Orders -->
+    <string name="order_number">Mã đơn: %s</string>
+    <string name="items_count">%d mặt hàng</string>
+
+    <!-- Map -->
+    <string name="current_location">Vị trí hiện tại</string>
+    <string name="tracking_active">Đang theo dõi</string>
+    <string name="start_tracking">Bắt đầu theo dõi</string>
+
+    <!-- Profile -->
+    <string name="rating">Đánh giá</string>
+    <string name="total_deliveries">Tổng giao hàng</string>
+    <string name="status">Trạng thái</string>
+    <string name="edit_profile">Chỉnh sửa</string>
+
+    <!-- Sync -->
+    <string name="syncing">Đang đồng bộ…</string>
+    <string name="sync_success">Đồng bộ thành công</string>
+    <string name="sync_failed">Đồng bộ thất bại</string>
+
+    <!-- Messages -->
+    <string name="error_generic">Có lỗi xảy ra. Vui lòng thử lại.</string>
+    <string name="error_network">Lỗi kết nối mạng</string>
+    <string name="error_server">Lỗi từ máy chủ</string>
+    <string name="error_loading_data">Lỗi tải dữ liệu</string>
 </resources>

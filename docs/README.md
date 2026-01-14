@@ -34,6 +34,13 @@ Tài liệu được tối ưu hóa để AI (GitHub Copilot, Cursor, v.v.) dễ
   - Data models
   - State management
 
+### 📱 Mobile (Android)
+
+- **[Mobile Docs](./mobile/README.md)** ⭐ **MVVM + XML (No Compose)**
+  - Architecture, screen specs
+  - Offline/online sync
+  - API contracts (Supabase + Backend)
+
 ### 📖 Developer Guides
 
 - **[Deployment Guide](./guides/deployment.md)** ⭐ **Production deployment**
@@ -102,6 +109,16 @@ docs/
 │
 ├── architecture/                   # System design
 │   └── overview.md                # Architecture details
+
+├── mobile/                         # Android mobile docs (MVVM + XML)
+│   ├── README.md
+│   ├── architecture-mvvm-xml.md
+│   ├── screens.md
+│   ├── offline-sync.md
+│   ├── api-contracts.md
+│   ├── rules-and-quality-gates.md
+│   ├── testing.md
+│   └── implementation-roadmap.md
 │
 ├── guides/                         # How-to guides
 │   ├── deployment.md              # ⭐ Deploy to production

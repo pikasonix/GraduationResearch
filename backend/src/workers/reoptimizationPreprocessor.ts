@@ -133,7 +133,9 @@ function dateToRelativeMinutes(date: Date | string | undefined, referenceStart: 
     const d = typeof date === 'string' ? new Date(date) : date;
     if (isNaN(d.getTime())) return fallback;
     const diff = Math.floor((d.getTime() - referenceStart.getTime()) / 60000); // minutes
-    return Math.max(0, diff); // Never negative
+    // CHANGED: Allow past times (negative diff) for orders that may have been created moments ago
+    // We'll clamp to 0 only if it's significantly in the past (> 10 minutes)
+    return diff < -10 ? 0 : Math.max(0, diff);
 }
 
 /**
@@ -314,7 +316,7 @@ export async function preprocessReoptimization(
     
     // Calculate reference start for time windows
     const referenceStart = calculateReferenceStart(allOrders, current_timestamp);
-    const horizonMinutes = 480; // 8 hours default
+    const horizonMinutes = 720; // 12 hours default (increased from 8h to prevent TW clamping)
     
     for (const order of allOrders) {
         // Check if this order is already picked up (on a vehicle)
@@ -453,7 +455,7 @@ async function buildSartoriInstanceText(params: {
     const { depot, mapping_ids, dummy_nodes, allOrders, current_timestamp } = params;
 
     const maxCapacity = Math.max(...params.vehicles.map(v => v.capacity_weight || 100), 100);
-    const horizonMinutes = 480; // 8 hours default
+    const horizonMinutes = 720; // 12 hours default (increased from 8h to prevent TW clamping)
     const speedKmh = 30;
 
     // Calculate reference start time for time windows

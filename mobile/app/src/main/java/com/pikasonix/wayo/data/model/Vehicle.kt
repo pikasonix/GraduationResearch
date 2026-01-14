@@ -1,13 +1,13 @@
 package com.pikasonix.wayo.data.model
 
 /**
- * Vehicle data model matching Supabase schema
+ * Data model xe khớp với schema Supabase
  */
 data class Vehicle(
     val id: String,
     val organizationId: String,
     val licensePlate: String,
-    val vehicleType: String, // motorcycle, van, truck_small, truck_medium, truck_large
+    val vehicleType: String, // xe máy, xe van, xe tải nhỏ, xe tải vừa, xe tải lớn
     val capacityWeight: Int,
     val capacityVolume: Int? = null,
     val fuelConsumption: Double? = null,
@@ -17,7 +17,7 @@ data class Vehicle(
     val isActive: Boolean = true,
     val notes: String? = null,
     val defaultDriverId: String? = null,
-    val driverName: String? = null, // Joined from drivers table
+    val driverName: String? = null, // Join từ bảng drivers
     val createdAt: String? = null,
     val updatedAt: String? = null
 )

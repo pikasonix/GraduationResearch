@@ -7,6 +7,8 @@ import com.pikasonix.wayo.data.model.LocationPoint
 import com.pikasonix.wayo.data.model.PlaceResult
 import com.pikasonix.wayo.data.model.RouteInfo
 import com.pikasonix.wayo.data.model.RouteResult
+import com.pikasonix.wayo.data.model.User
+import com.pikasonix.wayo.data.repository.AuthRepository
 import com.pikasonix.wayo.data.repository.RouteRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.FlowPreview
@@ -24,7 +26,10 @@ import javax.inject.Inject
 import kotlin.math.*
 
 /**
- * Map style options
+ * Các kiểu hiển thị bản đồ (Mapbox styles).
+ *
+ * @property id Mapbox style URL
+ * @property label Tên hiển thị cho người dùng
  */
 enum class MapStyle(val id: String, val label: String) {
     STREETS("mapbox://styles/mapbox/streets-v12", "Đường phố"),
@@ -37,7 +42,11 @@ enum class MapStyle(val id: String, val label: String) {
 }
 
 /**
- * Congestion level for route segments
+ * Mức độ tắc nghẽ trên từng đoạn đường.
+ * Hiển thị bằng màu sắc trên route polyline.
+ *
+ * @property color Mà màu ARGB (VD: 0xFF22C55E)
+ * @property label Nhãn hiển thị
  */
 enum class CongestionLevel(val color: Long, val label: String) {
     UNKNOWN(0xFF94A3B8, "Không rõ"),
@@ -48,11 +57,23 @@ enum class CongestionLevel(val color: Long, val label: String) {
 }
 
 /**
- * Simulation state for route playback
+ * Trạng thái simulation cho chế độ xem trước route.
+ * Cho phép playback route với tốc độ tùy chỉnh.
+ *
+ * @property isPlaying Đang chạy simulation
+ * @property speed Tốc độ playback (0.5x, 1x, 2x)
+ * @property followVehicle Camera tự động follow xe
+ * @property currentIndex Chỉ số điểm hiện tại trên route
+ * @property currentPosition Vị trí hiện tại (lat/long)
+ * @property currentBearing Hướng hiện tại (0-360°)
+ * @property remainingDistance Quãng đường còn lại (meters)
+ * @property remainingDuration Thời gian còn lại (seconds)
+ * @property distanceToNextStep Khoảng cách đến bước tiếp theo
+ * @property currentStepIndex Chỉ số bước hướng dẫn hiện tại
  */
 data class SimulationState(
     val isPlaying: Boolean = false,
-    val speed: Float = 1f, // 0.5x, 1x, 2x
+    val speed: Float = 1f,
     val followVehicle: Boolean = true,
     val currentIndex: Int = 0,
     val currentPosition: LocationPoint? = null,
@@ -64,7 +85,15 @@ data class SimulationState(
 )
 
 /**
- * UI State for Routing Screen
+ * UI State cho màn hình Routing (chọn tuyến và xem bản đồ).
+ * 
+ * Chứa:
+ * - Điểm đi/đến và text search
+ * - Danh sách routes alternatives
+ * - Route đang chọn
+ * - Simulation state
+ * - Map style và traffic toggle
+ * - Loading/error states
  */
 data class RoutingUiState(
     val origin: LocationPoint? = null,
@@ -85,10 +114,10 @@ data class RoutingUiState(
     val isSearchingDestination: Boolean = false,
     val showOriginSuggestions: Boolean = false,
     val showDestinationSuggestions: Boolean = false,
-    // Point selection mode
+    // Chế độ chọn điểm trên bản đồ
     val isSelectingOriginOnMap: Boolean = false,
     val isSelectingDestinationOnMap: Boolean = false,
-    // Map display options
+    // Tùy chọn hiển thị bản đồ
     val mapStyle: MapStyle = MapStyle.STREETS,
     val showTrafficLayer: Boolean = true,
     val showCongestionColors: Boolean = true,
@@ -107,7 +136,8 @@ data class RoutingUiState(
 @HiltViewModel
 class RoutingViewModel @Inject constructor(
     private val routeRepository: RouteRepository,
-    private val locationService: LocationService
+    private val locationService: LocationService,
+    private val authRepository: AuthRepository
 ) : ViewModel() {
     
     private val _uiState = MutableStateFlow(RoutingUiState())
@@ -166,6 +196,14 @@ class RoutingViewModel @Inject constructor(
     }
     
     fun hasLocationPermission(): Boolean = locationService.hasLocationPermission()
+    
+    fun getCurrentUser(): User? = authRepository.getCurrentUser()
+    
+    fun logout() {
+        viewModelScope.launch {
+            authRepository.signOut()
+        }
+    }
     
     fun updateOriginText(text: String) {
         _uiState.value = _uiState.value.copy(

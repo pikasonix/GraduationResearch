@@ -23,19 +23,14 @@ import javax.inject.Singleton
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
-/**
- * Service for getting device location using Fused Location Provider
- */
+// Service quản lý GPS
 @Singleton
 class LocationService @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
     private val fusedLocationClient: FusedLocationProviderClient = 
         LocationServices.getFusedLocationProviderClient(context)
-    
-    /**
-     * Check if location permissions are granted
-     */
+
     fun hasLocationPermission(): Boolean {
         return ContextCompat.checkSelfPermission(
             context,
@@ -46,9 +41,7 @@ class LocationService @Inject constructor(
         ) == PackageManager.PERMISSION_GRANTED
     }
     
-    /**
-     * Get the last known location (quick, but may be null or stale)
-     */
+    // Get the last known location
     suspend fun getLastLocation(): LocationPoint? = suspendCancellableCoroutine { continuation ->
         if (!hasLocationPermission()) {
             continuation.resume(null)

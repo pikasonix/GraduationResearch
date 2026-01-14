@@ -12,6 +12,19 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+/**
+ * UI State cho màn hình đăng ký tài khoản.
+ *
+ * @property email Email đăng ký
+ * @property phone Số điện thoại (format +84 hoặc 0)
+ * @property password Mật khẩu (≥ 8 ký tự)
+ * @property confirmPassword Xác nhận lại mật khẩu
+ * @property agreeTerms Đồng ý điều khoản sử dụng
+ * @property isLoading Đang xử lý đăng ký
+ * @property isSignUpSuccess Đăng ký thành công (trigger navigation)
+ * @property error Lỗi chung (email trùng, server error...)
+ * @property passwordError Lỗi riêng cho password/confirm password
+ */
 data class SignUpUiState(
     val email: String = "",
     val phone: String = "",
@@ -24,6 +37,20 @@ data class SignUpUiState(
     val passwordError: String? = null
 )
 
+/**
+ * ViewModel cho màn hình đăng ký.
+ * 
+ * Validation rules:
+ * - Email: không trống, format hợp lệ
+ * - Phone: không trống, format +84 hoặc 0
+ * - Password: ≥ 8 ký tự
+ * - Confirm password: khớp với password
+ * - Terms: phải đồng ý
+ *
+ * Sau khi đăng ký thành công, tự động login và lưu token.
+ *
+ * @property authRepository Repository xử lý authentication
+ */
 @HiltViewModel
 class SignUpViewModel @Inject constructor(
     private val authRepository: AuthRepository
@@ -111,7 +138,7 @@ class SignUpViewModel @Inject constructor(
                     }
                 }
                 is AuthResult.Loading -> {
-                    // Already loading
+                    // Đã đang loading
                 }
             }
         }

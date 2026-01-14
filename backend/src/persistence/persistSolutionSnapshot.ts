@@ -131,13 +131,13 @@ export async function persistSolutionSnapshot(opts: {
                 throw new Error(`mapping_ids[${nodeIndex}] missing`);
             }
             
-            // Skip dummy nodes (dummy_start, ghost_pickup) - they don't have order_id/location_id
-            if (m.kind === 'dummy_start' || m.kind === 'ghost_pickup') {
+            // Skip dummy/ghost nodes - they don't have real order_id/location_id
+            if (m.is_dummy || m.kind === 'dummy_start' || m.kind === 'ghost_pickup' || m.kind === 'depot') {
                 return null; // Will be filtered out
             }
             
             if (!m.order_id || !m.location_id) {
-                throw new Error(`mapping_ids[${nodeIndex}] missing order_id/location_id`);
+                throw new Error(`mapping_ids[${nodeIndex}] missing order_id/location_id (kind=${m.kind}, is_dummy=${m.is_dummy})`);
             }
 
             return {

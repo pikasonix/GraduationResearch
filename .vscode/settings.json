@@ -1,3 +1,4 @@
 {
-    "cmake.sourceDirectory": "D:/CODE/WAYO/backend/pdptw_solver_module/apps"
+    "cmake.sourceDirectory": "D:/CODE/WAYO/backend/pdptw_solver_module/apps",
+    "java.configuration.updateBuildConfiguration": "interactive"
 }

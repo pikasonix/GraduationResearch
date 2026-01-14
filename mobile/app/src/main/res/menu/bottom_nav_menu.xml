@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <item
+        android:id="@+id/routeSelectionFragment"
+        android:icon="@drawable/ic_directions_car"
+        android:title="Xe" />
+
+    <item
+        android:id="@+id/assignedRoutesFragment"
+        android:icon="@drawable/baseline_checklist_24"
+        android:title="Tuyến" />
+
+    <item
+        android:id="@+id/mapFragment"
+        android:icon="@drawable/ic_location_on"
+        android:title="Bản đồ" />
+
+    <item
+        android:id="@+id/profileFragment"
+        android:icon="@drawable/ic_account_circle"
+        android:title="Tôi" />
+
+</menu>

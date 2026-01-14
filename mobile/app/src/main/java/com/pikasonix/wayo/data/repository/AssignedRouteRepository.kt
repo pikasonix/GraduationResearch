@@ -8,28 +8,68 @@ import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
-import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.*
 
 /**
- * Repository for fetching and managing assigned routes from Supabase
+ * Repository quản lý routes được giao từ Supabase
  */
 class AssignedRouteRepository {
     private val supabase = SupabaseClientProvider.client
 
+    private data class DriverContext(
+        val driverId: String,
+        val organizationId: String
+    )
+
     /**
-     * Get all routes assigned to a specific driver
+     * Lấy thông tin driver từ bảng drivers dựa trên user_id
      */
-    suspend fun getAssignedRoutes(driverId: String): List<AssignedRoute> {
+    private suspend fun getDriverContextFromUserId(userId: String, userEmail: String?): DriverContext? {
         return try {
-            supabase.postgrest["routes"]
+            val response = supabase.postgrest["drivers"]
+                .select(columns = Columns.list("id", "organization_id")) {
+                    filter {
+                        eq("user_id", userId)
+                    }
+                }
+                .decodeList<JsonObject>()
+            
+            if (response.isNotEmpty()) {
+                val row = response[0]
+                val driverId = row["id"]?.jsonPrimitive?.content
+                val organizationId = row["organization_id"]?.jsonPrimitive?.content
+                if (!driverId.isNullOrBlank() && !organizationId.isNullOrBlank()) {
+                    return DriverContext(driverId = driverId, organizationId = organizationId)
+                }
+            }
+            
+            null
+        } catch (e: Exception) {
+            e.printStackTrace()
+            null
+        }
+    }
+
+    /**
+     * Lấy tất cả routes được giao cho driver
+     * @param userId Auth user ID từ Supabase auth
+     * @param userEmail Email người dùng (dự phòng)
+     */
+    suspend fun getAssignedRoutes(userId: String, userEmail: String? = null): List<AssignedRoute> {
+        return try {
+            val ctx = getDriverContextFromUserId(userId, userEmail) ?: return emptyList()
+
+            val assigned = supabase.postgrest["routes"]
                 .select {
                     filter {
-                        eq("driver_id", driverId)
+                        eq("driver_id", ctx.driverId)
                         neq("status", "completed")
                         neq("status", "cancelled")
                     }
                 }
-                .decodeList()
+                .decodeList<AssignedRoute>()
+
+            assigned
         } catch (e: Exception) {
             e.printStackTrace()
             emptyList()
@@ -37,7 +77,7 @@ class AssignedRouteRepository {
     }
 
     /**
-     * Get route with solution data for navigation
+     * Lấy route với dữ liệu solution để điều hướng
      */
     suspend fun getRouteWithSolution(routeId: String): AssignedRouteWithSolution? {
         return try {
@@ -73,7 +113,7 @@ class AssignedRouteRepository {
     }
 
     /**
-     * Update route status
+     * Cập nhật trạng thái route
      */
     suspend fun updateRouteStatus(routeId: String, status: RouteStatus): Boolean {
         return try {
@@ -93,24 +133,24 @@ class AssignedRouteRepository {
     }
 
     /**
-     * Mark route as in progress
+     * Đánh dấu route đang thực hiện
      */
     suspend fun startRoute(routeId: String): Boolean {
         return updateRouteStatus(routeId, RouteStatus.IN_PROGRESS)
     }
 
     /**
-     * Mark route as completed
+     * Đánh dấu route hoàn thành
      */
     suspend fun completeRoute(routeId: String): Boolean {
         return updateRouteStatus(routeId, RouteStatus.COMPLETED)
     }
 
     /**
-     * Flow to observe assigned routes (for realtime updates)
+     * Flow để theo dõi routes được giao (cho realtime updates)
      */
     fun observeAssignedRoutes(driverId: String): Flow<List<AssignedRoute>> = flow {
-        emit(getAssignedRoutes(driverId))
+        emit(getAssignedRoutes(driverId, null))
     }
 }
 

@@ -13,7 +13,16 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 /**
- * UI State for Login Screen
+ * UI State cho màn hình đăng nhập.
+ *
+ * @property email Email người dùng nhập vào
+ * @property password Password người dùng nhập vào
+ * @property rememberMe Checkbox "Ghi nhớ đăng nhập"
+ * @property isLoading Trạng thái đang loading (hiển thị progress bar)
+ * @property error Thông báo lỗi (null nếu không có lỗi)
+ * @property isLoggedIn Đã đăng nhập thành công (trigger navigation)
+ * @property user Thông tin user sau khi đăng nhập
+ * @property verificationMessage Thông báo xác thực email (nếu cần)
  */
 data class LoginUiState(
     val email: String = "",
@@ -27,7 +36,15 @@ data class LoginUiState(
 )
 
 /**
- * ViewModel for Login Screen
+ * ViewModel cho màn hình đăng nhập.
+ * 
+ * Xử lý:
+ * - Validation input (email format, password không trống)
+ * - Gọi AuthRepository để authenticate
+ * - Lưu token vào SecureStorage nếu "remember me"
+ * - Emit state để Fragment observe và update UI
+ *
+ * @property authRepository Repository xử lý authentication
  */
 @HiltViewModel
 class LoginViewModel @Inject constructor(
@@ -38,7 +55,7 @@ class LoginViewModel @Inject constructor(
     val uiState: StateFlow<LoginUiState> = _uiState.asStateFlow()
     
     init {
-        // Check if already logged in
+        // Kiểm tra xem đã đăng nhập chưa
         checkCurrentUser()
     }
     
@@ -95,7 +112,7 @@ class LoginViewModel @Inject constructor(
                     )
                 }
                 AuthResult.Loading -> {
-                    // Already handled
+                    // Đã xử lý
                 }
             }
         }

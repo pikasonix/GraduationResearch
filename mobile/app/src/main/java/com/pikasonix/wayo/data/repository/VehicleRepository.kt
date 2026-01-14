@@ -4,16 +4,16 @@ import com.pikasonix.wayo.data.model.Vehicle
 import com.pikasonix.wayo.data.remote.SupabaseClientProvider
 import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.postgrest.query.Columns
-import kotlinx.serialization.json.JsonNull.content
+import io.github.jan.supabase.postgrest.query.Order
 
 /**
- * Repository for vehicle operations
+ * Repository cho các thao tác xe
  */
 class VehicleRepository {
     private val supabase = SupabaseClientProvider.client
 
     /**
-     * Get all available vehicles for an organization
+     * Lấy tất cả xe khả dụng của một tổ chức
      */
     suspend fun getAvailableVehicles(organizationId: String): List<Vehicle> {
         return try {
@@ -31,7 +31,7 @@ class VehicleRepository {
                         eq("organization_id", organizationId)
                         eq("is_active", true)
                     }
-                    order("license_plate", ascending = true)
+                    order("license_plate", order = Order.ASCENDING)
                 }
                 .decodeList<VehicleResponse>()
                 .map { it.toVehicle() }
@@ -41,7 +41,7 @@ class VehicleRepository {
     }
 
     /**
-     * Get the vehicle assigned to a specific driver
+     * Lấy xe được gán cho một tài xế cụ thể
      */
     suspend fun getDriverVehicle(driverId: String): Vehicle? {
         return try {
@@ -70,7 +70,7 @@ class VehicleRepository {
     }
 
     /**
-     * Assign a driver to a vehicle as default
+     * Gán tài xế cho xe làm mặc định
      */
     suspend fun assignDriverToVehicle(
         vehicleId: String,
@@ -78,10 +78,10 @@ class VehicleRepository {
         organizationId: String
     ) {
         try {
-            // First, unassign driver from any other vehicle
+            // Đầu tiên, bỏ gán tài xế khỏi các xe khác
             supabase.from("vehicles")
                 .update({
-                    set("default_driver_id", null)
+                    set("default_driver_id", null as String?)
                 }) {
                     filter {
                         eq("default_driver_id", driverId)
@@ -89,7 +89,7 @@ class VehicleRepository {
                     }
                 }
 
-            // Then assign to new vehicle
+            // Sau đó gán cho xe mới
             supabase.from("vehicles")
                 .update({
                     set("default_driver_id", driverId)
@@ -105,7 +105,7 @@ class VehicleRepository {
     }
 
     /**
-     * Unassign a driver from their vehicle
+     * Bỏ gán tài xế khỏi xe của họ
      */
     suspend fun unassignDriverFromVehicle(
         driverId: String,
@@ -114,7 +114,7 @@ class VehicleRepository {
         try {
             supabase.from("vehicles")
                 .update({
-                    set("default_driver_id", null)
+                    set("default_driver_id", null as String?)
                 }) {
                     filter {
                         eq("default_driver_id", driverId)
@@ -128,7 +128,7 @@ class VehicleRepository {
 }
 
 /**
- * Response model for vehicle with nested driver data
+ * Response model cho xe với dữ liệu tài xế lồng nhau
  */
 @kotlinx.serialization.Serializable
 private data class VehicleResponse(
@@ -136,8 +136,8 @@ private data class VehicleResponse(
     val organization_id: String,
     val license_plate: String,
     val vehicle_type: String,
-    val capacity_weight: Int,
-    val capacity_volume: Int? = null,
+    val capacity_weight: Double? = null,
+    val capacity_volume: Double? = null,
     val fuel_consumption: Double? = null,
     val cost_per_km: Double? = null,
     val cost_per_hour: Double? = null,
@@ -160,8 +160,8 @@ private data class VehicleResponse(
         organizationId = organization_id,
         licensePlate = license_plate,
         vehicleType = vehicle_type,
-        capacityWeight = capacity_weight,
-        capacityVolume = capacity_volume,
+        capacityWeight = capacity_weight?.toInt() ?: 0,
+        capacityVolume = capacity_volume?.toInt(),
         fuelConsumption = fuel_consumption,
         costPerKm = cost_per_km,
         costPerHour = cost_per_hour,

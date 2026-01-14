@@ -1,7 +1,7 @@
 package com.pikasonix.wayo.data.model
 
 /**
- * User model representing authenticated user data
+ * User model đại diện cho dữ liệu người dùng đã xác thực
  */
 data class User(
     val id: String,
@@ -13,7 +13,7 @@ data class User(
 )
 
 /**
- * Login credentials for authentication
+ * Thông tin đăng nhập cho xác thực
  */
 data class LoginCredentials(
     val email: String,
@@ -22,7 +22,7 @@ data class LoginCredentials(
 )
 
 /**
- * Authentication result wrapper
+ * Wrapper kết quả xác thực
  */
 sealed class AuthResult {
     data class Success(val user: User) : AuthResult()

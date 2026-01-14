@@ -16,8 +16,8 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Mapbox configuration
- * Values are loaded from local.properties via BuildConfig
+ * Cấu hình Mapbox
+ * Giá trị được load từ local.properties qua BuildConfig
  */
 object MapboxConfig {
     val ACCESS_TOKEN: String = BuildConfig.MAPBOX_ACCESS_TOKEN
@@ -26,7 +26,7 @@ object MapboxConfig {
 }
 
 /**
- * Service for fetching routes from Mapbox Directions API
+ * Service để fetch routes từ Mapbox Directions API
  */
 @Singleton
 class MapboxService @Inject constructor() {
@@ -34,7 +34,7 @@ class MapboxService @Inject constructor() {
     private val client = OkHttpClient()
     
     /**
-     * Get route between two points
+     * Lấy route giữa hai điểm
      */
     suspend fun getRoute(
         origin: LocationPoint,
@@ -161,7 +161,7 @@ class MapboxService @Inject constructor() {
                         duration = leg.getDouble("duration"),
                         steps = legSteps,
                         annotation = annotation,
-                        summary = leg.optString("summary", null)
+                        summary = leg.optString("summary") ?: ""
                     )
                 )
             }
@@ -306,6 +306,96 @@ class MapboxService @Inject constructor() {
         } catch (e: Exception) {
             e.printStackTrace()
             null
+        }
+    }
+    
+    /**
+     * Get real road routing coordinates for multiple waypoints
+     * Returns list of coordinates that follow actual roads
+     * @param waypoints List of coordinates [lng, lat]
+     * @return List of coordinates following roads, or original waypoints if API fails
+     */
+    suspend fun getRealRouteCoordinates(
+        waypoints: List<Pair<Double, Double>>
+    ): List<Pair<Double, Double>> = withContext(Dispatchers.IO) {
+        if (waypoints.size < 2) return@withContext waypoints
+        
+        try {
+            // Mapbox Directions API limits to 25 waypoints per request
+            val maxWaypoints = 25
+            
+            if (waypoints.size <= maxWaypoints) {
+                // Single request
+                return@withContext fetchRouteSegment(waypoints)
+            } else {
+                // Chunk and merge
+                val allCoords = mutableListOf<Pair<Double, Double>>()
+                
+                var i = 0
+                while (i < waypoints.size) {
+                    val end = minOf(i + maxWaypoints, waypoints.size)
+                    val chunk = waypoints.subList(i, end)
+                    
+                    if (chunk.size < 2) break
+                    
+                    val chunkCoords = fetchRouteSegment(chunk)
+                    
+                    // Skip first point if not first chunk to avoid duplicates
+                    if (allCoords.isNotEmpty() && chunkCoords.isNotEmpty()) {
+                        allCoords.addAll(chunkCoords.drop(1))
+                    } else {
+                        allCoords.addAll(chunkCoords)
+                    }
+                    
+                    // Move forward, overlapping by 1 point
+                    i += maxWaypoints - 1
+                }
+                
+                return@withContext if (allCoords.isNotEmpty()) allCoords else waypoints
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            // Fallback to straight lines
+            return@withContext waypoints
+        }
+    }
+    
+    private suspend fun fetchRouteSegment(
+        waypoints: List<Pair<Double, Double>>
+    ): List<Pair<Double, Double>> = withContext(Dispatchers.IO) {
+        try {
+            val coordStr = waypoints.joinToString(";") { "${it.first},${it.second}" }
+            val url = "${MapboxConfig.DIRECTIONS_API_URL}/driving/$coordStr" +
+                    "?overview=full" +
+                    "&geometries=geojson" +
+                    "&access_token=${MapboxConfig.ACCESS_TOKEN}"
+            
+            val request = Request.Builder()
+                .url(url)
+                .build()
+            
+            val response = client.newCall(request).execute()
+            val body = response.body?.string() ?: return@withContext waypoints
+            
+            val jsonObject = JSONObject(body)
+            val routes = jsonObject.getJSONArray("routes")
+            
+            if (routes.length() == 0) return@withContext waypoints
+            
+            val route = routes.getJSONObject(0)
+            val geometry = route.getJSONObject("geometry")
+            val coordinates = geometry.getJSONArray("coordinates")
+            
+            val result = mutableListOf<Pair<Double, Double>>()
+            for (i in 0 until coordinates.length()) {
+                val coord = coordinates.getJSONArray(i)
+                result.add(Pair(coord.getDouble(0), coord.getDouble(1)))
+            }
+            
+            return@withContext if (result.isNotEmpty()) result else waypoints
+        } catch (e: Exception) {
+            e.printStackTrace()
+            return@withContext waypoints
         }
     }
 }

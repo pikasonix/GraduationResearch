@@ -1,7 +1,7 @@
 package com.pikasonix.wayo.data.model
 
 /**
- * Represents a place result from geocoding/search API
+ * Đại diện cho kết quả địa điểm từ geocoding/search API
  */
 data class PlaceResult(
     val id: String,

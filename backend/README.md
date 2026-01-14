@@ -4,6 +4,40 @@ Dưới đây là nội dung đã được thêm dấu tiếng Việt hoàn ch�
 
 Dự án backend cho hệ thống WAYO, cung cấp API và tích hợp bộ giải thuật tối ưu hóa lộ trình (PDPTW).
 
+## Chạy local (dev)
+
+### 1) Cài dependencies
+
+```powershell
+cd backend
+npm install
+```
+
+### 2) Tạo file môi trường
+
+Tạo `backend/.env` (hoặc thiết lập biến môi trường tương đương):
+
+```properties
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+
+# Optional
+PORT=3001
+NODE_ENV=development
+```
+
+### 3) Start server
+
+```powershell
+npm run dev
+```
+
+Sanity check:
+
+- `GET http://localhost:3001/api/mobile/health` → `{"status":"ok"...}`
+
+> Lưu ý Android Emulator phải dùng `http://10.0.2.2:3001` để gọi về máy host.
+
 ## Cấu trúc dự án
 
 Dự án được tổ chức thành các thành phần chính sau:

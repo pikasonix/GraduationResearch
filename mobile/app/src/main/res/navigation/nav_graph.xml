@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="utf-8"?>
+<navigation xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/nav_graph"
+    app:startDestination="@id/loginFragment">
+
+    <fragment
+        android:id="@+id/loginFragment"
+        android:name="com.pikasonix.wayo.ui.xml.login.LoginFragment"
+        android:label="@string/title_login">
+        <action
+            android:id="@+id/action_loginFragment_to_routeSelectionFragment"
+            app:destination="@id/routeSelectionFragment"
+            app:popUpTo="@id/loginFragment"
+            app:popUpToInclusive="true" />
+        <action
+            android:id="@+id/action_loginFragment_to_signUpFragment"
+            app:destination="@id/signUpFragment" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/signUpFragment"
+        android:name="com.pikasonix.wayo.ui.xml.signup.SignUpFragment"
+        android:label="@string/title_signup">
+        <action
+            android:id="@+id/action_signUpFragment_to_loginFragment"
+            app:destination="@id/loginFragment"
+            app:popUpTo="@id/signUpFragment"
+            app:popUpToInclusive="true" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/routeSelectionFragment"
+        android:name="com.pikasonix.wayo.ui.xml.drivervehicle.DriverVehicleFragment"
+        android:label="Chọn xe">
+        <action
+            android:id="@+id/action_vehicleSelection_to_assignedRoutes"
+            app:destination="@id/assignedRoutesFragment" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/assignedRoutesFragment"
+        android:name="com.pikasonix.wayo.ui.xml.routes.AssignedRoutesFragment"
+        android:label="@string/title_routes">
+        <action
+            android:id="@+id/action_assignedRoutes_to_routeDetails"
+            app:destination="@id/routeDetailsFragment" />
+        <action
+            android:id="@+id/action_assignedRoutes_to_map"
+            app:destination="@id/mapFragment" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/routeDetailsFragment"
+        android:name="com.pikasonix.wayo.ui.xml.routes.RouteDetailsFragment"
+        android:label="@string/title_route_details">
+        <argument
+            android:name="routeId"
+            app:argType="string" />
+        <action
+            android:id="@+id/action_routeDetails_to_map"
+            app:destination="@id/mapFragment" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/mapFragment"
+        android:name="com.pikasonix.wayo.ui.xml.map.MapFragment"
+        android:label="@string/title_map">
+        <action
+            android:id="@+id/action_map_to_routes"
+            app:destination="@id/assignedRoutesFragment" />
+        <action
+            android:id="@+id/action_map_to_profile"
+            app:destination="@id/profileFragment" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/profileFragment"
+        android:name="com.pikasonix.wayo.ui.xml.profile.ProfileFragment"
+        android:label="@string/title_profile">
+        <action
+            android:id="@+id/action_profile_to_login"
+            app:destination="@id/loginFragment"
+            app:popUpTo="@id/routeSelectionFragment"
+            app:popUpToInclusive="true" />
+    </fragment>
+
+</navigation>

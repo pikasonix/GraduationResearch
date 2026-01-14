@@ -13,18 +13,22 @@ data class AssignedRoute(
     @SerialName("organization_id")
     val organizationId: String,
     @SerialName("driver_id")
-    val driverId: String?,
+    val driverId: String? = null,
     @SerialName("vehicle_id")
-    val vehicleId: String?,
+    val vehicleId: String? = null,
     val status: RouteStatus,
     @SerialName("solution_id")
-    val solutionId: String?,
+    val solutionId: String? = null,
+    @SerialName("planned_distance_km")
+    val plannedDistanceKm: Double? = null,
+    @SerialName("planned_duration_hours")
+    val plannedDurationHours: Double? = null,
     @SerialName("total_distance_km")
-    val totalDistanceKm: Double?,
+    val totalDistanceKm: Double? = null,
     @SerialName("total_duration_hours")
-    val totalDurationHours: Double?,
+    val totalDurationHours: Double? = null,
     @SerialName("created_at")
-    val createdAt: String
+    val createdAt: String = ""
 )
 
 @Serializable

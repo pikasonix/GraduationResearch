@@ -45,8 +45,11 @@ export function buildCleanedMappingIds(
     for (let oldIndex = 0; oldIndex < originalMappingIds.length; oldIndex++) {
         const mapping = originalMappingIds[oldIndex];
         
-        // Skip dummy nodes
-        if (mapping.kind === 'dummy_start' || mapping.kind === 'ghost_pickup') {
+        // Skip dummy nodes (check both kind and is_dummy flag)
+        if (mapping.kind === 'dummy_start' || 
+            mapping.kind === 'ghost_pickup' || 
+            mapping.is_dummy === true ||
+            mapping.order_id?.startsWith('DUMMY_')) {
             continue;
         }
         

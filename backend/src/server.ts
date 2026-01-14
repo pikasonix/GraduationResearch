@@ -6,6 +6,7 @@ import cors from 'cors';
 import { JobQueue } from './queue/JobQueue';
 import { SolverWorker } from './workers/SolverWorker';
 import { setupJobRoutes } from './routes/jobRoutes';
+import { setupMobileRoutes } from './routes/mobileRoutes';
 import { SolverParams } from './types';
 import { persistSolutionSnapshot } from './persistence/persistSolutionSnapshot';
 import { cleanDummyNodes, parseSolverOutput } from './workers/dummyNodeCleaner';
@@ -131,6 +132,17 @@ jobQueue.on('processJob', (job, callbacks) => {
                             console.log(`[Server DEBUG] Cleaned mapping_ids count: ${cleanedMapping.cleanedMappingIds.length}`);
                             console.log(`[Server DEBUG] Sample cleaned mapping_ids[1]:`, JSON.stringify(cleanedMapping.cleanedMappingIds[1], null, 2));
                             
+                            // DEBUG: Log reindexed routes
+                            console.log(`[Server DEBUG] Reindexed routes count: ${cleanedMapping.reindexedRoutes.length}`);
+                            cleanedMapping.reindexedRoutes.forEach((route, idx) => {
+                                console.log(`[Server DEBUG] Reindexed route ${idx + 1}:`, {
+                                    route_number: route.route_number,
+                                    vehicle_id: route.vehicle_id,
+                                    node_sequence: route.node_sequence,
+                                    real_stops_count: route.real_stops.length,
+                                });
+                            });
+                            
                             // Update inputData with cleaned mapping_ids
                             persistOpts.inputData = {
                                 ...job.inputData,
@@ -197,6 +209,9 @@ app.use(express.json({ limit: MAX_FILE_SIZE }));
 
 // Routes
 app.use('/api/jobs', setupJobRoutes(jobQueue));
+
+// Mobile API (requires Supabase env vars)
+app.use('/api/mobile', setupMobileRoutes());
 
 // Legacy endpoint for backward compatibility
 interface SolveRequest {
