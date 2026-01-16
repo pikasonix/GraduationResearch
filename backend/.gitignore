@@ -22,6 +22,7 @@ dist-ssr
 # Temporary files
 tmp/
 temp/
+pdptw_solver_module_v2.1/
 
 # OS generated files
 .DS_Store

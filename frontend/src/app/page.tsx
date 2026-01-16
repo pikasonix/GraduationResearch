@@ -1,14 +1,5 @@
-import ShowcaseSection from "./_ShowcaseSection";
-import RoutingPage from "./routing/page";
-
-export const revalidate = 300; // Revalidate this page every 5 minutes
+import { redirect } from 'next/navigation';
 
 export default async function Home() {
-
-  return (
-    <main className="min-h-screen bg-[#F8F7FA]">
-      {/* <ShowcaseSection /> */}
-      <RoutingPage />
-    </main>
-  );
+  redirect('/route-details');
 }
