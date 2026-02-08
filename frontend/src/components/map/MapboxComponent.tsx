@@ -971,7 +971,7 @@ const MapboxComponent: React.FC<MapComponentProps> = ({
     }
 
     // Retry mechanism similar to solution effect
-    const attemptAddNodes = (attempt = 1, maxAttempts = 10) => {
+    const attemptAddNodes = (attempt = 1, maxAttempts = 20) => {
       if (!mapRef.current) return;
 
       if (mapRef.current.isStyleLoaded()) {
@@ -1003,7 +1003,7 @@ const MapboxComponent: React.FC<MapComponentProps> = ({
       } else {
         console.log(`⏳ Style not loaded for nodes, retry ${attempt}/${maxAttempts}`);
         if (attempt < maxAttempts) {
-          setTimeout(() => attemptAddNodes(attempt + 1, maxAttempts), 200);
+          setTimeout(() => attemptAddNodes(attempt + 1, maxAttempts), 300);
         } else {
           console.error('❌ Failed to add nodes after max attempts');
         }
@@ -1032,7 +1032,7 @@ const MapboxComponent: React.FC<MapComponentProps> = ({
     }
 
     // Retry mechanism: try to draw, if style not loaded, retry after delay
-    const attemptDraw = (attempt = 1, maxAttempts = 10) => {
+    const attemptDraw = (attempt = 1, maxAttempts = 20) => {
       if (!mapRef.current) return;
 
       if (mapRef.current.isStyleLoaded()) {
@@ -1041,7 +1041,7 @@ const MapboxComponent: React.FC<MapComponentProps> = ({
       } else {
         console.log(`⏳ Style not loaded yet, retry ${attempt}/${maxAttempts}`);
         if (attempt < maxAttempts) {
-          setTimeout(() => attemptDraw(attempt + 1, maxAttempts), 200);
+          setTimeout(() => attemptDraw(attempt + 1, maxAttempts), 300);
         } else {
           console.error('❌ Failed to draw solution after max attempts');
         }

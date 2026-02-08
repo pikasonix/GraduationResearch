@@ -228,6 +228,7 @@ export default function VehicleList({ vehicles, onRefresh, teamId, organizationI
                     fixed_cost: null,
                     is_active: formData.is_active,
                     notes: null,
+                    default_driver_id: null,
                     organization_id: organizationId || '00000000-0000-0000-0000-000000000000',
                 });
                 toast.success('Đã thêm xe mới');

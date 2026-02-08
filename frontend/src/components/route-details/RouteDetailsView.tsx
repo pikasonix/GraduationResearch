@@ -41,6 +41,21 @@ const getDistanceBetweenPoints = (coord1: [number, number], coord2: [number, num
     const a = Math.sin(dLat / 2) ** 2 + Math.cos(coord1[0] * Math.PI / 180) * Math.cos(coord2[0] * Math.PI / 180) * Math.sin(dLon / 2) ** 2; const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)); return R * c;
 };
 
+// Format minutes to HH:MM (e.g., 660 -> "11:00")
+const formatTime = (minutes: number): string => {
+    const h = Math.floor(minutes / 60);
+    const m = Math.floor(minutes % 60);
+    return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+};
+
+// Format minutes to duration (e.g., 75 -> "1h 15m", 45 -> "45m")
+const formatDuration = (minutes: number): string => {
+    if (minutes < 60) return `${Math.round(minutes)}m`;
+    const h = Math.floor(minutes / 60);
+    const m = Math.round(minutes % 60);
+    return m > 0 ? `${h}h ${m}m` : `${h}h`;
+};
+
 function calcMetrics(route: any, instance: any) {
     if (!route?.sequence || !instance?.nodes) return null;
     let totalDistance = 0;
@@ -128,7 +143,7 @@ const RouteAnalysis: React.FC<{
                             <Clock className="w-4 h-4" />
                             <span className="text-xs font-medium">Thời gian chờ</span>
                         </div>
-                        <div className="text-xl font-bold text-gray-800">{totalWaitTime.toFixed(1)}h</div>
+                        <div className="text-xl font-bold text-gray-800">{formatDuration(totalWaitTime)}</div>
                         <div className="text-xs text-gray-500">{earlyCount} đến sớm, {lateCount} muộn</div>
                     </div>
 
@@ -440,7 +455,7 @@ export const RouteDetailsView: React.FC<RouteDetailsViewProps> = ({
     const timelineData = useMemo(() => {
         if (!route?.sequence || !filteredInstance?.nodes) return null;
         const events: TimelineEvent[] = [];
-        let currentTime = 0;
+        let currentTime = 0; // Current time in MINUTES
         let currentLoad = 0;
         let totalDistance = 0;
         const nodesMap = new Map(filteredInstance.nodes.map((n: any) => [n.id, n]));
@@ -449,49 +464,50 @@ export const RouteDetailsView: React.FC<RouteDetailsViewProps> = ({
             const nodeId = route.sequence[i];
             const node = getNode(nodeId);
             if (!node) continue;
-            let travelTime = 0;
+            let travelTime = 0; // Travel time in MINUTES
             let distance = 0;
             if (i > 0) {
                 const prevId = route.sequence[i - 1];
                 const prevNode = getNode(prevId);
                 if (prevNode) {
                     if (Array.isArray(filteredInstance.times) && filteredInstance.times[prevId] && filteredInstance.times[prevId][nodeId] != null) {
-                        travelTime = filteredInstance.times[prevId][nodeId];
-                        distance = travelTime * 30;
+                        // Times matrix is in hours, convert to minutes
+                        travelTime = filteredInstance.times[prevId][nodeId] * 60;
+                        distance = (travelTime / 60) * 30; // Convert back to hours for distance calc
                     } else {
                         distance = getDistanceBetweenPoints(prevNode.coords, node.coords);
-                        travelTime = distance / 30;
+                        travelTime = (distance / 30) * 60; // Convert hours to minutes
                     }
                     totalDistance += distance;
                 }
             }
-            const arrivalTime = currentTime + travelTime;
-            const twStart = node.time_window?.[0] ?? 0;
-            const twEnd = node.time_window?.[1] ?? twStart;
-            const waitTime = arrivalTime < twStart ? (twStart - arrivalTime) : 0;
-            const serviceStartTime = arrivalTime + waitTime;
-            const serviceDuration = node.duration ?? 0;
+            const arrivalTime = currentTime + travelTime; // MINUTES
+            const twStart = node.time_window?.[0] ?? 0; // MINUTES from backend
+            const twEnd = node.time_window?.[1] ?? twStart; // MINUTES from backend
+            const waitTime = arrivalTime < twStart ? (twStart - arrivalTime) : 0; // MINUTES
+            const serviceStartTime = arrivalTime + waitTime; // MINUTES
+            const serviceDuration = node.duration ?? 0; // MINUTES (service_time from backend)
             currentLoad += node.demand || 0;
             const event: TimelineEvent = {
                 nodeId,
                 index: i,
-                arrivalTime,
-                serviceStartTime,
-                serviceEndTime: serviceStartTime + serviceDuration,
-                waitTime,
-                travelTime,
+                arrivalTime, // MINUTES
+                serviceStartTime, // MINUTES
+                serviceEndTime: serviceStartTime + serviceDuration, // MINUTES
+                waitTime, // MINUTES
+                travelTime, // MINUTES
                 distance,
                 demand: node.demand || 0,
                 load: currentLoad,
-                timeWindow: [twStart, twEnd],
+                timeWindow: [twStart, twEnd], // MINUTES
                 nodeType: node.is_depot ? 'Depot' : node.is_pickup ? 'Pickup' : 'Delivery'
             };
             events.push(event);
-            currentTime = serviceStartTime + serviceDuration;
+            currentTime = serviceStartTime + serviceDuration; // MINUTES
         }
         return {
             events,
-            totalDuration: currentTime,
+            totalDuration: currentTime, // MINUTES
             totalDistance,
         };
     }, [route, filteredInstance]);
@@ -720,7 +736,7 @@ export const RouteDetailsView: React.FC<RouteDetailsViewProps> = ({
                         {timelineData && (
                             <div className="flex items-center justify-between bg-gray-50 rounded-lg p-3">
                                 <div className="text-center flex-1 border-r border-gray-200">
-                                    <div className="text-lg font-bold text-gray-800">{timelineData.totalDuration.toFixed(1)}h</div>
+                                    <div className="text-lg font-bold text-gray-800">{formatDuration(timelineData.totalDuration)}</div>
                                     <div className="text-[10px] uppercase tracking-wider text-gray-500 font-medium">Duration</div>
                                 </div>
                                 <div className="text-center flex-1">
@@ -734,8 +750,20 @@ export const RouteDetailsView: React.FC<RouteDetailsViewProps> = ({
                     <div className="flex-1 overflow-y-auto bg-gray-50/50 p-4">
                         {!route ? (
                             <div className="space-y-3">
-                                <div className="text-xs text-gray-500">
-                                    {organizationId ? `Organization: ${organizationId}` : 'Chưa có organizationId (không tải được lịch sử)'}
+                                <div className="flex items-center justify-between">
+                                    <div className="text-xs text-gray-500">
+                                        {organizationId ? `Organization: ${organizationId}` : 'Chưa có organizationId (không tải được lịch sử)'}
+                                    </div>
+                                    {organizationId && (
+                                        <button
+                                            type="button"
+                                            onClick={() => router.push('/dynamic-tracking')}
+                                            className="px-3 py-1 text-xs font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-md border border-blue-200 transition-colors"
+                                            title="View solution timeline"
+                                        >
+                                            Timeline
+                                        </button>
+                                    )}
                                 </div>
 
                                 {solutionHistoryError && (
@@ -843,7 +871,7 @@ export const RouteDetailsView: React.FC<RouteDetailsViewProps> = ({
                                                     </span>
                                                     <span className="flex items-center gap-1 bg-white px-2 py-0.5 rounded-full border border-gray-100 shadow-sm">
                                                         <i className="far fa-clock" />
-                                                        {event.travelTime.toFixed(1)}h
+                                                        {formatDuration(event.travelTime)}
                                                     </span>
                                                 </div>
                                             )}
@@ -855,10 +883,10 @@ export const RouteDetailsView: React.FC<RouteDetailsViewProps> = ({
                                                             <i className="far fa-pause-circle text-orange-600" />
                                                             <div>
                                                                 <div className="font-bold text-orange-800 text-[11px]">Wait Required</div>
-                                                                <div className="text-[10px] text-orange-600">Wait {event.waitTime.toFixed(1)}h for window</div>
+                                                                <div className="text-[10px] text-orange-600">Wait {formatDuration(event.waitTime)} for window</div>
                                                             </div>
                                                         </div>
-                                                        <div className="bg-orange-200 px-1.5 py-0.5 rounded text-orange-800 font-bold text-[10px]">+{event.waitTime.toFixed(1)}h</div>
+                                                        <div className="bg-orange-200 px-1.5 py-0.5 rounded text-orange-800 font-bold text-[10px]">+{formatDuration(event.waitTime)}</div>
                                                     </div>
                                                 </div>
                                             )}
@@ -895,11 +923,11 @@ export const RouteDetailsView: React.FC<RouteDetailsViewProps> = ({
                                                                 </span>
                                                             </div>
                                                             <div className="text-[11px] text-gray-500 mt-0.5">
-                                                                {twStart}h - {twEnd}h
+                                                                {formatTime(twStart)} - {formatTime(twEnd)}
                                                             </div>
                                                         </div>
                                                         <div className={`text-right ${isLate ? 'text-red-600' : isEarly ? 'text-orange-500' : 'text-green-600'}`}>
-                                                            <div className="font-bold text-xs">{arrivalTime.toFixed(2)}h</div>
+                                                            <div className="font-bold text-xs">{formatTime(arrivalTime)}</div>
                                                             <div className="text-[10px] font-medium">
                                                                 {isLate ? 'Late' : isEarly ? 'Early' : 'On Time'}
                                                             </div>
@@ -909,7 +937,7 @@ export const RouteDetailsView: React.FC<RouteDetailsViewProps> = ({
                                                     <div className="grid grid-cols-3 gap-2 pt-2 border-t border-gray-50">
                                                         <div className="text-center">
                                                             <div className="text-[10px] text-gray-400 uppercase">Service</div>
-                                                            <div className="text-xs font-semibold text-gray-700">{(event.serviceEndTime - event.serviceStartTime).toFixed(1)}h</div>
+                                                            <div className="text-xs font-semibold text-gray-700">{formatDuration(event.serviceEndTime - event.serviceStartTime)}</div>
                                                         </div>
                                                         <div className="text-center border-l border-gray-50">
                                                             <div className="text-[10px] text-gray-400 uppercase">Demand</div>

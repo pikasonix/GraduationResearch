@@ -201,6 +201,8 @@ export default function MonitorMap({ drivers, routes, selectedDriverId, onSelect
                         color,
                         orderId: s.orderId ?? null,
                         locationId: s.locationId ?? null,
+                        // Include order info as JSON string since GeoJSON properties must be primitives
+                        orderInfo: s.orderInfo ? JSON.stringify(s.orderInfo) : null,
                     },
                     geometry: {
                         type: 'Point',
@@ -294,15 +296,67 @@ export default function MonitorMap({ drivers, routes, selectedDriverId, onSelect
                     const label = props.orderId ? `${kind} ${props.orderId}` : `${kind} #${nodeId}`;
                     const coord = (f.geometry as any)?.coordinates as [number, number] | undefined;
                     if (!coord) return;
-                    new mapboxgl.Popup({ offset: 12 })
+                    
+                    // Parse order info if available
+                    let orderInfo: any = null;
+                    try {
+                        if (props.orderInfo) {
+                            orderInfo = JSON.parse(props.orderInfo);
+                        }
+                    } catch (e) {
+                        console.error('Failed to parse orderInfo:', e);
+                    }
+                    
+                    // Build popup HTML
+                    let popupHTML = `<div class="p-3 text-xs max-w-xs">`;
+                    popupHTML += `<div class="font-semibold text-sm mb-2">${label}</div>`;
+                    popupHTML += `<div class="text-gray-500 mb-1">Route: ${props.routeId} | Seq: ${props.seqIndex}</div>`;
+                    
+                    if (orderInfo) {
+                        popupHTML += `<div class="border-t pt-2 mt-2">`;
+                        
+                        if (orderInfo.tracking_number) {
+                            popupHTML += `<div class="mb-1"><span class="font-medium">Tracking:</span> ${orderInfo.tracking_number}</div>`;
+                        }
+                        
+                        if (kind.toLowerCase().includes('pickup') && orderInfo.pickup_address) {
+                            popupHTML += `<div class="mb-1"><span class="font-medium">Pickup:</span><br/>${orderInfo.pickup_address}</div>`;
+                            if (orderInfo.pickup_contact_name) {
+                                popupHTML += `<div class="text-gray-600">${orderInfo.pickup_contact_name}`;
+                                if (orderInfo.pickup_contact_phone) {
+                                    popupHTML += ` - ${orderInfo.pickup_contact_phone}`;
+                                }
+                                popupHTML += `</div>`;
+                            }
+                        }
+                        
+                        if (kind.toLowerCase().includes('delivery') && orderInfo.delivery_address) {
+                            popupHTML += `<div class="mb-1"><span class="font-medium">Delivery:</span><br/>${orderInfo.delivery_address}</div>`;
+                            if (orderInfo.delivery_contact_name) {
+                                popupHTML += `<div class="text-gray-600">${orderInfo.delivery_contact_name}`;
+                                if (orderInfo.delivery_contact_phone) {
+                                    popupHTML += ` - ${orderInfo.delivery_contact_phone}`;
+                                }
+                                popupHTML += `</div>`;
+                            }
+                        }
+                        
+                        if (orderInfo.weight) {
+                            popupHTML += `<div class="mb-1"><span class="font-medium">Weight:</span> ${orderInfo.weight} kg</div>`;
+                        }
+                        
+                        if (orderInfo.notes) {
+                            popupHTML += `<div class="mt-1 text-gray-600 italic">${orderInfo.notes}</div>`;
+                        }
+                        
+                        popupHTML += `</div>`;
+                    }
+                    
+                    popupHTML += `</div>`;
+                    
+                    new mapboxgl.Popup({ offset: 12, maxWidth: '300px' })
                         .setLngLat(coord)
-                        .setHTML(`
-                            <div class="p-2 text-xs">
-                                <div class="font-semibold text-sm">${label}</div>
-                                <div class="text-gray-500">Route: ${props.routeId}</div>
-                                <div class="text-gray-500">Seq: ${props.seqIndex}</div>
-                            </div>
-                        `)
+                        .setHTML(popupHTML)
                         .addTo(map.current!);
                 });
                 map.current.on('mouseenter', nodesLayerId, () => {

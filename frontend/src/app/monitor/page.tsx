@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useRef, useState, useEffect } from 'react';
+import React, { useMemo, useRef, useState, useEffect, Suspense } from 'react';
 import MonitorSidebar from '@/components/monitor/MonitorSidebar';
 import MonitorMap from '@/components/monitor/MonitorMap';
 import MonitorTimeline, { DriverTimeline, TimelineEvent } from '@/components/monitor/MonitorTimeline';
@@ -41,6 +41,17 @@ export interface DispatchRoute {
         lng: number;
         orderId?: string | null;
         locationId?: string | null;
+        orderInfo?: {
+            tracking_number?: string;
+            pickup_address?: string;
+            delivery_address?: string;
+            pickup_contact_name?: string;
+            delivery_contact_name?: string;
+            pickup_contact_phone?: string;
+            delivery_contact_phone?: string;
+            weight?: number;
+            notes?: string;
+        };
     }>;
     meta?: {
         routeNumber?: number | null;
@@ -108,7 +119,14 @@ function isUnixTimestampLike(n: unknown): n is number {
 }
 
 function unixToLocalHHmm(unix: number): string {
-    // Accept seconds or milliseconds.
+    // Check if this is likely minutes (< 2880 = 48 hours in minutes)
+    // vs Unix timestamp (> 1e9 = year 2001+)
+    if (unix < 2880) {
+        // Treat as minutes from midnight
+        return minutesToHHmm(unix);
+    }
+    
+    // Accept seconds or milliseconds Unix timestamp
     const ms = unix > 1e12 ? unix : unix * 1000;
     const d = new Date(ms);
     if (Number.isNaN(d.getTime())) return '08:00';
@@ -134,7 +152,7 @@ type Segment = {
     to: { lat: number; lng: number };
 };
 
-function buildDispatchRoutesFromDb(dbRoutes: any[], nodes: SolutionNode[]): DispatchRoute[] {
+function buildDispatchRoutesFromDb(dbRoutes: any[], nodes: SolutionNode[], ordersMap: Map<string, any>): DispatchRoute[] {
     const palette = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#f97316'];
 
     return (dbRoutes ?? []).map((r: any, idx: number) => {
@@ -157,6 +175,7 @@ function buildDispatchRoutesFromDb(dbRoutes: any[], nodes: SolutionNode[]): Disp
             .map((nodeId, sIdx) => {
                 const n = nodes.find((x) => x.id === nodeId);
                 if (!n) return null;
+                const orderInfo = n.orderId ? ordersMap.get(n.orderId) : undefined;
                 return {
                     nodeId,
                     seqIndex: sIdx,
@@ -165,6 +184,7 @@ function buildDispatchRoutesFromDb(dbRoutes: any[], nodes: SolutionNode[]): Disp
                     lng: n.lng,
                     orderId: n.orderId,
                     locationId: n.locationId,
+                    orderInfo,
                 };
             })
             .filter(Boolean) as DispatchRoute['stops'];
@@ -223,7 +243,7 @@ const STATUS_COLORS = {
 // Import RoutePosition type from MonitorMap
 import { RoutePosition } from '@/components/monitor/MonitorMap';
 
-export default function MonitorPage() {
+function MonitorContent() {
     const searchParams = useSearchParams();
     const searchKey = useMemo(() => searchParams?.toString() || '', [searchParams]);
 
@@ -302,7 +322,7 @@ export default function MonitorPage() {
 
         async function loadData() {
             try {
-                async function loadRoutesForSolution(solutionId: string): Promise<{ routes: DispatchRoute[]; nodes: SolutionNode[]; rawSolutionData: any }>{
+                async function loadRoutesForSolution(solutionId: string, ordersMap: Map<string, any>): Promise<{ routes: DispatchRoute[]; nodes: SolutionNode[]; rawSolutionData: any }>{
                     const { data: solutionRow, error: solutionErr } = await supabase
                         .from('optimization_solutions')
                         .select('id, solution_data')
@@ -322,7 +342,7 @@ export default function MonitorPage() {
 
                     const rawSolutionData = (solutionRow as any).solution_data;
                     const nodes = buildNodesFromSolutionData(rawSolutionData);
-                    return { routes: buildDispatchRoutesFromDb(dbRoutes ?? [], nodes), nodes, rawSolutionData };
+                    return { routes: buildDispatchRoutesFromDb(dbRoutes ?? [], nodes, ordersMap), nodes, rawSolutionData };
                 }
 
                 function computeRouteSegments(route: DispatchRoute, routeStartMinute: number, durationSeconds: number | null): Segment[] {
@@ -402,7 +422,7 @@ export default function MonitorPage() {
                     return { lat: fallback.from.lat, lng: fallback.from.lng, heading, segmentIndex: 0 };
                 }
 
-                function buildTimelineForRoute(route: DispatchRoute, nowMinute: number): { events: TimelineEvent[]; startMinute: number; endMinute: number } {
+                function buildTimelineForRoute(route: DispatchRoute, nowMinute: number, ordersMap: Map<string, any>): { events: TimelineEvent[]; startMinute: number; endMinute: number } {
                     const startHHmm = route.meta?.startTimeUnix ? unixToLocalHHmm(route.meta.startTimeUnix) : '08:00';
                     const startMinute = toMinutes(startHHmm);
                     const segments = computeRouteSegments(route, startMinute, route.meta?.plannedDurationSeconds ?? null);
@@ -458,6 +478,9 @@ export default function MonitorPage() {
                         const stopStatus: TimelineEvent['status'] = nowMinute >= seg.endMinute ? 'completed' : 'pending';
                         const labelBase = stopType === 'pickup' ? 'Pickup' : 'Delivery';
                         const label = stop.orderId ? `${labelBase} ${stop.orderId}` : `${labelBase} #${stop.nodeId}`;
+                        
+                        // Get order info if available
+                        const orderInfo = stop.orderId ? ordersMap.get(stop.orderId) : undefined;
 
                         events.push({
                             id: `evt-${route.id}-stop-${idx}`,
@@ -466,6 +489,8 @@ export default function MonitorPage() {
                             endTime: minutesToHHmm(seg.endMinute),
                             status: stopStatus,
                             label,
+                            orderId: stop.orderId,
+                            orderInfo,
                         });
                     });
 
@@ -474,12 +499,36 @@ export default function MonitorPage() {
 
                 const orgId = typeof window !== 'undefined' ? getOrgIdFromLocalStorage() : null;
 
-                // Fetch basic data
-                const [driversData, vehiclesData, activeAssignments] = await Promise.all([
+                // Fetch basic data + orders
+                const [driversData, vehiclesData, activeAssignments, ordersData] = await Promise.all([
                     getDrivers(orgId ?? undefined).catch(() => []),
                     getVehicles(orgId ?? undefined).catch(() => []),
                     orgId ? getActiveRouteAssignments(orgId).catch(() => [] as RouteAssignment[]) : Promise.resolve([] as RouteAssignment[]),
+                    orgId ? supabase
+                        .from('orders')
+                        .select('id, tracking_number, pickup_address, delivery_address, pickup_contact_name, delivery_contact_name, pickup_contact_phone, delivery_contact_phone, weight, pickup_notes, delivery_notes')
+                        .eq('organization_id', orgId)
+                        .then(res => res.data || [])
+                        .catch(() => [])
+                        : Promise.resolve([]),
                 ]);
+                
+                // Create orders map for quick lookup
+                const ordersMap = new Map(ordersData.map((order: any) => [
+                    order.id,
+                    {
+                        tracking_number: order.tracking_number,
+                        pickup_address: order.pickup_address,
+                        delivery_address: order.delivery_address,
+                        pickup_contact_name: order.pickup_contact_name,
+                        delivery_contact_name: order.delivery_contact_name,
+                        pickup_contact_phone: order.pickup_contact_phone,
+                        delivery_contact_phone: order.delivery_contact_phone,
+                        weight: order.weight,
+                        notes: order.pickup_notes || order.delivery_notes,
+                    }
+                ]));
+
 
                 // Map Drivers & Vehicles
                 const nowMinute = toMinutes(currentTime);
@@ -490,7 +539,7 @@ export default function MonitorPage() {
                 if (isUuid(activeSolutionId)) {
                     try {
                         if (lastLoadedSolutionIdRef.current !== activeSolutionId) {
-                            const loaded = await loadRoutesForSolution(activeSolutionId);
+                            const loaded = await loadRoutesForSolution(activeSolutionId, ordersMap);
                             effectiveRoutes = loaded.routes;
                             solutionNodes = loaded.nodes;
                             lastLoadedSolutionIdRef.current = activeSolutionId;
@@ -512,22 +561,26 @@ export default function MonitorPage() {
                         lat: Number(organization.depot_latitude),
                         lng: Number(organization.depot_longitude)
                     };
-                } else if (solutionNodes[0]) {
-                    // Fallback to solution data if organization depot not set
-                    depotNode = { lat: solutionNodes[0].lat, lng: solutionNodes[0].lng };
                 } else {
-                    // Final fallback to Hanoi center
-                    depotNode = { lat: 21.0285, lng: 105.85 };
+                    // Fallback to solution data if organization depot not set
+                    // Find the depot node (nodeId === 0 or kind === 'depot')
+                    const depotFromSolution = solutionNodes.find(n => n.id === 0 || n.kind === 'depot');
+                    if (depotFromSolution) {
+                        depotNode = { lat: depotFromSolution.lat, lng: depotFromSolution.lng };
+                    } else {
+                        // Final fallback to Hanoi center
+                        depotNode = { lat: 21.0285, lng: 105.85 };
+                    }
                 }
                 setDepot(depotNode);
 
                 // Compute per-route positions (interpolated based on current time) and per-vehicle timelines
                 const routePositions = new Map<string, { lat: number; lng: number; heading: number }>();
-                const vehiclePositions = new Map<string, { lat: number; lng: number; busy: boolean; orderCount: number }>();
+                const vehiclePositions = new Map<string, { lat: number; lng: number; heading: number; busy: boolean; orderCount: number }>();
                 const timelinesByVehicle = new Map<string, TimelineEvent[]>();
 
                 for (const r of effectiveRoutes) {
-                    const timeline = buildTimelineForRoute(r, nowMinute);
+                    const timeline = buildTimelineForRoute(r, nowMinute, ordersMap);
                     
                     const startMinute = timeline.startMinute;
                     const endMinute = timeline.endMinute;
@@ -608,7 +661,7 @@ export default function MonitorPage() {
                 const computedTimelines: DriverTimeline[] = effectiveRoutes.map((r, idx) => {
                     const timeline = r.vehicleId && r.vehicleId !== 'unknown' 
                         ? timelinesByVehicle.get(r.vehicleId) 
-                        : buildTimelineForRoute(r, nowMinute).events;
+                        : buildTimelineForRoute(r, nowMinute, ordersMap).events;
                     return {
                         driverId: r.id,
                         driverName: `Route #${r.meta?.routeNumber ?? idx + 1}`,
@@ -624,13 +677,13 @@ export default function MonitorPage() {
                 // Calculate real stats from routes
                 const totalDistance = effectiveRoutes.reduce((sum, r) => {
                     const meters = r.meta?.plannedDistanceMeters;
-                    return sum + (Number.isFinite(meters) ? meters / 1000 : 0);
+                    return sum + (meters != null && Number.isFinite(meters) ? meters / 1000 : 0);
                 }, 0);
 
                 // Find the longest route duration (max instead of sum)
                 const maxDurationSeconds = effectiveRoutes.reduce((max, r) => {
                     const secs = r.meta?.plannedDurationSeconds;
-                    const duration = Number.isFinite(secs) ? secs : 0;
+                    const duration = (secs != null && Number.isFinite(secs)) ? secs : 0;
                     return Math.max(max, duration);
                 }, 0);
 
@@ -710,5 +763,13 @@ export default function MonitorPage() {
                 {...stats}
             />
         </div>
+    );
+}
+
+export default function MonitorPage() {
+    return (
+        <Suspense fallback={<div className="h-screen flex items-center justify-center">Loading...</div>}>
+            <MonitorContent />
+        </Suspense>
     );
 }

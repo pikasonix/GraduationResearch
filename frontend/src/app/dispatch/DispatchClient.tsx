@@ -315,8 +315,8 @@ export default function DispatchClient() {
                             vehicleType: vehicleTypeLabels[vehicle.vehicle_type] || vehicle.vehicle_type,
                             capacity: vehicle.capacity_weight,
                             status: isBusy ? 'busy' : 'available',
-                            currentLat: vehicle.current_latitude || 0,
-                            currentLng: vehicle.current_longitude || 0,
+                            currentLat: (vehicle as any).current_latitude || 0,
+                            currentLng: (vehicle as any).current_longitude || 0,
                             distanceToDepot: 'N/A',
                             driverId: assignedDriverId || null,
                             driverName: assignedDriver?.full_name || null

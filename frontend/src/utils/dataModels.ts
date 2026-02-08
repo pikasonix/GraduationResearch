@@ -92,3 +92,88 @@ export function createNode(id: number, coords: [number, number], demand: number,
         pair: -1
     };
 }
+
+// ========== Dynamic Tracking / Timeline Types ==========
+
+export interface OptimizationSolutionMetadata {
+    id: string;
+    created_at: string;
+    solution_name: string | null;
+    total_cost: number;
+    total_distance_km: number;
+    total_time_hours: number;
+    total_vehicles_used: number;
+    parent_solution_id: string | null;
+    organization_id: string;
+    job_id: string | null;
+    solution_data?: any; // JSONB field with instance + routes
+    mapping_ids?: any[];
+}
+
+export interface TimelineNode {
+    solution: Solution; // Parsed solution data
+    metadata: OptimizationSolutionMetadata; // DB row
+    children: TimelineNode[]; // Child solutions (reoptimizations)
+    depth: number; // Depth in tree (0 = root)
+    timestamp: string; // created_at
+    index: number; // Position in chronological sequence
+}
+
+export interface MetricsChange {
+    totalCost: number; // Delta from previous
+    totalDistance: number; // Delta km
+    totalTime: number; // Delta hours
+    vehiclesUsed: number; // Delta count
+    costPercent: number; // % change
+    distancePercent: number; // % change
+    timePercent: number; // % change
+}
+
+export interface OrderReassignment {
+    nodeId: number; // Node ID in instance
+    orderId: string | null; // Order UUID from mapping_ids
+    fromRoute: number | null; // Previous route ID (null if newly added)
+    toRoute: number | null; // New route ID (null if removed)
+    impactScore: number; // Delivery time change in minutes
+    kind: 'pickup' | 'delivery' | 'depot' | 'unknown';
+}
+
+export interface RouteModification {
+    routeId: number;
+    changeType: 'added' | 'removed' | 'modified' | 'unchanged';
+    ordersAdded: number[]; // Node IDs added to this route
+    ordersRemoved: number[]; // Node IDs removed from this route
+    sequenceChanged: boolean; // Whether order of stops changed
+    metricsChange: {
+        cost: number;
+        distance: number;
+        time: number;
+    };
+}
+
+export interface VehicleUtilizationChange {
+    vehicleId: number | string | null;
+    routeId: number;
+    beforeCapacity: number; // % capacity used
+    afterCapacity: number; // % capacity used
+    beforeTime: number; // % time window used
+    afterTime: number; // % time window used
+}
+
+export interface SolutionDiff {
+    fromSolution: OptimizationSolutionMetadata;
+    toSolution: OptimizationSolutionMetadata;
+    metricsChange: MetricsChange;
+    ordersReassigned: OrderReassignment[];
+    routesAdded: number[]; // Route IDs
+    routesRemoved: number[]; // Route IDs
+    routesModified: RouteModification[];
+    vehicleUtilizationChange: VehicleUtilizationChange[];
+    timeWindowViolationsDelta: number; // Change in violations count
+    summary: {
+        totalChanges: number;
+        ordersAffected: number;
+        routesAffected: number;
+        isImprovement: boolean; // True if cost decreased
+    };
+}

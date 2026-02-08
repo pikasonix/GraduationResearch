@@ -1,5 +1,6 @@
-import React, { useRef, useCallback } from 'react';
+import React, { useRef, useCallback, useState } from 'react';
 import { cn } from '@/lib/utils';
+import { X } from 'lucide-react';
 
 export interface TimelineEvent {
     id: string;
@@ -11,6 +12,18 @@ export interface TimelineEvent {
     seqIndex?: number;
     serviceMinutes?: number;
     waitMinutes?: number;
+    orderId?: string | null;
+    orderInfo?: {
+        tracking_number?: string;
+        pickup_address?: string;
+        delivery_address?: string;
+        pickup_contact_name?: string;
+        delivery_contact_name?: string;
+        pickup_contact_phone?: string;
+        delivery_contact_phone?: string;
+        weight?: number;
+        notes?: string;
+    };
 }
 
 export interface DriverTimeline {
@@ -30,8 +43,9 @@ interface MonitorTimelineProps {
 // SVG Icons
 const PickupIcon = ({ color = "white", size = 12 }: { color?: string; size?: number }) => (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
-        <circle cx="12" cy="10" r="3" fill={color}/>
+        <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+        <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
+        <line x1="12" y1="22.08" x2="12" y2="12"/>
     </svg>
 );
 
@@ -57,9 +71,188 @@ const VehicleIcon = ({ color = "white", size = 14 }: { color?: string; size?: nu
 
 const DRIVER_COL_WIDTH = 200;
 
+// Order Detail Popup Component
+const OrderDetailPopup = ({ event, onClose }: { event: TimelineEvent; onClose: () => void }) => {
+    const info = event.orderInfo;
+    const isPickup = event.type === 'pickup';
+    const statusColor = event.status === 'completed' ? 'text-green-600' : 
+                       event.status === 'in_progress' ? 'text-amber-600' : 'text-gray-600';
+    const statusLabel = event.status === 'completed' ? 'Hoàn thành' :
+                       event.status === 'in_progress' ? 'Đang thực hiện' : 'Chưa thực hiện';
+
+    return (
+        <>
+            {/* Backdrop */}
+            <div 
+                className="fixed inset-0 bg-black/30 z-[100]" 
+                onClick={onClose}
+            />
+            
+            {/* Popup */}
+            <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white rounded-lg shadow-2xl z-[101] w-[500px] max-w-[90vw]">
+                {/* Header */}
+                <div className={cn(
+                    "flex items-center justify-between px-4 py-3 rounded-t-lg border-b",
+                    isPickup ? "bg-blue-50 border-blue-200" : "bg-red-50 border-red-200"
+                )}>
+                    <div className="flex items-center gap-3">
+                        <div className={cn(
+                            "w-10 h-10 rounded-full flex items-center justify-center",
+                            isPickup ? "bg-blue-500" : "bg-red-500"
+                        )}>
+                            {isPickup ? <PickupIcon size={16} /> : <DeliveryIcon size={16} />}
+                        </div>
+                        <div>
+                            <h3 className="font-bold text-gray-800">
+                                {isPickup ? 'Lấy hàng' : 'Giao hàng'}
+                            </h3>
+                            <p className="text-sm text-gray-600">{event.startTime}</p>
+                        </div>
+                    </div>
+                    <button
+                        onClick={onClose}
+                        className="p-1 hover:bg-gray-200 rounded-full transition-colors"
+                    >
+                        <X size={20} className="text-gray-600" />
+                    </button>
+                </div>
+
+                {/* Content */}
+                <div className="p-4 space-y-4 max-h-[70vh] overflow-y-auto">
+                    {/* Status */}
+                    <div className="flex items-center justify-between pb-3 border-b">
+                        <span className="text-sm text-gray-600">Trạng thái:</span>
+                        <span className={cn("text-sm font-semibold", statusColor)}>
+                            {statusLabel}
+                        </span>
+                    </div>
+
+                    {/* Order ID */}
+                    {event.orderId && (
+                        <div className="space-y-1">
+                            <div className="text-xs text-gray-500 uppercase font-medium">Mã đơn hàng</div>
+                            <div className="text-sm font-mono bg-gray-50 px-3 py-2 rounded border">
+                                {event.orderId}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Tracking Number */}
+                    {info?.tracking_number && (
+                        <div className="space-y-1">
+                            <div className="text-xs text-gray-500 uppercase font-medium">Mã vận đơn</div>
+                            <div className="text-sm font-semibold text-gray-800">
+                                {info.tracking_number}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Pickup Info */}
+                    {info?.pickup_address && (
+                        <div className="space-y-2 bg-blue-50 p-3 rounded-lg border border-blue-100">
+                            <div className="flex items-center gap-2">
+                                <div className="w-6 h-6 rounded-full bg-blue-500 flex items-center justify-center">
+                                    <PickupIcon size={12} />
+                                </div>
+                                <div className="text-xs text-gray-500 uppercase font-medium">Điểm lấy hàng</div>
+                            </div>
+                            <div className="text-sm text-gray-800">{info.pickup_address}</div>
+                            {info.pickup_contact_name && (
+                                <div className="text-xs text-gray-600">
+                                    <span className="font-medium">Người gửi:</span> {info.pickup_contact_name}
+                                    {info.pickup_contact_phone && ` • ${info.pickup_contact_phone}`}
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* Delivery Info */}
+                    {info?.delivery_address && (
+                        <div className="space-y-2 bg-red-50 p-3 rounded-lg border border-red-100">
+                            <div className="flex items-center gap-2">
+                                <div className="w-6 h-6 rounded-full bg-red-500 flex items-center justify-center">
+                                    <DeliveryIcon size={12} />
+                                </div>
+                                <div className="text-xs text-gray-500 uppercase font-medium">Điểm giao hàng</div>
+                            </div>
+                            <div className="text-sm text-gray-800">{info.delivery_address}</div>
+                            {info.delivery_contact_name && (
+                                <div className="text-xs text-gray-600">
+                                    <span className="font-medium">Người nhận:</span> {info.delivery_contact_name}
+                                    {info.delivery_contact_phone && ` • ${info.delivery_contact_phone}`}
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* Service Time */}
+                    {event.serviceMinutes && event.serviceMinutes > 0 && (
+                        <div className="flex items-center justify-between text-sm">
+                            <span className="text-gray-600">Thời gian phục vụ:</span>
+                            <span className="font-semibold text-gray-800">{event.serviceMinutes} phút</span>
+                        </div>
+                    )}
+
+                    {/* Wait Time */}
+                    {event.waitMinutes && event.waitMinutes > 0 && (
+                        <div className="flex items-center justify-between text-sm">
+                            <span className="text-gray-600">Thời gian chờ:</span>
+                            <span className="font-semibold text-amber-600">{event.waitMinutes} phút</span>
+                        </div>
+                    )}
+
+                    {/* Weight */}
+                    {info?.weight && (
+                        <div className="flex items-center justify-between text-sm">
+                            <span className="text-gray-600">Khối lượng:</span>
+                            <span className="font-semibold text-gray-800">{info.weight} kg</span>
+                        </div>
+                    )}
+
+                    {/* Notes */}
+                    {info?.notes && (
+                        <div className="space-y-1">
+                            <div className="text-xs text-gray-500 uppercase font-medium">Ghi chú</div>
+                            <div className="text-sm text-gray-700 bg-gray-50 p-2 rounded border">
+                                {info.notes}
+                            </div>
+                        </div>
+                    )}
+                </div>
+            </div>
+        </>
+    );
+};
+
 export default function MonitorTimeline({ timelines, currentTime }: MonitorTimelineProps) {
-    const START_HOUR = 8;
-    const TOTAL_HOURS = 12;
+    const [selectedEvent, setSelectedEvent] = useState<TimelineEvent | null>(null);
+    
+    // Auto-calculate time range from data
+    const { START_HOUR, TOTAL_HOURS } = React.useMemo(() => {
+        if (timelines.length === 0) {
+            return { START_HOUR: 0, TOTAL_HOURS: 24 };
+        }
+        
+        let minHour = 24;
+        let maxHour = 0;
+        
+        timelines.forEach(timeline => {
+            timeline.events.forEach(event => {
+                const [startH] = event.startTime.split(':').map(Number);
+                const [endH] = event.endTime.split(':').map(Number);
+                minHour = Math.min(minHour, startH, endH);
+                maxHour = Math.max(maxHour, startH, endH);
+            });
+        });
+        
+        // Add padding
+        const start = Math.max(0, Math.floor(minHour) - 1);
+        const end = Math.min(24, Math.ceil(maxHour) + 2);
+        const total = end - start;
+        
+        return { START_HOUR: start, TOTAL_HOURS: total };
+    }, [timelines]);
+    
     const TOTAL_MINUTES = TOTAL_HOURS * 60;
     const PX_PER_MINUTE = 12;
     const TIMELINE_WIDTH = TOTAL_MINUTES * PX_PER_MINUTE;
@@ -332,7 +525,7 @@ export default function MonitorTimeline({ timelines, currentTime }: MonitorTimel
                                         const waitMin = event.waitMinutes ?? 0;
                                         const waitWidth = minutesToPixels(waitMin);
                                         
-                                        const stopColor = isDepot ? '#22c55e' : isPickup ? '#f59e0b' : '#3b82f6';
+                                        const stopColor = isDepot ? '#22c55e' : isPickup ? '#3b82f6' : '#ef4444';
                                         const bgColor = stopColor; // Always full color, no opacity
                                         
                                         return (
@@ -357,12 +550,12 @@ export default function MonitorTimeline({ timelines, currentTime }: MonitorTimel
                                                         style={{
                                                             left: 28,
                                                             width: serviceWidth,
-                                                            backgroundColor: isPickup ? '#fef3c7' : '#dbeafe',
-                                                            border: `1px solid ${isPickup ? '#f59e0b' : '#3b82f6'}`,
+                                                            backgroundColor: isPickup ? '#dbeafe' : '#fee2e2',
+                                                            border: `1px solid ${isPickup ? '#3b82f6' : '#ef4444'}`,
                                                         }}
                                                         title={`Phục vụ: ${serviceMin} phút`}
                                                     >
-                                                        <span className="text-[7px] px-1 font-medium" style={{ color: isPickup ? '#92400e' : '#1e40af' }}>
+                                                        <span className="text-[7px] px-1 font-medium" style={{ color: isPickup ? '#1e40af' : '#991b1b' }}>
                                                             {serviceMin}m
                                                         </span>
                                                     </div>
@@ -383,6 +576,11 @@ export default function MonitorTimeline({ timelines, currentTime }: MonitorTimel
                                                         boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
                                                     }}
                                                     title={`${event.startTime} - ${event.label || event.type}${serviceMin ? ` (${serviceMin}m)` : ''}`}
+                                                    onClick={() => {
+                                                        if (!isDepot && (isPickup || isDelivery)) {
+                                                            setSelectedEvent(event);
+                                                        }
+                                                    }}
                                                 >
                                                     {isPickup && <PickupIcon size={14} />}
                                                     {isDelivery && <DeliveryIcon size={14} />}
@@ -448,11 +646,11 @@ export default function MonitorTimeline({ timelines, currentTime }: MonitorTimel
             {/* Legend */}
             <div className="shrink-0 border-t bg-white px-3 py-1.5 flex items-center gap-4 text-[10px] text-gray-600">
                 <div className="flex items-center gap-1.5">
-                    <div className="w-5 h-5 rounded-full bg-amber-500 flex items-center justify-center"><PickupIcon size={10} /></div>
+                    <div className="w-5 h-5 rounded-full bg-blue-500 flex items-center justify-center"><PickupIcon size={10} /></div>
                     <span>Lấy hàng</span>
                 </div>
                 <div className="flex items-center gap-1.5">
-                    <div className="w-5 h-5 rounded-full bg-blue-500 flex items-center justify-center"><DeliveryIcon size={10} /></div>
+                    <div className="w-5 h-5 rounded-full bg-red-500 flex items-center justify-center"><DeliveryIcon size={10} /></div>
                     <span>Giao hàng</span>
                 </div>
                 <div className="flex items-center gap-1.5">
@@ -472,6 +670,14 @@ export default function MonitorTimeline({ timelines, currentTime }: MonitorTimel
                     <span>Thời gian hiện tại</span>
                 </div>
             </div>
+            
+            {/* Order Detail Popup */}
+            {selectedEvent && (
+                <OrderDetailPopup 
+                    event={selectedEvent} 
+                    onClose={() => setSelectedEvent(null)} 
+                />
+            )}
         </div>
     );
 }

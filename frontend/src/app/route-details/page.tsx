@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import RouteDetailsView from '@/components/route-details/RouteDetailsView';
 import RouteChipsBar from '@/components/route-details/RouteChipsBar';
 import { useRouteDetailsData } from '@/components/route-details/useRouteDetailsData';
@@ -16,7 +16,7 @@ import { Map } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 
 // Trang index: danh sách routes + xem chi tiết route được chọn
-export default function RouteDetailsIndexPage() {
+function RouteDetailsContent() {
     const { data, error, loading } = useRouteDetailsData();
     const [useRealRouting, setUseRealRouting] = useState(false);
     const [selectedRouteId, setSelectedRouteId] = useState<string | null>(null);
@@ -93,5 +93,13 @@ export default function RouteDetailsIndexPage() {
                 </div>
             </div>
         </div>
+    );
+}
+
+export default function RouteDetailsIndexPage() {
+    return (
+        <Suspense fallback={<div className="h-screen flex items-center justify-center">Loading...</div>}>
+            <RouteDetailsContent />
+        </Suspense>
     );
 }
